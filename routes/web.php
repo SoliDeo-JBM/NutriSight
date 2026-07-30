@@ -59,6 +59,18 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:encoder')->group(function () {
         Route::get('/encoder/dashboard', [DashboardController::class, 'encoder'])->name('dashboard.encoder');
+        Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
+        Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
+        Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::patch('/students/{student}/approval', [App\Http\Controllers\StudentController::class, 'updateApproval'])->name('students.approval');
+        Route::post('/students', [App\Http\Controllers\StudentController::class, 'store'])->name('students.store');
+        Route::delete('/students/{student}', [App\Http\Controllers\StudentController::class, 'destroy'])->name('students.destroy');
+        Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
+        Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
+        
+        Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
+        Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
     });
 
     // Account & Profile
