@@ -48,6 +48,11 @@ Route::middleware('auth')->group(function () {
         return view('welcome');
     })->name('home');
 
+    // Redirect /dashboard to the appropriate role-based dashboard
+    Route::get('/dashboard', function () {
+        return redirect()->route(Auth::user()->dashboardRoute());
+    })->name('dashboard');
+
     // Role-protected dashboards
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/super-admin/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard.super-admin');

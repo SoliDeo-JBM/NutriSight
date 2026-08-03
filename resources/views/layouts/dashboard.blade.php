@@ -37,14 +37,42 @@
             @endif
         </nav>
         <div class="p-4 border-t border-slate-800">
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="w-full text-left py-2 px-4 hover:bg-slate-800 text-red-400">
-                    <i class="fas fa-sign-out-alt mr-3"></i> Logout
-                </button>
-            </form>
+            <button type="button" onclick="openLogoutModal()" class="w-full text-left py-2 px-4 hover:bg-slate-800 text-red-400 rounded transition flex items-center">
+                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            </button>
         </div>
     </aside>
+
+    <!-- Logout Confirmation Modal -->
+    <div id="logoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center">
+            <div class="text-red-500 text-4xl mb-4">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mb-2">Confirm Logout</h3>
+            <p class="text-sm text-gray-600 mb-6">Are you sure you want to log out of NutriSight?</p>
+            <div class="flex justify-center gap-4">
+                <button type="button" onclick="closeLogoutModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded text-sm font-semibold hover:bg-gray-300">
+                    Cancel
+                </button>
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700">
+                        Yes, Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function openLogoutModal() {
+            document.getElementById('logoutModal').classList.remove('hidden');
+        }
+        function closeLogoutModal() {
+            document.getElementById('logoutModal').classList.add('hidden');
+        }
+    </script>
 
     <!-- Main Content -->
     <main class="flex-1 flex flex-col overflow-hidden">
