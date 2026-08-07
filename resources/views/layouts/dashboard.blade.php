@@ -6,46 +6,90 @@
     <title>NutriSight Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ asset('css/dashboard-layout.css') }}">
+    @if(View::exists('css/' . Auth::user()->role . '-dashboard.css'))
+    <link rel="stylesheet" href="{{ asset('css/' . Auth::user()->role . '-dashboard.css') }}">
+    @endif
 </head>
-<body class="bg-gray-100 flex h-screen overflow-hidden">
+<body>
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
     <!-- Sidebar -->
-    <aside class="w-64 bg-slate-900 text-white flex flex-col">
-        <div class="p-6 text-2xl font-bold border-b border-slate-800">NutriSight</div>
-        <nav class="flex-1 overflow-y-auto">
-            <div class="p-4 text-xs font-semibold text-slate-500 uppercase">Menu</div>
-            <a href="{{ route(Auth::user()->dashboardRoute()) }}" class="block py-2.5 px-4 hover:bg-slate-800">
-                <i class="fas fa-tachometer-alt mr-3"></i> Dashboard
+    <aside id="appSidebar" class="sidebar">
+        <div class="sidebar-brand">
+            <span>NutriSight</span>
+            <button type="button" class="sidebar-close-btn" onclick="toggleSidebar()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-section-title">Menu</div>
+            <a href="{{ route(Auth::user()->dashboardRoute()) }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             @if(Auth::user()->role === 'encoder')
-            <a href="{{ route('students.index') }}" class="block py-2.5 px-4 hover:bg-slate-800">
-                <i class="fas fa-users mr-3"></i> Advisory Student Lists
+            <a href="{{ route('students.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-users"></i> Advisory Student Lists
             </a>
-            <a href="{{ route('students.create') }}" class="block py-2.5 px-4 hover:bg-slate-800">
-                <i class="fas fa-user-plus mr-3"></i> Add Advisory Student
+            <a href="{{ route('students.create') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-user-plus"></i> Add Advisory Student
             </a>
-            <a href="{{ route('students.sbfp') }}" class="block py-2.5 px-4 hover:bg-slate-800">
-                <i class="fas fa-clipboard-list mr-3"></i> Advisory SBFP Lists
+            <a href="{{ route('students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-clipboard-list"></i> Advisory SBFP Lists
             </a>
-            <a href="{{ route('attendance.index') }}" class="block py-2.5 px-4 hover:bg-slate-800">
-                <i class="fas fa-calendar-check mr-3"></i> Attendance Lists
+            <a href="{{ route('attendance.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-calendar-check"></i> Attendance Lists
             </a>
             @endif
             @if(Auth::user()->role === 'admin')
-            <a href="{{ route('admin.reports') }}" class="block py-2.5 px-4 hover:bg-slate-800">
-                <i class="fas fa-chart-line mr-3"></i> SBFP Reports
+            <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-chart-line"></i> SBFP Reports
             </a>
             @endif
         </nav>
-        <div class="p-4 border-t border-slate-800">
-            <button type="button" onclick="openLogoutModal()" class="w-full text-left py-2 px-4 hover:bg-slate-800 text-red-400 rounded transition flex items-center">
-                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+        <div class="sidebar-footer">
+            <button type="button" onclick="openLogoutModal()" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
             </button>
         </div>
     </aside>
 
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="top-header">
+            <div class="header-left">
+                <button type="button" class="hamburger-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
+            </div>
+        </header>
+
+        <div class="content-body">
+            @if(session('success'))
+                <div id="success-alert" class="success-alert">
+                    <i class="fas fa-check-circle"></i>
+                    <span>{{ session('success') }}</span>
+                </div>
+                <script>
+                    setTimeout(() => {
+                        const alert = document.getElementById('success-alert');
+                        if (alert) {
+                            alert.style.opacity = '0';
+                            setTimeout(() => alert.remove(), 500);
+                        }
+                    }, 3500);
+                </script>
+            @endif
+
+            @yield('content')
+        </div>
+    </main>
+
     <!-- Logout Confirmation Modal -->
     <div id="logoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
-        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center mx-4">
             <div class="text-red-500 text-4xl mb-4">
                 <i class="fas fa-exclamation-circle"></i>
             </div>
@@ -66,6 +110,13 @@
     </div>
 
     <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('appSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('active');
+            backdrop.classList.toggle('active');
+        }
+
         function openLogoutModal() {
             document.getElementById('logoutModal').classList.remove('hidden');
         }
@@ -73,32 +124,5 @@
             document.getElementById('logoutModal').classList.add('hidden');
         }
     </script>
-
-    <!-- Main Content -->
-    <main class="flex-1 flex flex-col overflow-hidden">
-        <header class="bg-white shadow-sm h-16 flex items-center justify-between px-6">
-            <div class="text-gray-500">Welcome, {{ Auth::user()->name }}</div>
-        </header>
-
-        <div class="flex-1 overflow-y-auto p-6 relative">
-            @if(session('success'))
-                <div id="success-alert" class="absolute top-4 right-6 z-50 bg-emerald-500 text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 transition-opacity duration-500">
-                    <i class="fas fa-check-circle"></i>
-                    <span>{{ session('success') }}</span>
-                </div>
-                <script>
-                    setTimeout(() => {
-                        const alert = document.getElementById('success-alert');
-                        if (alert) {
-                            alert.style.opacity = '0';
-                            setTimeout(() => alert.remove(), 500);
-                        }
-                    }, 3500);
-                </script>
-            @endif
-
-            @yield('content')
-        </div>
-    </main>
 </body>
 </html>
