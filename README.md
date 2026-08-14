@@ -1,58 +1,88 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# NutriSight: School-Based Feeding Program (SBFP) Management System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+This README provides a straightforward guide on what NutriSight is, what it does, and how you can run and test the system locally on your computer.
 
-## About Laravel
+---
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## What is NutriSight?
+**NutriSight** is a web application built specifically for the **School-Based Feeding Program (SBFP)** of Marisol Bliss Elementary School. Its main purpose is to help teachers (Encoders) and school administrators efficiently manage student nutritional profiles, track feeding program participation, manage parent approvals, record daily attendance using QR codes, and generate health/nutrition progress reports.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+---
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+## Current Available Functionalities
 
-## Learning Laravel
+### 1. User Authentication & Roles
+*   **Role-Based Access Control**: Secure login system with three distinct user levels: **Super Admin**, **Admin**, and **Encoder**.
+*   **Automatic Dashboard Routing**: Upon logging in, users are automatically directed to their respective role-tailored dashboards.
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+### 2. Encoder (Adviser) Module
+*   **Advisory Student Lists**: A complete master table of all students under an adviser's section. Includes names (formatted as Last Name, First Name, Extension, Middle Name), birthdate, sex, weight (kg), height (cm), BMI, color-coded BMI categories (*Severely Wasted, Wasted, Normal, Overweight, Obese*), guardian contact details, and soft-delete archiving.
+*   **Add Advisory Student Form**: A dedicated form where teachers can encode new students. Entering weight and height automatically calculates the student's BMI and nutritional status. Guardian email is optional.
+*   **Advisory SBFP Lists**: Automatically filters students who are eligible for the feeding program (specifically those evaluated as *Wasted* or *Severely Wasted*, or explicitly approved by parents).
+    *   **Parent Approval Manager**: Interactive radio buttons allowing teachers to mark students as Approved or Disapproved. Disapproving a student prompts for a reason (*Unwilling* or *Underlying medical condition* with a text note) and instantly removes them from the active SBFP list.
+    *   **Portrait ID QR Code Printing**: Generates individual ID-sized portrait QR codes or a paginated **Letter / A4 batch sheet (9 IDs per page)** ready for printing and cutting.
+*   **Attendance Dashboard & Calendar**: 
+    *   Features an interactive monthly calendar with **Prev / Today / Next** buttons and **Month & Year dropdown selectors**.
+    *   Active feeding days where QR scans occurred light up in a distinct green color with a live indicator for today's date.
+    *   A vertical-scrolling daily roster beside the calendar lets teachers manually update student attendance (*Present, Absent, Tardy*).
+*   **Dashboard Analytics**: Summary stat cards and a live **Chart.js** line graph tracking attendance frequency over the last 7 days.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+### 3. Admin & Super Admin Modules
+*   **Admin Reports**: Aggregates nutritional data to display baseline vs. mid-program summary counts and individual student health progress.
+*   **Account Management (Super Admin)**: Handles account creation and role assignments for admins and encoders.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+---
 
-## Agentic Development
+## How to Run the System Locally
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+Follow these plain-English steps to set up and run NutriSight on your local machine:
 
-```bash
-composer require laravel/boost --dev
+### Prerequisites
+Make sure you have the following installed on your computer:
+*   PHP (version 8.2 or higher)
+*   Composer
+*   Node.js & npm
+*   Git
 
-php artisan boost:install
-```
+### Step-by-Step Setup Guide
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+1. **Clone the Repository & Open Terminal**
+   Open your terminal or command prompt inside the project folder (`/NutriSight`).
 
-## Contributing
+2. **Install PHP Dependencies**
+   Run the following command to install all required backend packages:
+   ```bash
+   composer install
+   ```
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+3. **Install JavaScript Dependencies**
+   Run this command to install frontend packages:
+   ```bash
+   npm install
+   ```
 
-## Code of Conduct
+4. **Configure Environment Variables**
+   Make sure you have your `.env` file set up with the correct database connection pointing to our central Supabase PostgreSQL database (or your local database).
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+5. **Run Database Migrations & Seeders**
+   To set up the database tables and populate sample test accounts, run:
+   ```bash
+   php artisan migrate:fresh --seed
+   ```
+   *(Note: This sets up clean database tables with default user accounts).*
 
-## Security Vulnerabilities
+6. **Start the Local Development Server**
+   Start Laravel's local server by running:
+   ```bash
+   php artisan serve
+   ```
+   This will output a local URL (usually `http://127.0.0.1:8000`). Open that link in your web browser.
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+7. **Log In and Test**
+   You can log in using the pre-configured test accounts created by the seeder:
+   *   **Encoder Account**: `encoder@nutrisight.test` | Password: `password`
+   *   **Admin Account**: `admin@nutrisight.test` | Password: `password`
+   *   **Super Admin Account**: `superadmin@nutrisight.test` | Password: `password`
 
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+---
+If you encounter any issues or have questions while testing, feel free to reach out to the development team!

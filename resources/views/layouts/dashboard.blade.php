@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NutriSight Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{{ asset('css/dashboard-layout.css') }}">
+    @if(View::exists('css/' . Auth::user()->role . '-dashboard.css'))
+    <link rel="stylesheet" href="{{ asset('css/' . Auth::user()->role . '-dashboard.css') }}">
+    @endif
+</head>
+<body>
+    <!-- Mobile Sidebar Backdrop -->
+    <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
+
+    <!-- Sidebar -->
+    <aside id="appSidebar" class="sidebar">
+        <div class="sidebar-brand">
+            <span>NutriSight</span>
+            <button type="button" class="sidebar-close-btn" onclick="toggleSidebar()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <nav class="sidebar-nav">
+            <div class="nav-section-title">Menu</div>
+            <a href="{{ route(Auth::user()->dashboardRoute()) }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a>
+            @if(Auth::user()->role === 'encoder')
+            <a href="{{ route('students.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-users"></i> Advisory Student Lists
+            </a>
+            <a href="{{ route('students.create') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-user-plus"></i> Add Advisory Student
+            </a>
+            <a href="{{ route('students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-clipboard-list"></i> Advisory SBFP Lists
+            </a>
+            <a href="{{ route('attendance.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-calendar-check"></i> Attendance Lists
+            </a>
+            @endif
+            @if(Auth::user()->role === 'admin')
+            <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-chart-line"></i> SBFP Reports
+            </a>
+            @endif
+        </nav>
+        <div class="sidebar-footer">
+            <button type="button" onclick="openLogoutModal()" class="logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <header class="top-header">
+            <div class="header-left">
+                <button type="button" class="hamburger-btn" onclick="toggleSidebar()">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
+            </div>
+        </header>
+
+        <div class="content-body">
+            @if(session('success'))
+                <div id="success-alert" class="success-alert">
+                    <i class="fas fa-check-circle"></i>
+                    <span>{{ session('success') }}</span>
+                </div>
+                <script>
+                    setTimeout(() => {
+                        const alert = document.getElementById('success-alert');
+                        if (alert) {
+                            alert.style.opacity = '0';
+                            setTimeout(() => alert.remove(), 500);
+                        }
+                    }, 3500);
+                </script>
+            @endif
+
+            @yield('content')
+        </div>
+    </main>
+
+    <!-- Logout Confirmation Modal -->
+    <div id="logoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center mx-4">
+            <div class="text-red-500 text-4xl mb-4">
+                <i class="fas fa-exclamation-circle"></i>
+            </div>
+            <h3 class="text-lg font-bold text-gray-900 mb-2">Confirm Logout</h3>
+            <p class="text-sm text-gray-600 mb-6">Are you sure you want to log out of NutriSight?</p>
+            <div class="flex justify-center gap-4">
+                <button type="button" onclick="closeLogoutModal()" class="px-4 py-2 bg-gray-200 text-gray-800 rounded text-sm font-semibold hover:bg-gray-300">
+                    Cancel
+                </button>
+                <form method="POST" action="{{ route('logout') }}">
+                    @csrf
+                    <button type="submit" class="px-4 py-2 bg-red-600 text-white rounded text-sm font-semibold hover:bg-red-700">
+                        Yes, Logout
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function toggleSidebar() {
+            const sidebar = document.getElementById('appSidebar');
+            const backdrop = document.getElementById('sidebarBackdrop');
+            sidebar.classList.toggle('active');
+            backdrop.classList.toggle('active');
+        }
+
+        function openLogoutModal() {
+            document.getElementById('logoutModal').classList.remove('hidden');
+        }
+        function closeLogoutModal() {
+            document.getElementById('logoutModal').classList.add('hidden');
+        }
+    </script>
+</body>
+</html>
