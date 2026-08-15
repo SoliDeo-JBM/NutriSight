@@ -103,8 +103,81 @@ class StudentController extends Controller
             'remarks' => 'Initial encoder entry'
         ]);
 
+        $heightInMeters = $validated['height'] / 100;
+\App\Models\StudentAssessment::create([
+    'student_id' => $student->id,
+    'assessed_by_user_id' => auth()->id(),
+    'assessment_date' => \Carbon\Carbon::createFromFormat('Y-m-d', date('Y') . '-01-01'),
+    'weight_kg' => $validated['weight'],
+    'height_m' => round($heightInMeters, 2),
+    'bmi' => $metrics['bmi'],
+    'nutritional_status' => $this->getNutritionalStatus($metrics['bmi']),
+]);
+
         return redirect()->route('students.index')->with('success', 'Student added successfully.');
     }
+
+public function storeAssessment(Request $request, Student $student)
+{
+    $validated = $request->validate([
+        'term' => 'required|in:1,2,3',
+        'weight_kg' => 'required|numeric|min:0',
+        'height_cm' => 'required|numeric|min:0',
+    ]);
+
+    // Convert height from cm to meters for storage
+    $heightM = $validated['height_cm'] / 100;
+    $bmi = $validated['weight_kg'] / ($heightM ** 2);
+    $nutritionalStatus = $this->getNutritionalStatus($bmi);
+    
+    // Use fixed dates for each term (month identifies the term)
+    $termDates = [
+        1 => date('Y') . '-01-01',  // Term 1
+        2 => date('Y') . '-02-01',  // Term 2
+        3 => date('Y') . '-03-01',  // Term 3
+    ];
+    
+    $assessmentDate = \Carbon\Carbon::createFromFormat('Y-m-d', $termDates[$validated['term']]);
+
+    // Check if assessment already exists for this term
+    $existingAssessment = \App\Models\StudentAssessment::where('student_id', $student->id)
+        ->whereMonth('assessment_date', $validated['term'])
+        ->latest('assessment_date')
+        ->first();
+
+    if ($existingAssessment) {
+        // Update existing assessment
+        $existingAssessment->update([
+            'assessed_by_user_id' => auth()->id(),
+            'weight_kg' => $validated['weight_kg'],
+            'height_m' => round($heightM, 2),
+            'bmi' => round($bmi, 2),
+            'nutritional_status' => $nutritionalStatus,
+        ]);
+    } else {
+        // Create new assessment
+        \App\Models\StudentAssessment::create([
+            'student_id' => $student->id,
+            'assessed_by_user_id' => auth()->id(),
+            'assessment_date' => $assessmentDate,
+            'weight_kg' => $validated['weight_kg'],
+            'height_m' => round($heightM, 2),
+            'bmi' => round($bmi, 2),
+            'nutritional_status' => $nutritionalStatus,
+        ]);
+    }
+
+    return back()->with('success', 'Term progress recorded successfully.');
+}
+
+private function getNutritionalStatus($bmi)
+{
+    if ($bmi < 16) return 'Severely Wasted';
+    if ($bmi < 18.5) return 'Wasted';
+    if ($bmi < 25) return 'Normal';
+    if ($bmi < 30) return 'Overweight';
+    return 'Obese';
+}
 
     public function updateApproval(Request $request, Student $student)
     {
