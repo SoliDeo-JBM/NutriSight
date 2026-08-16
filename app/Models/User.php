@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'role'])]
+#[Fillable(['name', 'email', 'password', 'role', 'deped_id', 'sex', 'birthdate', 'position', 'advisory_grade_level', 'advisory_section'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -50,7 +50,7 @@ class User extends Authenticatable
 
     public function dashboardRoute(): string
     {
-        return match($this->role) {
+        return match ($this->role) {
             self::ROLE_SUPER_ADMIN => 'dashboard.super-admin',
             self::ROLE_ADMIN => 'dashboard.admin',
             self::ROLE_ENCODER => 'dashboard.encoder',
