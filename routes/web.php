@@ -14,6 +14,15 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('/', function () {
+    return view('welcome');
+})->name('home');
+
+/*
+|--------------------------------------------------------------------------
 | Guest Routes
 |--------------------------------------------------------------------------
 */
@@ -42,28 +51,22 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
-    
-    // Home Page
-    Route::get('/', function () {
-        return view('welcome');
-    })->name('home');
-
     // Redirect /dashboard to the appropriate role-based dashboard
     Route::get('/dashboard', function () {
         return redirect()->route(Auth::user()->dashboardRoute());
     })->name('dashboard');
 
     // Role-protected dashboards
-    Route::middleware('role:super_admin')->group(function () {
+    Route::middleware(['auth', 'role:super_admin'])->group(function () {
         Route::get('/super-admin/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard.super-admin');
     });
 
-    Route::middleware('role:admin')->group(function () {
+    Route::middleware(['auth', 'role:admin'])->group(function () {
         Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('dashboard.admin');
         Route::get('/admin/reports', [App\Http\Controllers\ReportsController::class, 'admin'])->name('admin.reports');
     });
 
-    Route::middleware('role:encoder')->group(function () {
+    Route::middleware(['auth', 'role:encoder'])->group(function () {
         Route::get('/encoder/dashboard', [DashboardController::class, 'encoder'])->name('dashboard.encoder');
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
