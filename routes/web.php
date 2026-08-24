@@ -67,6 +67,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('admin.accounts.index');
         Route::get('/admin/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('admin.accounts.create');
         Route::post('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('admin.accounts.store');
+        Route::get('/admin/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('admin.students.index');
+        Route::get('/admin/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('admin.students.sbfp');
     });
 
     Route::middleware('role:super_admin|admin')->group(function () {

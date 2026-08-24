@@ -141,7 +141,7 @@ class AccountController extends Controller
       'birthdate' => $validated['birthdate'],
       'position' => $validated['position'],
       'advisory_grade_level' => $validated['advisory_grade_level'],
-      'advisory_section' => $validated['advisory_section'],
+      'advisory_section' => ucfirst(strtolower($validated['advisory_section'])),
       'role' => $targetRole,
       'is_active' => true,
     ]);

@@ -2,7 +2,7 @@
 
 @section('content')
     <div class="flex justify-between items-center mb-6">
-        <h1 class="text-2xl font-bold">Advisory Student Lists</h1>
+        <h1 class="text-2xl font-bold">Advisory Student List</h1>
         <a href="{{ route('students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700">
             <i class="fas fa-plus mr-2"></i> Add Advisory Student
         </a>

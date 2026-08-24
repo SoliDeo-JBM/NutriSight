@@ -102,28 +102,28 @@
                 <table class="w-full text-sm text-gray-700">
                     <thead class="bg-gray-100 border-b border-gray-200">
                         <tr>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">No.</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Full Name</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">DepEd ID</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Position</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Grade / Section</th>
-                            <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Email</th>
-                            <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
-                            <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Actions</th>
+                            <th class="px-4 py-3 border text-left text-xs font-semibold text-gray-700 uppercase">No.</th>
+                            <th class="px-4 py-3 border text-left text-xs font-semibold text-gray-700 uppercase">Full Name</th>
+                            <th class="px-4 py-3 border text-left text-xs font-semibold text-gray-700 uppercase">DepEd ID</th>
+                            <th class="px-4 py-3 border text-left text-xs font-semibold text-gray-700 uppercase">Position</th>
+                            <th class="px-4 py-3 border text-left text-xs font-semibold text-gray-700 uppercase">Grade / Section</th>
+                            <th class="px-4 py-3 border text-left text-xs font-semibold text-gray-700 uppercase">Email</th>
+                            <th class="px-4 py-3 border text-center text-xs font-semibold text-gray-700 uppercase">Status</th>
+                            <th class="px-4 py-3 border text-center text-xs font-semibold text-gray-700 uppercase">Actions</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         @forelse($advisers as $index => $adviser)
                         <tr class="hover:bg-gray-50">
-                            <td class="px-6 py-4 text-sm text-gray-900">{{ $advisers->firstItem() + $index }}</td>
-                            <td class="px-6 py-4 text-sm font-semibold text-gray-900">{{ $adviser->name }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-600">{{ $adviser->deped_id ?? '-' }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-600">{{ $adviser->position ?? '-' }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-600">{{ $adviser->advisory_grade_level ?? '-' }} - {{ $adviser->advisory_section ?? '-' }}</td>
-                            <td class="px-6 py-4 text-sm text-gray-600 truncate">{{ $adviser->email }}</td>
+                            <td class="px-4 py-4 border text-sm text-gray-900">{{ $advisers->firstItem() + $index }}</td>
+                            <td class="px-4 py-4 border text-sm font-semibold text-gray-900">{{ $adviser->name }}</td>
+                            <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->deped_id ?? '-' }}</td>
+                            <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->position ?? '-' }}</td>
+                            <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->advisory_grade_level ?? '-' }} - {{ $adviser->advisory_section ?? '-' }}</td>
+                            <td class="px-4 py-4 border text-sm text-gray-600 truncate">{{ $adviser->email }}</td>
                             
                             <!-- Status Column -->
-                            <td class="px-6 py-4 text-center">
+                            <td class="px-4 py-4 border text-center">
                                 @if($adviser->is_active)
                                     <span class="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-800">Active</span>
                                 @else
@@ -132,7 +132,7 @@
                             </td>
 
                             <!-- Actions Column -->
-                            <td class="px-6 py-4 text-center space-x-2 whitespace-nowrap">
+                            <td class="px-4 py-4 border text-center space-x-2 whitespace-nowrap">
                                 <!-- Deactivate / Activate Form -->
                                 <form action="{{ route('accounts.toggle-status', $adviser) }}" method="POST" class="inline">
                                     @csrf

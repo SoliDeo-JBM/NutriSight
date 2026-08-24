@@ -2,7 +2,7 @@
 
 @section('content')
     <div x-data="sbfpManager()" x-cloak>
-        <h1 class="text-2xl font-bold mb-6">Advisory SBFP Lists</h1>
+        <h1 class="text-2xl font-bold mb-6">Advisory SBFP List</h1>
 
         <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border border-gray-200">
             <div class="flex justify-between items-center mb-6">

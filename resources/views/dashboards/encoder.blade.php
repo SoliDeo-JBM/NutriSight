@@ -28,17 +28,17 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <a href="{{ route('students.index') }}" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
-            <h2 class="text-lg font-semibold mb-2 text-blue-600">Advisory Student Lists</h2>
+            <h2 class="text-lg font-semibold mb-2 text-blue-600">Advisory Student List</h2>
             <p class="text-gray-600">Manage learner profiles and nutritional data.</p>
         </a>
         
         <a href="{{ route('students.sbfp') }}" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
-            <h2 class="text-lg font-semibold mb-2 text-emerald-600">Advisory SBFP Lists</h2>
+            <h2 class="text-lg font-semibold mb-2 text-emerald-600">Advisory SBFP List</h2>
             <p class="text-gray-600">View official feeding program participants & approvals.</p>
         </a>
 
         <a href="{{ route('attendance.index') }}" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
-            <h2 class="text-lg font-semibold mb-2 text-purple-600">Attendance Lists</h2>
+            <h2 class="text-lg font-semibold mb-2 text-purple-600">Attendance List</h2>
             <p class="text-gray-600">Interactive calendar and QR scanner logs.</p>
         </a>
     </div>
