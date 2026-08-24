@@ -105,6 +105,7 @@
                                 </svg>
                             </button>
                         </div>
+                        <p id="passwordStrengthIndicator" class="text-xs mt-1 font-medium transition-all"></p>
                         @error('password')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -129,6 +130,7 @@
                                 </svg>
                             </button>
                         </div>
+                        <p id="confirmPasswordMatchIndicator" class="text-xs mt-1 font-medium transition-all"></p>
                         @error('password_confirmation')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -167,6 +169,58 @@
                             eyeSlashIcon.style.display = 'none';
                         }
                     });
+
+                    const passwordInput = document.getElementById('password');
+                    const strengthIndicator = document.getElementById('passwordStrengthIndicator');
+
+                    passwordInput.addEventListener('input', function() {
+                        const val = this.value;
+                        if (val.length === 0) {
+                            strengthIndicator.textContent = '';
+                            return;
+                        }
+                        if (val.length < 8) {
+                            strengthIndicator.textContent = 'Password should be at least 8 characters long';
+                            strengthIndicator.className = 'text-xs mt-1 font-medium text-red-500';
+                        } else if (!/[a-z]/.test(val)) {
+                            strengthIndicator.textContent = 'Password should have a lowercase letter';
+                            strengthIndicator.className = 'text-xs mt-1 font-medium text-red-500';
+                        } else if (!/[A-Z]/.test(val)) {
+                            strengthIndicator.textContent = 'Password should have an uppercase letter';
+                            strengthIndicator.className = 'text-xs mt-1 font-medium text-red-500';
+                        } else if (!/[0-9]/.test(val)) {
+                            strengthIndicator.textContent = 'Password should have a number';
+                            strengthIndicator.className = 'text-xs mt-1 font-medium text-red-500';
+                        } else if (!/[^A-Za-z0-9]/.test(val)) {
+                            strengthIndicator.textContent = 'Password should have a symbol';
+                            strengthIndicator.className = 'text-xs mt-1 font-medium text-red-500';
+                        } else {
+                            strengthIndicator.textContent = 'Password is acceptable';
+                            strengthIndicator.className = 'text-xs mt-1 font-medium text-green-600';
+                        }
+                    });
+
+                    const confirmPasswordInput = document.getElementById('password_confirmation');
+                    const matchIndicator = document.getElementById('confirmPasswordMatchIndicator');
+
+                    function checkPasswordMatch() {
+                        const pass = passwordInput.value;
+                        const confirmPass = confirmPasswordInput.value;
+                        if (confirmPass.length === 0) {
+                            matchIndicator.textContent = '';
+                            return;
+                        }
+                        if (pass !== confirmPass) {
+                            matchIndicator.textContent = 'Passwords do not match';
+                            matchIndicator.className = 'text-xs mt-1 font-medium text-red-500';
+                        } else {
+                            matchIndicator.textContent = 'Passwords match';
+                            matchIndicator.className = 'text-xs mt-1 font-medium text-green-600';
+                        }
+                    }
+
+                    passwordInput.addEventListener('input', checkPasswordMatch);
+                    confirmPasswordInput.addEventListener('input', checkPasswordMatch);
                 </script>
 
                 <!-- Birthdate -->

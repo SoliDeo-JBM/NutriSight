@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rules\Password;
 
 class AccountController extends Controller
 {
@@ -111,7 +112,7 @@ class AccountController extends Controller
       'deped_id' => 'required|string|unique:users,deped_id',
       'name' => 'required|string|max:255',
       'email' => 'required|email|unique:users,email',
-      'password' => 'required|string|min:8|confirmed',
+      'password' => ['required', 'confirmed', Password::defaults()],
       'sex' => 'required|in:Male,Female',
       'birthdate' => 'required|date|before:today',
       'position' => 'required|in:Teacher I,Teacher II,Teacher III,Master Teacher I,Master Teacher II',
