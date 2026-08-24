@@ -56,6 +56,9 @@ Route::middleware('auth')->group(function () {
     // Role-protected dashboards
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/super-admin/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard.super-admin');
+        Route::get('/super-admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('super-admin.accounts.index');
+        Route::get('/super-admin/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('super-admin.accounts.create');
+        Route::post('/super-admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('super-admin.accounts.store');
     });
 
     Route::middleware('role:admin')->group(function () {
@@ -64,6 +67,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('admin.accounts.index');
         Route::get('/admin/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('admin.accounts.create');
         Route::post('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('admin.accounts.store');
+    });
+
+    Route::middleware('role:super_admin|admin')->group(function () {
+        Route::patch('/accounts/{user}/toggle-status', [App\Http\Controllers\Admin\AccountController::class, 'toggleStatus'])->name('accounts.toggle-status');
+        Route::delete('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'destroy'])->name('accounts.destroy');
     });
 
     Route::middleware('role:encoder')->group(function () {

@@ -44,7 +44,7 @@
             @endif
             @if(Auth::user()->role === 'admin')
             <a href="{{ route('admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-users-cog"></i> Accounts
+                <i class="fas fa-users-cog"></i> Encoder Accounts
             </a>
             <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-chart-line"></i> SBFP Reports

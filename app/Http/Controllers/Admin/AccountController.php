@@ -11,18 +11,26 @@ use Illuminate\Validation\Rules\Password;
 class AccountController extends Controller
 {
   /**
-   * Display a listing of all adviser accounts.
+   * Display a listing of accounts.
    */
   public function index(Request $request)
   {
-    $query = User::where('role', 'encoder');
+    $currentUser = auth()->user();
+    $targetRole = $currentUser->isSuperAdmin() ? 'admin' : 'encoder';
 
-    // Search by name or DepEd ID
+    $query = User::where('role', $targetRole);
+
+    // Search by name or DepEd ID (case-insensitive, starts-with for 1 char, partial for multi-char)
     if ($request->filled('search')) {
-      $search = $request->input('search');
-      $query->where(function ($q) use ($search) {
-        $q->where('name', 'like', "%{$search}%")
-          ->orWhere('deped_id', 'like', "%{$search}%");
+      $search = trim($request->input('search'));
+      if (mb_strlen($search) === 1) {
+        $searchTerm = strtolower($search) . '%';
+      } else {
+        $searchTerm = '%' . strtolower($search) . '%';
+      }
+      $query->where(function ($q) use ($searchTerm) {
+        $q->whereRaw('LOWER(name) LIKE ?', [$searchTerm])
+          ->orWhereRaw('LOWER(deped_id) LIKE ?', [$searchTerm]);
       });
     }
 
@@ -60,12 +68,12 @@ class AccountController extends Controller
     $advisers = $query->paginate(15);
 
     // Get filter options
-    $gradeLevels = User::where('role', 'encoder')
+    $gradeLevels = User::where('role', $targetRole)
       ->whereNotNull('advisory_grade_level')
       ->distinct('advisory_grade_level')
       ->pluck('advisory_grade_level');
 
-    $positions = User::where('role', 'encoder')
+    $positions = User::where('role', $targetRole)
       ->whereNotNull('position')
       ->distinct('position')
       ->pluck('position');
@@ -76,7 +84,7 @@ class AccountController extends Controller
   }
 
   /**
-   * Show the form for creating a new adviser account.
+   * Show the form for creating a new account.
    */
   public function create()
   {
@@ -104,10 +112,14 @@ class AccountController extends Controller
   }
 
   /**
-   * Store a newly created adviser account in storage.
+   * Store a newly created account in storage.
    */
   public function store(Request $request)
   {
+    $currentUser = auth()->user();
+    $targetRole = $currentUser->isSuperAdmin() ? 'admin' : 'encoder';
+    $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
+
     $validated = $request->validate([
       'deped_id' => 'required|string|unique:users,deped_id',
       'name' => 'required|string|max:255',
@@ -120,7 +132,6 @@ class AccountController extends Controller
       'advisory_section' => 'required|string|max:255',
     ]);
 
-    // Create the user with encoder role
     User::create([
       'deped_id' => $validated['deped_id'],
       'name' => $validated['name'],
@@ -131,9 +142,60 @@ class AccountController extends Controller
       'position' => $validated['position'],
       'advisory_grade_level' => $validated['advisory_grade_level'],
       'advisory_section' => $validated['advisory_section'],
-      'role' => 'encoder',
+      'role' => $targetRole,
+      'is_active' => true,
     ]);
 
-    return redirect()->route('admin.accounts.index')->with('success', 'Adviser account created successfully.');
+    return redirect()->route($redirectRoute)->with('success', 'Account created successfully.');
+  }
+
+  /**
+   * Toggle account active status.
+   */
+  public function toggleStatus(User $user)
+  {
+    $currentUser = auth()->user();
+    if ($currentUser->isSuperAdmin() && $user->role !== 'admin') {
+      abort(403);
+    }
+    if ($currentUser->isAdmin() && $user->role !== 'encoder') {
+      abort(403);
+    }
+
+    $user->is_active = !$user->is_active;
+    $user->save();
+
+    return back()->with('success', 'Account status updated successfully.');
+  }
+
+  /**
+   * Soft delete account with level 2 security password verification.
+   */
+  public function destroy(Request $request, User $user)
+  {
+    $currentUser = auth()->user();
+    if ($currentUser->isSuperAdmin() && $user->role !== 'admin') {
+      abort(403);
+    }
+    if ($currentUser->isAdmin() && $user->role !== 'encoder') {
+      abort(403);
+    }
+
+    if ($currentUser->id === $user->id) {
+      return back()->withErrors(['delete_error' => 'You cannot delete your own account.']);
+    }
+
+    $request->validate([
+      'password' => ['required', function ($attribute, $value, $fail) use ($currentUser) {
+        if (!Hash::check($value, $currentUser->password)) {
+          $fail('The password you entered is incorrect.');
+        }
+      }],
+    ]);
+
+    $user->delete(); // Soft delete
+
+    $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
+    return redirect()->route($redirectRoute)->with('success', 'Account deleted successfully.');
   }
 }
