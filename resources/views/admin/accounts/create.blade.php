@@ -90,9 +90,21 @@
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             Password <span class="text-red-500">*</span>
                         </label>
-                        <input type="password" name="password" required 
-                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('password') border-red-500 @enderror"
-                               placeholder="Minimum 8 characters">
+                        <div class="relative">
+                            <input type="password" id="password" name="password" required 
+                                   class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('password') border-red-500 @enderror"
+                                   placeholder="Minimum 8 characters">
+                            <button type="button" id="togglePassword" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-600 transition-colors focus:outline-none">
+                                <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.43 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <svg id="eyeSlashIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5" style="display: none;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.779M6.228 6.228L3 3m3.228 3.228L3 3m.252 15.8s.031-1.612-.234-2.5a5.006 5.006 0 01-.233-2.5M16.5 13.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                                </svg>
+                            </button>
+                        </div>
                         @error('password')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
@@ -102,14 +114,60 @@
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             Confirm Password <span class="text-red-500">*</span>
                         </label>
-                        <input type="password" name="password_confirmation" required 
-                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('password_confirmation') border-red-500 @enderror"
-                               placeholder="Re-enter password">
+                        <div class="relative">
+                            <input type="password" id="password_confirmation" name="password_confirmation" required 
+                                   class="w-full border border-gray-300 rounded-lg p-2.5 pr-10 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('password_confirmation') border-red-500 @enderror"
+                                   placeholder="Re-enter password">
+                            <button type="button" id="toggleConfirmPassword" class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-blue-600 transition-colors focus:outline-none">
+                                <svg id="eyeConfirmIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.43 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                </svg>
+                                <svg id="eyeSlashConfirmIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5" style="display: none;">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.779M6.228 6.228L3 3m3.228 3.228L3 3m.252 15.8s.031-1.612-.234-2.5a5.006 5.006 0 01-.233-2.5M16.5 13.5a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <line x1="3" y1="3" x2="21" y2="21" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
+                                </svg>
+                            </button>
+                        </div>
                         @error('password_confirmation')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
                     </div>
                 </div>
+
+                <script>
+                    document.getElementById('togglePassword').addEventListener('click', function () {
+                        const passwordInput = document.getElementById('password');
+                        const eyeIcon = document.getElementById('eyeIcon');
+                        const eyeSlashIcon = document.getElementById('eyeSlashIcon');
+                        
+                        if (passwordInput.type === 'password') {
+                            passwordInput.type = 'text';
+                            eyeIcon.style.display = 'none';
+                            eyeSlashIcon.style.display = 'block';
+                        } else {
+                            passwordInput.type = 'password';
+                            eyeIcon.style.display = 'block';
+                            eyeSlashIcon.style.display = 'none';
+                        }
+                    });
+
+                    document.getElementById('toggleConfirmPassword').addEventListener('click', function () {
+                        const passwordInput = document.getElementById('password_confirmation');
+                        const eyeIcon = document.getElementById('eyeConfirmIcon');
+                        const eyeSlashIcon = document.getElementById('eyeSlashConfirmIcon');
+                        
+                        if (passwordInput.type === 'password') {
+                            passwordInput.type = 'text';
+                            eyeIcon.style.display = 'none';
+                            eyeSlashIcon.style.display = 'block';
+                        } else {
+                            passwordInput.type = 'password';
+                            eyeIcon.style.display = 'block';
+                            eyeSlashIcon.style.display = 'none';
+                        }
+                    });
+                </script>
 
                 <!-- Birthdate -->
                 <div>
