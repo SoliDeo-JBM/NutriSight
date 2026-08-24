@@ -14,7 +14,7 @@ class AccountController extends Controller
    */
   public function index(Request $request)
   {
-    $query = User::where('role', 'adviser');
+    $query = User::where('role', 'encoder');
 
     // Search by name or DepEd ID
     if ($request->filled('search')) {
@@ -59,12 +59,12 @@ class AccountController extends Controller
     $advisers = $query->paginate(15);
 
     // Get filter options
-    $gradeLevels = User::where('role', 'adviser')
+    $gradeLevels = User::where('role', 'encoder')
       ->whereNotNull('advisory_grade_level')
       ->distinct('advisory_grade_level')
       ->pluck('advisory_grade_level');
 
-    $positions = User::where('role', 'adviser')
+    $positions = User::where('role', 'encoder')
       ->whereNotNull('position')
       ->distinct('position')
       ->pluck('position');
@@ -119,7 +119,7 @@ class AccountController extends Controller
       'advisory_section' => 'required|string|max:255',
     ]);
 
-    // Create the user with adviser role
+    // Create the user with encoder role
     User::create([
       'deped_id' => $validated['deped_id'],
       'name' => $validated['name'],
@@ -130,7 +130,7 @@ class AccountController extends Controller
       'position' => $validated['position'],
       'advisory_grade_level' => $validated['advisory_grade_level'],
       'advisory_section' => $validated['advisory_section'],
-      'role' => 'adviser',
+      'role' => 'encoder',
     ]);
 
     return redirect()->route('admin.accounts.index')->with('success', 'Adviser account created successfully.');
