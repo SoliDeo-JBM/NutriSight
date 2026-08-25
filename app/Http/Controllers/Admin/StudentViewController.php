@@ -44,13 +44,45 @@ class StudentViewController extends Controller
             $query->where('gender', $request->input('sex'));
         }
 
+        // Sorting
+        $sort = $request->input('sort', 'latest');
+        switch ($sort) {
+            case 'name_az':
+                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                break;
+            case 'name_za':
+                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                break;
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'lrn_asc':
+                $query->orderBy('student_number', 'asc');
+                break;
+            case 'lrn_desc':
+                $query->orderBy('student_number', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
+        }
+
         $students = $query->paginate(15)->withQueryString();
 
         $gradeLevels = Student::whereNotNull('grade_level')->distinct()->pluck('grade_level');
         $sections = Section::pluck('name');
         $sexes = ['Male', 'Female'];
+        $sortOptions = [
+            'latest' => 'Latest to Oldest',
+            'oldest' => 'Oldest to Latest',
+            'name_az' => 'Name (A-Z)',
+            'name_za' => 'Name (Z-A)',
+            'lrn_asc' => 'LRN / ID (Ascending)',
+            'lrn_desc' => 'LRN / ID (Descending)',
+        ];
 
-        return view('admin.students.index', compact('students', 'gradeLevels', 'sections', 'sexes'));
+        return view('admin.students.index', compact('students', 'gradeLevels', 'sections', 'sexes', 'sortOptions'));
     }
 
     public function sbfpIndex(Request $request)
@@ -98,12 +130,58 @@ class StudentViewController extends Controller
             $query->where('gender', $request->input('sex'));
         }
 
+        // Filter by approval status
+        if ($request->filled('approval_status')) {
+            $approvalStatus = $request->input('approval_status');
+            if ($approvalStatus === 'approved') {
+                $query->where('parent_approval_status', 'approved');
+            } elseif ($approvalStatus === 'disapproved') {
+                $query->where('parent_approval_status', 'disapproved');
+            }
+        }
+
+        // Sorting
+        $sort = $request->input('sort', 'latest');
+        switch ($sort) {
+            case 'name_az':
+                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                break;
+            case 'name_za':
+                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                break;
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'lrn_asc':
+                $query->orderBy('student_number', 'asc');
+                break;
+            case 'lrn_desc':
+                $query->orderBy('student_number', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
+        }
+
         $students = $query->paginate(15)->withQueryString();
 
         $gradeLevels = Student::whereNotNull('grade_level')->distinct()->pluck('grade_level');
         $sections = Section::pluck('name');
         $sexes = ['Male', 'Female'];
+        $approvalStatuses = [
+            'approved' => 'Approved',
+            'disapproved' => 'Disapproved'
+        ];
+        $sortOptions = [
+            'latest' => 'Latest to Oldest',
+            'oldest' => 'Oldest to Latest',
+            'name_az' => 'Name (A-Z)',
+            'name_za' => 'Name (Z-A)',
+            'lrn_asc' => 'LRN / ID (Ascending)',
+            'lrn_desc' => 'LRN / ID (Descending)',
+        ];
 
-        return view('admin.students.sbfp', compact('students', 'gradeLevels', 'sections', 'sexes'));
+        return view('admin.students.sbfp', compact('students', 'gradeLevels', 'sections', 'sexes', 'approvalStatuses', 'sortOptions'));
     }
 }

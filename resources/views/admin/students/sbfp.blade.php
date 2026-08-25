@@ -23,7 +23,7 @@
                 </div>
 
                 <!-- Filters Row -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
                     <!-- Grade Level Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Grade Level</label>
@@ -53,6 +53,27 @@
                             <option value="">All</option>
                             @foreach($sexes as $sex)
                                 <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Approval Status Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Parent Approval</label>
+                        <select name="approval_status" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <option value="">All Statuses</option>
+                            @foreach($approvalStatuses as $key => $label)
+                                <option value="{{ $key }}" {{ request('approval_status') == $key ? 'selected' : '' }}>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Sort By -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
+                        <select name="sort" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            @foreach($sortOptions as $key => $label)
+                                <option value="{{ $key }}" {{ request('sort', 'latest') == $key ? 'selected' : '' }}>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
