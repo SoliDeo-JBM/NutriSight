@@ -28,6 +28,11 @@
             <a href="{{ route(Auth::user()->dashboardRoute()) }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
+            @if(Auth::user()->role === 'super_admin')
+            <a href="{{ route('admin.students.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-users"></i> Complete Student List
+            </a>
+            @endif
             @if(Auth::user()->role === 'encoder')
             <a href="{{ route('students.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-users"></i> Advisory Student List
