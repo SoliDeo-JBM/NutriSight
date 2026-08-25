@@ -53,6 +53,11 @@ Route::middleware('auth')->group(function () {
         return redirect()->route(Auth::user()->dashboardRoute());
     })->name('dashboard');
 
+    // Account Settings (Available for authenticated users)
+    Route::get('/account/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('account.settings');
+    Route::patch('/account/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('account.settings.update');
+    Route::put('/account/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('account.password.update');
+
     // Role-protected dashboards
     Route::middleware('role:super_admin')->group(function () {
         Route::get('/super-admin/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard.super-admin');

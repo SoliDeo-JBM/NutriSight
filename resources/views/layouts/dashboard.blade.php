@@ -41,6 +41,9 @@
             <a href="{{ route('attendance.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-calendar-check"></i> Attendance List
             </a>
+            <a href="{{ route('account.settings') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-user-cog"></i> Account Settings
+            </a>
             @endif
             @if(Auth::user()->role === 'admin')
             <a href="{{ route('admin.students.index') }}" class="nav-link" onclick="toggleSidebar()">
