@@ -249,8 +249,27 @@ class DashboardController extends Controller
 
     public function encoder()
     {
-        $totalStudents = Student::count();
-        $totalSbfp = Student::where('is_permitted', true)->count();
+        $user = auth()->user();
+        $studentQuery = Student::query();
+        if ($user && $user->isEncoder()) {
+            if ($user->advisory_grade_level) {
+                $studentQuery->where('grade_level', $user->advisory_grade_level);
+            }
+            if ($user->advisory_section) {
+                $studentQuery->where('section', $user->advisory_section);
+            }
+        }
+
+        $totalStudents = (clone $studentQuery)->count();
+        $totalSbfp = (clone $studentQuery)->where(function ($q) {
+            $q->where('is_permitted', true)
+              ->orWhereHas('nutritionalRecords', function ($sub) {
+                  $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+              });
+        })->where(function ($q) {
+            $q->where('parent_approval_status', '!=', 'disapproved')
+              ->orWhereNull('parent_approval_status');
+        })->count();
         
         // Attendance chart data (last 7 days)
         $attendanceDates = [];
@@ -258,7 +277,19 @@ class DashboardController extends Controller
         for ($i = 6; $i >= 0; $i--) {
             $date = Carbon::today()->subDays($i)->toDateString();
             $attendanceDates[] = Carbon::parse($date)->format('M d');
-            $attendanceCounts[] = \App\Models\AttendanceLog::where('date', $date)->where('status', 'present')->count();
+            $attendanceCounts[] = \App\Models\AttendanceLog::where('date', $date)
+                ->where('status', 'present')
+                ->whereHas('student', function ($q) use ($user) {
+                    if ($user && $user->isEncoder()) {
+                        if ($user->advisory_grade_level) {
+                            $q->where('grade_level', $user->advisory_grade_level);
+                        }
+                        if ($user->advisory_section) {
+                            $q->where('section', $user->advisory_section);
+                        }
+                    }
+                })
+                ->count();
         }
 
         return view('dashboards.encoder', compact('totalStudents', 'totalSbfp', 'attendanceDates', 'attendanceCounts'));

@@ -17,9 +17,18 @@ class AttendanceController extends Controller
         $defaultDate = Carbon::create($year, $month, 1)->toDateString();
         $date = $request->input('date', $defaultDate);
         
-        // Exclude disapproved students from attendance roster
-        $sbfpStudents = Student::with('nutritionalRecords')
-            ->get()
+        // Exclude disapproved students from attendance roster and scope to encoder's advisory section/grade level
+        $user = auth()->user();
+        $studentQuery = Student::with('nutritionalRecords');
+        if ($user && $user->isEncoder()) {
+            if ($user->advisory_grade_level) {
+                $studentQuery->where('grade_level', $user->advisory_grade_level);
+            }
+            if ($user->advisory_section) {
+                $studentQuery->where('section', $user->advisory_section);
+            }
+        }
+        $sbfpStudents = $studentQuery->get()
             ->filter(function ($student) {
                 if ($student->parent_approval_status === 'disapproved') {
                     return false;
