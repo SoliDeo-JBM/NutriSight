@@ -10,7 +10,15 @@ class AuditLogController extends Controller
 {
     public function index(Request $request)
     {
+        $currentUser = auth()->user();
         $query = AuditLog::with('user')->latest();
+
+        // If user is Admin (not Super Admin), restrict to encoder actions only
+        if ($currentUser && $currentUser->isAdmin()) {
+            $query->whereHas('user', function ($q) {
+                $q->where('role', 'encoder');
+            });
+        }
 
         // Search description, module, action, or user name
         if ($request->filled('search')) {
@@ -37,8 +45,15 @@ class AuditLogController extends Controller
 
         $auditLogs = $query->paginate(20)->withQueryString();
 
-        $modules = AuditLog::distinct()->pluck('module');
-        $actions = AuditLog::distinct()->pluck('action');
+        $baseLogQuery = AuditLog::query();
+        if ($currentUser && $currentUser->isAdmin()) {
+            $baseLogQuery->whereHas('user', function ($q) {
+                $q->where('role', 'encoder');
+            });
+        }
+
+        $modules = (clone $baseLogQuery)->distinct()->pluck('module');
+        $actions = (clone $baseLogQuery)->distinct()->pluck('action');
 
         $rolePrefix = auth()->user()->isSuperAdmin() ? 'super-admin' : 'admin';
 
