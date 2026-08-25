@@ -58,6 +58,9 @@
             <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-chart-line"></i> SBFP Reports
             </a>
+            <a href="{{ route('account.settings') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-user-cog"></i> Account Settings
+            </a>
             @endif
         </nav>
         <div class="sidebar-footer">

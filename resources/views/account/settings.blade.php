@@ -76,6 +76,7 @@
                         <input type="text" name="position" x-model="form.position" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
                     </div>
 
+                    @if($user->role === 'encoder')
                     <!-- Advisory Grade Level -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Advisory Grade Level</label>
@@ -92,6 +93,7 @@
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Advisory Section</label>
                         <input type="text" name="advisory_section" x-model="form.advisory_section" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
                     </div>
+                    @endif
                 </div>
 
                 <div class="flex justify-end gap-2 pt-4">
