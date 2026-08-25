@@ -1,18 +1,78 @@
 @extends('layouts.dashboard')
 
 @section('content')
-    <div x-data="sbfpManager()" x-cloak>
-        <h1 class="text-2xl font-bold mb-6">Advisory SBFP List</h1>
-
-        <div class="bg-white overflow-hidden shadow-sm sm:rounded-lg p-6 border border-gray-200">
-            <div class="flex justify-between items-center mb-6">
-                <p class="text-gray-600">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval. Scroll horizontally for details.</p>
-                <a href="{{ route('students.print-batch') }}" target="_blank" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap">
-                    <i class="fas fa-print mr-2"></i> Print Portrait ID QR Sheet
-                </a>
+    <div x-data="sbfpManager()" x-cloak class="flex flex-col gap-6">
+        <!-- Header -->
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
+                <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
             </div>
-            
-            <div class="overflow-x-auto shadow ring-1 ring-black ring-opacity-5 rounded-lg">
+            <a href="{{ route('students.print-batch') }}" target="_blank" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
+                <i class="fas fa-print"></i> Print Portrait ID QR Sheet
+            </a>
+        </div>
+
+        <!-- Filters & Search Card -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+            <form method="GET" action="{{ route('students.sbfp') }}" class="space-y-4">
+                <!-- Search Bar -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                </div>
+
+                <!-- Filters Row -->
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                    <!-- Sex Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
+                        <select name="sex" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <option value="">All</option>
+                            @foreach($sexes as $sex)
+                                <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- BMI Category Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">BMI Category</label>
+                        <select name="bmi_category" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <option value="">All Categories</option>
+                            @foreach($bmiCategories as $cat)
+                                <option value="{{ $cat }}" {{ request('bmi_category') == $cat ? 'selected' : '' }}>{{ $cat }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Approval Status Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Parent Approval</label>
+                        <select name="approval_status" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                            <option value="">All Statuses</option>
+                            @foreach($approvalStatuses as $key => $label)
+                                <option value="{{ $key }}" {{ request('approval_status') == $key ? 'selected' : '' }}>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Action Buttons -->
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
+                        <i class="fas fa-filter mr-2"></i> Apply Filters
+                    </button>
+                    <a href="{{ route('students.sbfp') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
+                        <i class="fas fa-redo mr-2"></i> Clear Filters
+                    </a>
+                </div>
+            </form>
+        </div>
+
+        <!-- SBFP Table -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div class="overflow-x-auto">
                 <table class="w-full border-collapse bg-white text-left text-sm text-gray-500">
                     <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
                         <tr>
@@ -44,13 +104,13 @@
                             ];
                         @endphp
                         <tr class="hover:bg-gray-50">
-                            <td class="px-4 py-3 border">{{ $index + 1 }}</td>
+                            <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }} ({{ $student->gender }})</td>
                             
                             <!-- Term Data Columns -->
-                            @foreach(['Term 1', 'Term 2', 'Term 3'] as $index => $term)
+                            @foreach(['Term 1', 'Term 2', 'Term 3'] as $termIndex => $term)
                             <td class="px-4 py-3 border text-center">
                                 @if($termData[$term])
                                     @php $data = $termData[$term]; @endphp
@@ -64,10 +124,10 @@
                                             @else text-yellow-700 @endif">
                                             {{ $data->nutritional_status }}
                                         </div>
-                                        <button @click="openProgressModal({{ $student->id }}, {{ $index + 1 }})" class="mt-1 text-blue-600 hover:underline text-xs">Edit</button>
+                                        <button @click="openProgressModal({{ $student->id }}, {{ $termIndex + 1 }})" class="mt-1 text-blue-600 hover:underline text-xs">Edit</button>
                                     </div>
                                 @else
-                                    <button @click="openProgressModal({{ $student->id }}, {{ $index + 1 }})" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
+                                    <button @click="openProgressModal({{ $student->id }}, {{ $termIndex + 1 }})" class="bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700">
                                         Add
                                     </button>
                                 @endif
@@ -105,7 +165,9 @@
                             </td>
 
                             <td class="px-4 py-3 border text-center whitespace-nowrap">
-                                @if($student->is_permitted || $isWasted)
+                                @if($student->parent_approval_status === 'disapproved')
+                                    <span class="text-red-500 text-xs font-semibold">Disapproved (No QR)</span>
+                                @elseif($student->is_permitted || $isWasted)
                                     <div class="flex flex-col items-center justify-center">
                                         <div class="p-1 bg-white border inline-block shadow-sm rounded">
                                             {!! QrCode::size(60)->generate($student->student_number) !!}
@@ -119,12 +181,19 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="10" class="px-4 py-6 border text-center text-gray-500">No SBFP records found.</td>
+                            <td colspan="9" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
                         </tr>
                         @endforelse
                     </tbody>
                 </table>
             </div>
+
+            <!-- Pagination -->
+            @if($students->hasPages())
+            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
+                {{ $students->render() }}
+            </div>
+            @endif
         </div>
 
         <!-- Progress Input Modal -->
@@ -182,6 +251,17 @@
                     this.currentTerm = null;
                 }
             }
+        }
+
+        let searchTimeout;
+        const searchInput = document.querySelector('input[name="search"]');
+        if (searchInput) {
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    this.form.submit();
+                }, 300);
+            });
         }
     </script>
 
