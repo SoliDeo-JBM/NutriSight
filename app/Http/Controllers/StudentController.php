@@ -60,11 +60,43 @@ class StudentController extends Controller
             });
         }
 
+        // Sorting
+        $sort = $request->input('sort', 'latest');
+        switch ($sort) {
+            case 'name_az':
+                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                break;
+            case 'name_za':
+                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                break;
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'lrn_asc':
+                $query->orderBy('student_number', 'asc');
+                break;
+            case 'lrn_desc':
+                $query->orderBy('student_number', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
+        }
+
         $students = $query->paginate(15)->withQueryString();
         $sexes = ['Male', 'Female'];
         $bmiCategories = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese'];
+        $sortOptions = [
+            'latest' => 'Latest to Oldest',
+            'oldest' => 'Oldest to Latest',
+            'name_az' => 'Name (A-Z)',
+            'name_za' => 'Name (Z-A)',
+            'lrn_asc' => 'LRN / ID (Ascending)',
+            'lrn_desc' => 'LRN / ID (Descending)',
+        ];
 
-        return view('students.index', compact('students', 'sexes', 'bmiCategories'));
+        return view('students.index', compact('students', 'sexes', 'bmiCategories', 'sortOptions'));
     }
 
     public function sbfpIndex(Request $request)
@@ -123,9 +155,31 @@ class StudentController extends Controller
                 $query->where('parent_approval_status', 'approved');
             } elseif ($approvalStatus === 'disapproved') {
                 $query->where('parent_approval_status', 'disapproved');
-            } elseif ($approvalStatus === 'pending') {
-                $query->whereNull('parent_approval_status');
             }
+        }
+
+        // Sorting
+        $sort = $request->input('sort', 'latest');
+        switch ($sort) {
+            case 'name_az':
+                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                break;
+            case 'name_za':
+                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                break;
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'lrn_asc':
+                $query->orderBy('student_number', 'asc');
+                break;
+            case 'lrn_desc':
+                $query->orderBy('student_number', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
         }
 
         $students = $query->paginate(15)->withQueryString();
@@ -133,11 +187,18 @@ class StudentController extends Controller
         $bmiCategories = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese'];
         $approvalStatuses = [
             'approved' => 'Approved',
-            'disapproved' => 'Disapproved',
-            'pending' => 'Pending'
+            'disapproved' => 'Disapproved'
+        ];
+        $sortOptions = [
+            'latest' => 'Latest to Oldest',
+            'oldest' => 'Oldest to Latest',
+            'name_az' => 'Name (A-Z)',
+            'name_za' => 'Name (Z-A)',
+            'lrn_asc' => 'LRN / ID (Ascending)',
+            'lrn_desc' => 'LRN / ID (Descending)',
         ];
 
-        return view('students.sbfp', compact('students', 'sexes', 'bmiCategories', 'approvalStatuses'));
+        return view('students.sbfp', compact('students', 'sexes', 'bmiCategories', 'approvalStatuses', 'sortOptions'));
     }
 
     public function create()
