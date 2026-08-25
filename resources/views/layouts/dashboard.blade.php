@@ -29,24 +29,33 @@
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             @if(Auth::user()->role === 'super_admin')
-            <a href="{{ route('admin.students.index') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('super-admin.students.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-users"></i> Complete Student List
+            </a>
+            <a href="{{ route('super-admin.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-clipboard-list"></i> Complete SBFP List
+            </a>
+            <a href="{{ route('super-admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-users-cog"></i> Admin Accounts
+            </a>
+            <a href="{{ route('super-admin.settings') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-user-cog"></i> Account Settings
             </a>
             @endif
             @if(Auth::user()->role === 'encoder')
-            <a href="{{ route('students.index') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('encoder.students.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-users"></i> Advisory Student List
             </a>
-            <a href="{{ route('students.create') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('encoder.students.create') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-plus"></i> Add Advisory Student
             </a>
-            <a href="{{ route('students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('encoder.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-clipboard-list"></i> Advisory SBFP List
             </a>
-            <a href="{{ route('attendance.index') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('encoder.attendance.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-calendar-check"></i> Attendance List
             </a>
-            <a href="{{ route('account.settings') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('encoder.settings') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-cog"></i> Account Settings
             </a>
             @endif
@@ -63,7 +72,7 @@
             <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-chart-line"></i> SBFP Reports
             </a>
-            <a href="{{ route('account.settings') }}" class="nav-link" onclick="toggleSidebar()">
+            <a href="{{ route('admin.settings') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-cog"></i> Account Settings
             </a>
             @endif

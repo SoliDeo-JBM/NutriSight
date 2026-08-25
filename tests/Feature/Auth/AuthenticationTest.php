@@ -29,7 +29,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard.encoder', absolute: false));
+        $response->assertRedirect(route('encoder.dashboard', absolute: false));
     }
 
     public function test_super_admin_redirects_to_super_admin_dashboard(): void
@@ -44,7 +44,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard.super-admin', absolute: false));
+        $response->assertRedirect(route('super-admin.dashboard', absolute: false));
     }
 
     public function test_admin_redirects_to_admin_dashboard(): void
@@ -59,7 +59,7 @@ class AuthenticationTest extends TestCase
         ]);
 
         $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard.admin', absolute: false));
+        $response->assertRedirect(route('admin.dashboard', absolute: false));
     }
 
     public function test_users_can_not_authenticate_with_invalid_password(): void

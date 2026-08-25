@@ -53,36 +53,48 @@ Route::middleware('auth')->group(function () {
         return redirect()->route(Auth::user()->dashboardRoute());
     })->name('dashboard');
 
-    // Account Settings (Available for authenticated users)
-    Route::get('/account/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('account.settings');
-    Route::patch('/account/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('account.settings.update');
-    Route::put('/account/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('account.password.update');
+    // Shared Student Print/ID Routes
+    Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
+    Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
+
+
 
     // Role-protected dashboards
-    Route::middleware('role:super_admin')->group(function () {
-        Route::get('/super-admin/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard.super-admin');
-        Route::get('/super-admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('super-admin.accounts.index');
-        Route::get('/super-admin/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('super-admin.accounts.create');
-        Route::post('/super-admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('super-admin.accounts.store');
+    Route::middleware('role:super_admin')->prefix('super-admin')->name('super-admin.')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard');
+        Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
+        Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
+
+        Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+
+        Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
+        Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
+        Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
     });
 
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('dashboard.admin');
-        Route::get('/admin/reports', [App\Http\Controllers\ReportsController::class, 'admin'])->name('admin.reports');
-        Route::get('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('admin.accounts.index');
-        Route::get('/admin/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('admin.accounts.create');
-        Route::post('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('admin.accounts.store');
-        Route::get('/admin/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('admin.students.sbfp');
+    Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
+        Route::get('/reports', [App\Http\Controllers\ReportsController::class, 'admin'])->name('reports');
+        Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
+        Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
+        Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+
+        Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
+        Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
+        Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
     });
 
     Route::middleware('role:super_admin|admin')->group(function () {
         Route::patch('/accounts/{user}/toggle-status', [App\Http\Controllers\Admin\AccountController::class, 'toggleStatus'])->name('accounts.toggle-status');
         Route::delete('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'destroy'])->name('accounts.destroy');
-        Route::get('/admin/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('admin.students.index');
     });
 
-    Route::middleware('role:encoder')->group(function () {
-        Route::get('/encoder/dashboard', [DashboardController::class, 'encoder'])->name('dashboard.encoder');
+    Route::middleware('role:encoder')->prefix('encoder')->name('encoder.')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'encoder'])->name('dashboard');
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');
@@ -96,6 +108,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
         Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
         Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
+
+        Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
+        Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
+        Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
     });
 
     // Account & Profile

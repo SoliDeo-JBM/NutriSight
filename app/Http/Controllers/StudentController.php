@@ -275,7 +275,7 @@ class StudentController extends Controller
     'nutritional_status' => $this->getNutritionalStatus($metrics['bmi']),
 ]);
 
-        return redirect()->route('students.index')->with('success', 'Student added successfully.');
+        return redirect()->route('encoder.students.index')->with('success', 'Student added successfully.');
     }
 
 public function storeAssessment(Request $request, Student $student)

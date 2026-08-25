@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
         function onScanSuccess(decodedText, decodedResult) {
-            fetch('{{ route('attendance.scan') }}', {
+            fetch('{{ route('encoder.attendance.scan') }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

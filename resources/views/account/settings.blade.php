@@ -1,6 +1,14 @@
 @extends('layouts.dashboard')
 
 @section('content')
+    @php
+        $rolePrefix = match(Auth::user()->role) {
+            'super_admin' => 'super-admin.',
+            'admin' => 'admin.',
+            'encoder' => 'encoder.',
+            default => ''
+        };
+    @endphp
     <div class="flex flex-col gap-6 max-w-4xl mx-auto">
         <!-- Header -->
         <div>
@@ -30,7 +38,7 @@
                 <h2 class="text-lg font-bold text-gray-900">Profile Information</h2>
             </div>
 
-            <form method="POST" action="{{ route('account.settings.update') }}" class="space-y-4">
+            <form method="POST" action="{{ route($rolePrefix . 'settings.update') }}" class="space-y-4">
                 @csrf
                 @method('PATCH')
 
@@ -122,7 +130,7 @@
                 <h2 class="text-lg font-bold text-gray-900">Update Password</h2>
             </div>
 
-            <form method="POST" action="{{ route('account.password.update') }}" class="space-y-4">
+            <form method="POST" action="{{ route($rolePrefix . 'password.update') }}" class="space-y-4">
                 @csrf
                 @method('PUT')
 

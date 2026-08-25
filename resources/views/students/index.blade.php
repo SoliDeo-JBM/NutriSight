@@ -8,14 +8,14 @@
                 <h1 class="text-2xl font-bold text-gray-900">Advisory Student List</h1>
                 <p class="text-sm text-gray-500 mt-1">Master list of advisory students with WHO nutritional metrics.</p>
             </div>
-            <a href="{{ route('students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
+            <a href="{{ route('encoder.students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
                 <i class="fas fa-plus"></i> Add Advisory Student
             </a>
         </div>
 
         <!-- Filters & Search Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <form method="GET" action="{{ route('students.index') }}" class="space-y-4">
+            <form method="GET" action="{{ route('encoder.students.index') }}" class="space-y-4">
                 <!-- Search Bar -->
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
@@ -62,7 +62,7 @@
                     <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
                         <i class="fas fa-filter mr-2"></i> Apply Filters
                     </button>
-                    <a href="{{ route('students.index') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
+                    <a href="{{ route('encoder.students.index') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
                         <i class="fas fa-redo mr-2"></i> Clear Filters
                     </a>
                 </div>
@@ -122,7 +122,7 @@
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">
-                                <form action="{{ route('students.destroy', $student->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to archive this student?');">
+                                 <form action="{{ route('encoder.students.destroy', $student->id) }}" method="POST" onsubmit="return confirm('Are you sure you want to archive this student?');">
                                     @csrf
                                     @method('DELETE')
                                     <button type="submit" class="text-red-600 hover:underline text-xs font-medium">Archive</button>

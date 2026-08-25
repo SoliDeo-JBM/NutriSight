@@ -8,14 +8,14 @@
                 <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
                 <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
             </div>
-            <a href="{{ route('students.print-batch') }}" target="_blank" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
+            <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
                 <i class="fas fa-print"></i> Print Portrait ID QR Sheet
             </a>
         </div>
 
         <!-- Filters & Search Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <form method="GET" action="{{ route('students.sbfp') }}" class="space-y-4">
+            <form method="GET" action="{{ route('encoder.students.sbfp') }}" class="space-y-4">
                 <!-- Search Bar -->
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
@@ -73,7 +73,7 @@
                     <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
                         <i class="fas fa-filter mr-2"></i> Apply Filters
                     </button>
-                    <a href="{{ route('students.sbfp') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
+                    <a href="{{ route('encoder.students.sbfp') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
                         <i class="fas fa-redo mr-2"></i> Clear Filters
                     </a>
                 </div>
@@ -145,7 +145,7 @@
                             @endforeach
 
                             <td class="px-4 py-3 border min-w-[220px]">
-                                <form action="{{ route('students.approval', $student->id) }}" method="POST" x-data="{ status: '{{ $student->parent_approval_status ?? ($isWasted ? 'approved' : '') }}', reason: '{{ $student->disapproval_reason }}' }">
+                                <form action="{{ route('encoder.students.approval', $student->id) }}" method="POST" x-data="{ status: '{{ $student->parent_approval_status ?? ($isWasted ? 'approved' : '') }}', reason: '{{ $student->disapproval_reason }}' }">
                                     @csrf
                                     @method('PATCH')
                                     <div class="space-y-2 text-xs">
@@ -182,7 +182,7 @@
                                         <div class="p-1 bg-white border inline-block shadow-sm rounded">
                                             {!! QrCode::size(60)->generate($student->student_number) !!}
                                         </div>
-                                        <a href="{{ route('students.id-card', $student->id) }}" target="_blank" class="text-[11px] text-blue-600 hover:underline mt-1">Print Portrait ID</a>
+                                        <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" class="text-[11px] text-blue-600 hover:underline mt-1">Print Portrait ID</a>
                                     </div>
                                 @else
                                     <span class="text-gray-400 text-xs italic">Requires Approval</span>
@@ -211,7 +211,7 @@
             <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
                 <h3 class="text-lg font-bold mb-4">Add Term Progress</h3>
                 
-                <form :action="'/students/' + currentStudentId + '/assessment'" method="POST">
+                <form :action="'/encoder/students/' + currentStudentId + '/assessment'" method="POST">
                     @csrf
                     
                     <div class="mb-4">
