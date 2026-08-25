@@ -17,99 +17,27 @@ class StudentController extends Controller
         $this->nutriService = $nutriService;
     }
 
-    public function index(Request $request)
+    public function index()
     {
-        $query = Student::with(['section', 'nutritionalRecords']);
-
-        if ($request->filled('search')) {
-            $search = trim($request->input('search'));
-            if (mb_strlen($search) === 1) {
-                $searchTerm = strtolower($search) . '%';
-            } else {
-                $searchTerm = '%' . strtolower($search) . '%';
-            }
-            $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
-            });
-        }
-
-        if ($request->filled('bmi_category')) {
-            $query->whereHas('nutritionalRecords', function ($sub) use ($request) {
-                $sub->where('bmi_category', $request->input('bmi_category'));
-            });
-        }
-
-        if ($request->filled('sex')) {
-            $query->where('gender', $request->input('sex'));
-        }
-
-        $students = $query->paginate(15)->withQueryString();
-
-        $bmiCategories = ['Normal', 'Wasted', 'Severely Wasted', 'Overweight', 'Obese'];
-        $sexes = ['Male', 'Female'];
-
-        return view('students.index', compact('students', 'bmiCategories', 'sexes'));
+        $students = Student::with(['section', 'nutritionalRecords'])->get();
+        return view('students.index', compact('students'));
     }
 
-    public function sbfpIndex(Request $request)
+    public function sbfpIndex()
     {
-        $query = Student::with(['section', 'nutritionalRecords', 'assessments'])
-            ->where(function ($q) {
-                $q->where('is_permitted', true)
-                  ->orWhereHas('nutritionalRecords', function ($sub) {
-                      $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                  });
-            })
-            ->where(function ($q) {
-                $q->where('parent_approval_status', '!=', 'disapproved')
-                  ->orWhereNull('parent_approval_status');
+        // Only include students who are explicitly permitted or Wasted/Severely Wasted, AND NOT disapproved by parent
+        $students = Student::with(['section', 'nutritionalRecords'])
+            ->get()
+            ->filter(function ($student) {
+                if ($student->parent_approval_status === 'disapproved') {
+                    return false;
+                }
+                $latestRecord = $student->nutritionalRecords()->latest()->first();
+                $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
+                return $student->is_permitted || $isWasted;
             });
 
-        if ($request->filled('search')) {
-            $search = trim($request->input('search'));
-            if (mb_strlen($search) === 1) {
-                $searchTerm = strtolower($search) . '%';
-            } else {
-                $searchTerm = '%' . strtolower($search) . '%';
-            }
-            $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
-            });
-        }
-
-        if ($request->filled('approval_status')) {
-            $status = $request->input('approval_status');
-            if ($status === 'approved') {
-                $query->where(function($q) {
-                    $q->where('parent_approval_status', 'approved')
-                      ->orWhere(function($sub) {
-                          $sub->whereNull('parent_approval_status')
-                              ->where('is_permitted', true);
-                      });
-                });
-            } elseif ($status === 'disapproved') {
-                $query->where('parent_approval_status', 'disapproved');
-            } elseif ($status === 'pending') {
-                $query->whereNull('parent_approval_status')
-                      ->where('is_permitted', false);
-            }
-        }
-
-        if ($request->filled('sex')) {
-            $query->where('gender', $request->input('sex'));
-        }
-
-        $students = $query->paginate(15)->withQueryString();
-
-        $sexes = ['Male', 'Female'];
-
-        return view('students.sbfp', compact('students', 'sexes'));
+        return view('students.sbfp', compact('students'));
     }
 
     public function create()
