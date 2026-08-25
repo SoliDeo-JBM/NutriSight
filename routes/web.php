@@ -68,6 +68,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
@@ -82,6 +83,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');

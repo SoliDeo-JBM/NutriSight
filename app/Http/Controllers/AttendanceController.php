@@ -81,6 +81,8 @@ class AttendanceController extends Controller
             ]
         );
 
+        \App\Services\AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $student->first_name . ' ' . $student->last_name);
+
         return response()->json(['success' => 'Attendance logged for ' . $student->first_name . ' ' . $student->last_name]);
     }
 
@@ -101,6 +103,8 @@ class AttendanceController extends Controller
                 'status' => $request->status
             ]
         );
+
+        \App\Services\AuditLogger::log('Updated', 'Attendance', 'Updated attendance status for student ID ' . $request->student_id . ' on ' . $request->date);
 
         return back()->with('success', 'Attendance updated.');
     }

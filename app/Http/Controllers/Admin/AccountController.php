@@ -146,6 +146,8 @@ class AccountController extends Controller
       'is_active' => true,
     ]);
 
+    \App\Services\AuditLogger::log('Created', 'Accounts', 'Created new ' . $targetRole . ' account for ' . $validated['name']);
+
     return redirect()->route($redirectRoute)->with('success', 'Account created successfully.');
   }
 
@@ -164,6 +166,8 @@ class AccountController extends Controller
 
     $user->is_active = !$user->is_active;
     $user->save();
+
+    \App\Services\AuditLogger::log('Updated', 'Accounts', 'Toggled active status for user ' . $user->name);
 
     return back()->with('success', 'Account status updated successfully.');
   }
@@ -194,6 +198,8 @@ class AccountController extends Controller
     ]);
 
     $user->delete(); // Soft delete
+
+    \App\Services\AuditLogger::log('Deleted', 'Accounts', 'Deleted user account ' . $user->name);
 
     $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
     return redirect()->route($redirectRoute)->with('success', 'Account deleted successfully.');

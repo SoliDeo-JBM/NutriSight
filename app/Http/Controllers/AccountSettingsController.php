@@ -31,6 +31,8 @@ class AccountSettingsController extends Controller
 
         $user->update($validated);
 
+        \App\Services\AuditLogger::log('Updated', 'Account Settings', 'Updated account profile information');
+
         return back()->with('success', 'Account information updated successfully.');
     }
 
@@ -44,6 +46,8 @@ class AccountSettingsController extends Controller
         $request->user()->update([
             'password' => Hash::make($validated['password']),
         ]);
+
+        \App\Services\AuditLogger::log('Updated', 'Security', 'Updated account password');
 
         return back()->with('success', 'Password updated successfully.');
     }

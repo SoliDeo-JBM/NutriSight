@@ -38,6 +38,9 @@
             <a href="{{ route('super-admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-users-cog"></i> Admin Accounts
             </a>
+            <a href="{{ route('super-admin.audit-logs.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-history"></i> Audit Logs
+            </a>
             <a href="{{ route('super-admin.settings') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-cog"></i> Account Settings
             </a>
@@ -71,6 +74,9 @@
             </a>
             <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-chart-line"></i> SBFP Reports
+            </a>
+            <a href="{{ route('admin.audit-logs.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-history"></i> Audit Logs
             </a>
             <a href="{{ route('admin.settings') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-cog"></i> Account Settings

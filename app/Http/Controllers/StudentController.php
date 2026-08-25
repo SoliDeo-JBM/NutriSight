@@ -253,6 +253,8 @@ class StudentController extends Controller
             'section_id' => $validated['section_id'],
         ]);
 
+        \App\Services\AuditLogger::log('Created', 'Students', 'Added advisory student ' . $student->first_name . ' ' . $student->last_name);
+
         NutritionalRecord::create([
             'student_id' => $student->id,
             'type' => 'baseline',
@@ -328,6 +330,7 @@ public function storeAssessment(Request $request, Student $student)
         ]);
     }
 
+    \App\Services\AuditLogger::log('Updated', 'Assessments', 'Recorded term progress for student ' . $student->first_name . ' ' . $student->last_name);
     return back()->with('success', 'Term progress recorded successfully.');
 }
 
@@ -355,12 +358,15 @@ private function getNutritionalStatus($bmi)
             'is_permitted' => $validated['parent_approval_status'] === 'approved'
         ]);
 
+        \App\Services\AuditLogger::log('Updated', 'SBFP Approval', 'Updated parent approval status for student ' . $student->first_name . ' ' . $student->last_name . ' to ' . $validated['parent_approval_status']);
+
         return back()->with('success', 'Parent approval status updated.');
     }
 
     public function destroy(Student $student)
     {
         $student->delete(); 
+        \App\Services\AuditLogger::log('Archived', 'Students', 'Archived student ' . $student->first_name . ' ' . $student->last_name);
         return back()->with('success', 'Student archived.');
     }
 
