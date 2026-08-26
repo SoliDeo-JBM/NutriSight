@@ -35,6 +35,9 @@
             <a href="{{ route('super-admin.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-clipboard-list"></i> Complete SBFP List
             </a>
+            <a href="{{ route('super-admin.students.promote') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-user-graduate"></i> Student Promotion
+            </a>
             <a href="{{ route('super-admin.school-years.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-calendar-alt"></i> School Years
             </a>

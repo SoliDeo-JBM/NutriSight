@@ -69,6 +69,8 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::get('/students/promote', [App\Http\Controllers\Admin\StudentPromotionController::class, 'index'])->name('students.promote');
+        Route::post('/students/promote', [App\Http\Controllers\Admin\StudentPromotionController::class, 'store'])->name('students.promote.store');
         Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
         Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
         Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
