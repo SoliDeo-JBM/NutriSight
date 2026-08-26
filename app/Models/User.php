@@ -59,4 +59,15 @@ class User extends Authenticatable
             default => 'home',
         };
     }
+
+    public function sections()
+    {
+        return $this->hasMany(Section::class, 'adviser_id');
+    }
+
+    public function activeSections()
+    {
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        return $this->sections()->where('school_year_id', $activeSyId);
+    }
 }

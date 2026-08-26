@@ -250,14 +250,11 @@ class DashboardController extends Controller
     public function encoder()
     {
         $user = auth()->user();
-        $studentQuery = Student::query();
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $studentQuery = Student::where('school_year_id', $activeSyId);
         if ($user && $user->isEncoder()) {
-            if ($user->advisory_grade_level) {
-                $studentQuery->where('grade_level', $user->advisory_grade_level);
-            }
-            if ($user->advisory_section) {
-                $studentQuery->where('section', $user->advisory_section);
-            }
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $studentQuery->whereIn('section_id', $activeSectionIds);
         }
 
         $totalStudents = (clone $studentQuery)->count();
@@ -278,15 +275,12 @@ class DashboardController extends Controller
             $date = Carbon::today()->subDays($i)->toDateString();
             $attendanceDates[] = Carbon::parse($date)->format('M d');
             $attendanceCounts[] = \App\Models\AttendanceLog::where('date', $date)
+                ->where('school_year_id', $activeSyId)
                 ->where('status', 'present')
                 ->whereHas('student', function ($q) use ($user) {
                     if ($user && $user->isEncoder()) {
-                        if ($user->advisory_grade_level) {
-                            $q->where('grade_level', $user->advisory_grade_level);
-                        }
-                        if ($user->advisory_section) {
-                            $q->where('section', $user->advisory_section);
-                        }
+                        $activeSectionIds = $user->activeSections()->pluck('id');
+                        $q->whereIn('section_id', $activeSectionIds);
                     }
                 })
                 ->count();

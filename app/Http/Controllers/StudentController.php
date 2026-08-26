@@ -24,12 +24,8 @@ class StudentController extends Controller
         $query = Student::with(['section', 'nutritionalRecords'])->where('school_year_id', $activeSyId);
 
         if ($user && $user->isEncoder()) {
-            if ($user->advisory_grade_level) {
-                $query->where('grade_level', $user->advisory_grade_level);
-            }
-            if ($user->advisory_section) {
-                $query->where('section', $user->advisory_section);
-            }
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $query->whereIn('section_id', $activeSectionIds);
         }
 
         // Search by name or student number (LRN)
@@ -114,12 +110,8 @@ class StudentController extends Controller
             });
 
         if ($user && $user->isEncoder()) {
-            if ($user->advisory_grade_level) {
-                $query->where('grade_level', $user->advisory_grade_level);
-            }
-            if ($user->advisory_section) {
-                $query->where('section', $user->advisory_section);
-            }
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $query->whereIn('section_id', $activeSectionIds);
         }
 
         // Search by name or student number (LRN)
@@ -384,12 +376,8 @@ private function getNutritionalStatus($bmi)
         $user = auth()->user();
         $query = Student::with('nutritionalRecords');
         if ($user && $user->isEncoder()) {
-            if ($user->advisory_grade_level) {
-                $query->where('grade_level', $user->advisory_grade_level);
-            }
-            if ($user->advisory_section) {
-                $query->where('section', $user->advisory_section);
-            }
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $query->whereIn('section_id', $activeSectionIds);
         }
         $students = $query->get()
             ->filter(function ($student) {

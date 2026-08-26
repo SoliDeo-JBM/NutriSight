@@ -22,12 +22,8 @@ class AttendanceController extends Controller
         $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $studentQuery = Student::with('nutritionalRecords')->where('school_year_id', $activeSyId);
         if ($user && $user->isEncoder()) {
-            if ($user->advisory_grade_level) {
-                $studentQuery->where('grade_level', $user->advisory_grade_level);
-            }
-            if ($user->advisory_section) {
-                $studentQuery->where('section', $user->advisory_section);
-            }
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $studentQuery->whereIn('section_id', $activeSectionIds);
         }
         $sbfpStudents = $studentQuery->get()
             ->filter(function ($student) {
