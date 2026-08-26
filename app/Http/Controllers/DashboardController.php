@@ -98,15 +98,21 @@ class DashboardController extends Controller
 
         $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
 
-        // 4. Section-wise Attendance Rate
-        $sections = \App\Models\Section::with('students.attendanceLogs')->get();
+        // 4. Grade Level-wise Attendance Rate
+        $gradeLevels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $sectionAttendanceLabels = [];
         $sectionAttendanceRates = [];
 
-        foreach ($sections as $section) {
+        foreach ($gradeLevels as $grade) {
             $totalLogs = 0;
             $presentLogs = 0;
-            foreach ($section->students as $student) {
+            $students = Student::where('school_year_id', $activeSyId)
+                ->where('grade_level', $grade)
+                ->with('attendanceLogs')
+                ->get();
+
+            foreach ($students as $student) {
                 foreach ($student->attendanceLogs as $log) {
                     $totalLogs++;
                     if ($log->status === 'present') {
@@ -115,7 +121,7 @@ class DashboardController extends Controller
                 }
             }
             $rate = $totalLogs > 0 ? round(($presentLogs / $totalLogs) * 100, 1) : 0;
-            $sectionAttendanceLabels[] = $section->name;
+            $sectionAttendanceLabels[] = $grade;
             $sectionAttendanceRates[] = $rate;
         }
 
@@ -223,15 +229,21 @@ class DashboardController extends Controller
 
         $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
 
-        // 4. Section-wise Attendance Rate
-        $sections = \App\Models\Section::with('students.attendanceLogs')->get();
+        // 4. Grade Level-wise Attendance Rate
+        $gradeLevels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $sectionAttendanceLabels = [];
         $sectionAttendanceRates = [];
 
-        foreach ($sections as $section) {
+        foreach ($gradeLevels as $grade) {
             $totalLogs = 0;
             $presentLogs = 0;
-            foreach ($section->students as $student) {
+            $students = Student::where('school_year_id', $activeSyId)
+                ->where('grade_level', $grade)
+                ->with('attendanceLogs')
+                ->get();
+
+            foreach ($students as $student) {
                 foreach ($student->attendanceLogs as $log) {
                     $totalLogs++;
                     if ($log->status === 'present') {
@@ -240,7 +252,7 @@ class DashboardController extends Controller
                 }
             }
             $rate = $totalLogs > 0 ? round(($presentLogs / $totalLogs) * 100, 1) : 0;
-            $sectionAttendanceLabels[] = $section->name;
+            $sectionAttendanceLabels[] = $grade;
             $sectionAttendanceRates[] = $rate;
         }
 

@@ -53,9 +53,9 @@
         </div>
     </div>
 
-    <!-- Section Attendance Rate Chart -->
+    <!-- Grade Level Attendance Rate Chart -->
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Attendance Rate by Section (%)</h2>
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Attendance Rate by Grade Level (%)</h2>
         <div class="relative" style="height: 280px;">
             <canvas id="sectionAttendanceChart"></canvas>
         </div>
