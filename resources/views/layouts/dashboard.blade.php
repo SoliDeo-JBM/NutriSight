@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NutriSight Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <link rel="stylesheet" href="{{ asset('css/dashboard-layout.css') }}">
     @if(View::exists('css/' . Auth::user()->role . '-dashboard.css'))
@@ -29,41 +30,52 @@
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             @if(Auth::user()->role === 'super_admin')
-            <a href="{{ route('super-admin.students.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-users"></i> Complete Student List
-            </a>
-            <a href="{{ route('super-admin.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-clipboard-list"></i> Complete SBFP List
-            </a>
-            <a href="{{ route('super-admin.students.promote') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-user-graduate"></i> Student Promotion
-            </a>
-            <a href="{{ route('super-admin.sections.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-chalkboard-teacher"></i> Sections & Advisers
-            </a>
-            <a href="{{ route('super-admin.school-years.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-calendar-alt"></i> School Years
-            </a>
-            <a href="{{ route('super-admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-users-cog"></i> Admin Accounts
-            </a>
-            <a href="{{ route('super-admin.audit-logs.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-history"></i> Audit Logs
-            </a>
+            <!-- Student Management Dropdown -->
+            <div x-data="{ open: true }" class="my-1">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Management</span>
+                    <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
+                </button>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('super-admin.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete Student List</a>
+                    <a href="{{ route('super-admin.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete SBFP List</a>
+                    <a href="{{ route('super-admin.students.promote') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Student Promotion</a>
+                </div>
+            </div>
+
+            <!-- System Administration Dropdown -->
+            <div x-data="{ open: true }" class="my-1">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <span class="flex items-center gap-3"><i class="fas fa-cogs w-5 text-center"></i> Administration</span>
+                    <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
+                </button>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('super-admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
+                    <a href="{{ route('super-admin.school-years.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">School Years</a>
+                    <a href="{{ route('super-admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Admin Accounts</a>
+                    <a href="{{ route('super-admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Audit Logs</a>
+                </div>
+            </div>
+
             <a href="{{ route('super-admin.settings') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-cog"></i> Account Settings
             </a>
             @endif
+
             @if(Auth::user()->role === 'encoder')
-            <a href="{{ route('encoder.students.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-users"></i> Advisory Student List
-            </a>
-            <a href="{{ route('encoder.students.create') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-user-plus"></i> Add Advisory Student
-            </a>
-            <a href="{{ route('encoder.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-clipboard-list"></i> Advisory SBFP List
-            </a>
+            <!-- Student Management Dropdown -->
+            <div x-data="{ open: true }" class="my-1">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Records</span>
+                    <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
+                </button>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('encoder.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Advisory Student List</a>
+                    <a href="{{ route('encoder.students.create') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Add Advisory Student</a>
+                    <a href="{{ route('encoder.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Advisory SBFP List</a>
+                </div>
+            </div>
+
             <a href="{{ route('encoder.attendance.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-calendar-check"></i> Attendance List
             </a>
@@ -71,25 +83,34 @@
                 <i class="fas fa-user-cog"></i> Account Settings
             </a>
             @endif
+
             @if(Auth::user()->role === 'admin')
-            <a href="{{ route('admin.students.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-users"></i> Complete Student List
-            </a>
-            <a href="{{ route('admin.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-clipboard-list"></i> Complete SBFP List
-            </a>
-            <a href="{{ route('admin.sections.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-chalkboard-teacher"></i> Sections & Advisers
-            </a>
-            <a href="{{ route('admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-users-cog"></i> Encoder Accounts
-            </a>
-            <a href="{{ route('admin.reports') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-chart-line"></i> SBFP Reports
-            </a>
-            <a href="{{ route('admin.audit-logs.index') }}" class="nav-link" onclick="toggleSidebar()">
-                <i class="fas fa-history"></i> Audit Logs
-            </a>
+            <!-- Student Management Dropdown -->
+            <div x-data="{ open: true }" class="my-1">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Management</span>
+                    <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
+                </button>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('admin.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete Student List</a>
+                    <a href="{{ route('admin.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete SBFP List</a>
+                </div>
+            </div>
+
+            <!-- Management & Reports Dropdown -->
+            <div x-data="{ open: true }" class="my-1">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                    <span class="flex items-center gap-3"><i class="fas fa-folder-open w-5 text-center"></i> Management & Reports</span>
+                    <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
+                </button>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
+                    <a href="{{ route('admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Encoder Accounts</a>
+                    <a href="{{ route('admin.reports') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">SBFP Reports</a>
+                    <a href="{{ route('admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Audit Logs</a>
+                </div>
+            </div>
+
             <a href="{{ route('admin.settings') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-cog"></i> Account Settings
             </a>
