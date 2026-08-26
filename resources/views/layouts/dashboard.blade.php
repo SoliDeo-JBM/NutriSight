@@ -38,6 +38,9 @@
             <a href="{{ route('super-admin.students.promote') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-user-graduate"></i> Student Promotion
             </a>
+            <a href="{{ route('super-admin.sections.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-chalkboard-teacher"></i> Sections & Advisers
+            </a>
             <a href="{{ route('super-admin.school-years.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-calendar-alt"></i> School Years
             </a>
@@ -74,6 +77,9 @@
             </a>
             <a href="{{ route('admin.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-clipboard-list"></i> Complete SBFP List
+            </a>
+            <a href="{{ route('admin.sections.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-chalkboard-teacher"></i> Sections & Advisers
             </a>
             <a href="{{ route('admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-users-cog"></i> Encoder Accounts
