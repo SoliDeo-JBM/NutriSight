@@ -10,4 +10,8 @@ class Program extends Model
     use HasFactory;
 
     protected $fillable = ['school_year', 'start_date', 'end_date', 'is_active'];
+
+    protected $casts = [
+        'is_active' => 'boolean',
+    ];
 }
