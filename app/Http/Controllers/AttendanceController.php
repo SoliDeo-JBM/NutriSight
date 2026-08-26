@@ -19,7 +19,8 @@ class AttendanceController extends Controller
         
         // Exclude disapproved students from attendance roster and scope to encoder's advisory section/grade level
         $user = auth()->user();
-        $studentQuery = Student::with('nutritionalRecords');
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $studentQuery = Student::with('nutritionalRecords')->where('school_year_id', $activeSyId);
         if ($user && $user->isEncoder()) {
             if ($user->advisory_grade_level) {
                 $studentQuery->where('grade_level', $user->advisory_grade_level);
@@ -52,10 +53,13 @@ class AttendanceController extends Controller
     {
         $request->validate(['student_number' => 'required']);
 
-        $student = Student::where('student_number', $request->student_number)->first();
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $student = Student::where('student_number', $request->student_number)
+            ->where('school_year_id', $activeSyId)
+            ->first();
 
         if (!$student) {
-            return response()->json(['error' => 'Student not found'], 404);
+            return response()->json(['error' => 'Student not found in active school year'], 404);
         }
 
         // Check if student is disapproved for SBFP
@@ -75,6 +79,7 @@ class AttendanceController extends Controller
             [
                 'student_id' => $student->id,
                 'date' => now()->toDateString(),
+                'school_year_id' => $activeSyId,
             ],
             [
                 'status' => 'present'
@@ -94,10 +99,13 @@ class AttendanceController extends Controller
             'status' => 'required|in:present,absent,tardy'
         ]);
 
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+
         AttendanceLog::updateOrCreate(
             [
                 'student_id' => $request->student_id,
                 'date' => $request->date,
+                'school_year_id' => $activeSyId,
             ],
             [
                 'status' => $request->status

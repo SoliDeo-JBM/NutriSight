@@ -11,7 +11,8 @@ class StudentViewController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Student::with(['section', 'nutritionalRecords']);
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $query = Student::with(['section', 'nutritionalRecords'])->where('school_year_id', $activeSyId);
 
         // Search by name or student number (LRN)
         if ($request->filled('search')) {
@@ -87,7 +88,9 @@ class StudentViewController extends Controller
 
     public function sbfpIndex(Request $request)
     {
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $query = Student::with(['section', 'nutritionalRecords', 'assessments'])
+            ->where('school_year_id', $activeSyId)
             ->where(function ($q) {
                 $q->where('is_permitted', true)
                   ->orWhereHas('nutritionalRecords', function ($sub) {

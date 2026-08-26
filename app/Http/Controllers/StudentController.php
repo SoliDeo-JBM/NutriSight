@@ -20,7 +20,8 @@ class StudentController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $query = Student::with(['section', 'nutritionalRecords']);
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $query = Student::with(['section', 'nutritionalRecords'])->where('school_year_id', $activeSyId);
 
         if ($user && $user->isEncoder()) {
             if ($user->advisory_grade_level) {
@@ -102,7 +103,9 @@ class StudentController extends Controller
     public function sbfpIndex(Request $request)
     {
         $user = auth()->user();
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $query = Student::with(['section', 'nutritionalRecords', 'assessments'])
+            ->where('school_year_id', $activeSyId)
             ->where(function ($q) {
                 $q->where('is_permitted', true)
                   ->orWhereHas('nutritionalRecords', function ($sub) {
@@ -235,6 +238,7 @@ class StudentController extends Controller
         $isWasted = in_array($metrics['category'], ['Severely Wasted', 'Wasted']);
 
         $student = Student::create([
+            'school_year_id' => \App\Services\SchoolYearManager::activeSchoolYearId(),
             'student_number' => $validated['student_number'],
             'last_name' => $validated['last_name'],
             'first_name' => $validated['first_name'],
