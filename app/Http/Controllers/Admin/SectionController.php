@@ -21,7 +21,7 @@ class SectionController extends Controller
             ->orderBy('name')
             ->get();
 
-        $encoders = User::where('role', User::ROLE_ENCODER)
+        $encoders = User::whereIn('role', [User::ROLE_ENCODER, User::ROLE_ADMIN])
             ->where('is_active', true)
             ->orderBy('name')
             ->get();
