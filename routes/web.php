@@ -53,9 +53,10 @@ Route::middleware('auth')->group(function () {
         return redirect()->route(Auth::user()->dashboardRoute());
     })->name('dashboard');
 
-    // Shared Student Print/ID Routes
+    // Shared Student Print/ID & School Year Switch
     Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
     Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
+    Route::post('/school-years/switch', [App\Http\Controllers\Admin\SchoolYearController::class, 'switch'])->name('school-years.switch');
 
 
 
@@ -68,6 +69,9 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
+        Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
+        Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');

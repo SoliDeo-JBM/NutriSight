@@ -35,6 +35,9 @@
             <a href="{{ route('super-admin.students.sbfp') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-clipboard-list"></i> Complete SBFP List
             </a>
+            <a href="{{ route('super-admin.school-years.index') }}" class="nav-link" onclick="toggleSidebar()">
+                <i class="fas fa-calendar-alt"></i> School Years
+            </a>
             <a href="{{ route('super-admin.accounts.index') }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-users-cog"></i> Admin Accounts
             </a>
@@ -92,12 +95,29 @@
 
     <!-- Main Content -->
     <main class="main-content">
-        <header class="top-header">
-            <div class="header-left">
+        <header class="top-header flex justify-between items-center px-6">
+            <div class="header-left flex items-center gap-4">
                 <button type="button" class="hamburger-btn" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>
                 </button>
                 <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
+            </div>
+            <div class="header-right flex items-center gap-3">
+                <form method="POST" action="{{ route('school-years.switch') }}" class="flex items-center gap-2">
+                    @csrf
+                    <span class="text-xs font-semibold text-gray-600 hidden sm:inline"><i class="fas fa-calendar-alt mr-1"></i> School Year:</span>
+                    <select name="school_year_id" onchange="this.form.submit()" class="border border-gray-300 rounded px-2.5 py-1 text-xs font-medium text-gray-700 bg-white focus:outline-none focus:border-blue-500">
+                        @php
+                            $allSy = \App\Services\SchoolYearManager::allSchoolYears();
+                            $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+                        @endphp
+                        @foreach($allSy as $sy)
+                            <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
+                                {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
+                            </option>
+                        @endforeach
+                    </select>
+                </form>
             </div>
         </header>
 
