@@ -391,4 +391,25 @@ private function getNutritionalStatus($bmi)
 
         return view('students.print-batch', compact('students'));
     }
+
+    public function emailFeedingNotice(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'meal' => 'required|string',
+            'date' => 'required|date',
+            'notes' => 'nullable|string',
+        ]);
+
+        if (!$student->guardian_email) {
+            return back()->withErrors(['email' => 'This student does not have a guardian email address recorded.']);
+        }
+
+        \Illuminate\Support\Facades\Mail::to($student->guardian_email)->send(
+            new \App\Mail\FeedingDayNotice($student, $validated['meal'], $validated['date'], $validated['notes'])
+        );
+
+        \App\Services\AuditLogger::log('Created', 'Email', 'Sent feeding day email notice to guardian of ' . $student->first_name . ' ' . $student->last_name);
+
+        return back()->with('success', 'Feeding day notice email sent successfully to ' . $student->guardian_email);
+    }
 }

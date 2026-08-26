@@ -183,6 +183,13 @@
                                             {!! QrCode::size(60)->generate($student->student_number) !!}
                                         </div>
                                         <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" class="text-[11px] text-blue-600 hover:underline mt-1">Print Portrait ID</a>
+                                        @if($student->guardian_email)
+                                            <button @click="openEmailModal({{ $student->id }}, '{{ $student->first_name }} {{ $student->last_name }}', '{{ $student->guardian_email }}')" class="mt-2 bg-blue-600 text-white px-2.5 py-1 rounded text-xs hover:bg-blue-700 font-semibold inline-flex items-center gap-1">
+                                                <i class="fas fa-envelope"></i> Email Parent
+                                            </button>
+                                        @else
+                                            <span class="text-[10px] text-gray-400 block mt-1">No Guardian Email</span>
+                                        @endif
                                     </div>
                                 @else
                                     <span class="text-gray-400 text-xs italic">Requires Approval</span>
@@ -241,6 +248,34 @@
                 </form>
             </div>
         </div>
+
+        <!-- Email Notice Modal -->
+        <div x-show="showEmailModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
+                <h3 class="text-lg font-bold mb-2">Send Feeding Day Notice</h3>
+                <p class="text-xs text-gray-500 mb-4">Recipient: <span class="font-semibold text-gray-800" x-text="currentGuardianEmail"></span></p>
+                
+                <form :action="'/encoder/students/' + currentStudentId + '/email-feeding'" method="POST" class="space-y-4">
+                    @csrf
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Meal to be Served <span class="text-red-500">*</span></label>
+                        <input type="text" name="meal" required placeholder="e.g. Rice porridge with egg" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Feeding Date <span class="text-red-500">*</span></label>
+                        <input type="date" name="date" required value="{{ date('Y-m-d') }}" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Teacher's Notes (Optional)</label>
+                        <textarea name="notes" rows="3" placeholder="Additional instructions or notes for the parent..." class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                    </div>
+                    <div class="flex gap-2 pt-2">
+                        <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Send Email</button>
+                        <button type="button" @click="closeEmailModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -248,8 +283,10 @@
         function sbfpManager() {
             return {
                 showModal: false,
+                showEmailModal: false,
                 currentStudentId: null,
                 currentTerm: null,
+                currentGuardianEmail: '',
                 openProgressModal(studentId, term) {
                     this.currentStudentId = studentId;
                     this.currentTerm = parseInt(term);
@@ -259,6 +296,16 @@
                     this.showModal = false;
                     this.currentStudentId = null;
                     this.currentTerm = null;
+                },
+                openEmailModal(studentId, studentName, guardianEmail) {
+                    this.currentStudentId = studentId;
+                    this.currentGuardianEmail = guardianEmail;
+                    this.showEmailModal = true;
+                },
+                closeEmailModal() {
+                    this.showEmailModal = false;
+                    this.currentStudentId = null;
+                    this.currentGuardianEmail = '';
                 }
             }
         }
