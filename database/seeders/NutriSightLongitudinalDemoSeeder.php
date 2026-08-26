@@ -6,6 +6,7 @@ use App\Models\Program;
 use App\Models\Section;
 use App\Models\Student;
 use App\Models\StudentAssessment;
+use App\Models\NutritionalRecord;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
@@ -136,8 +137,8 @@ class NutriSightLongitudinalDemoSeeder extends Seeder
                 }
             }
 
-            $studentsBatch = [];
             $assessmentsBatch = [];
+            $nutritionalRecordsBatch = [];
 
             foreach ($sySections as $section) {
                 for ($k = 0; $k < 5; $k++) {
@@ -167,6 +168,28 @@ class NutriSightLongitudinalDemoSeeder extends Seeder
                         'parent_approval_status' => $isWasted ? 'approved' : null,
                     ]);
 
+                    // Nutritional Record (baseline)
+                    $nutritionalRecordsBatch[] = [
+                        'school_year_id' => $sy->id,
+                        'student_id' => $student->id,
+                        'type' => 'baseline',
+                        'weight' => $weight,
+                        'height' => $height,
+                        'bmi' => $bmi,
+                        'bmi_category' => $status,
+                        'height_for_age' => 'Normal',
+                        'remarks' => match ($status) {
+                            'Severely Wasted' => 'Needs immediate nutritional intervention.',
+                            'Wasted' => 'Prioritize daily feeding and monitoring.',
+                            'Overweight' => 'Monitor meal portions and physical activity.',
+                            'Obese' => 'Coordinate with parents for follow-up guidance.',
+                            default => 'Stable and within expected range.',
+                        },
+                        'recorded_at' => Carbon::parse("202" . ($syIndex + 3) . "-06-15")->toDateTimeString(),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+
                     // Assessments for Term 1, 2, 3
                     foreach (['1' => '10-01', '2' => '12-01', '3' => '02-01'] as $term => $md) {
                         $assessmentsBatch[] = [
@@ -186,8 +209,15 @@ class NutriSightLongitudinalDemoSeeder extends Seeder
                 }
             }
 
+            if (!empty($nutritionalRecordsBatch)) {
+                foreach (array_chunk($nutritionalRecordsBatch, 50) as $chunk) {
+                    NutritionalRecord::insert($chunk);
+                }
+            }
             if (!empty($assessmentsBatch)) {
-                StudentAssessment::insert($assessmentsBatch);
+                foreach (array_chunk($assessmentsBatch, 50) as $chunk) {
+                    StudentAssessment::insert($chunk);
+                }
             }
         }
     }

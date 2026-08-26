@@ -55,6 +55,14 @@ return new class extends Migration
             DB::table('student_assessments')->update(['school_year_id' => $activeProgramId]);
         }
 
+        // 4b. Add school_year_id to nutritional_records
+        if (Schema::hasTable('nutritional_records') && !Schema::hasColumn('nutritional_records', 'school_year_id')) {
+            Schema::table('nutritional_records', function (Blueprint $table) use ($activeProgramId) {
+                $table->foreignId('school_year_id')->nullable()->after('id')->constrained('programs')->cascadeOnDelete();
+            });
+            DB::table('nutritional_records')->update(['school_year_id' => $activeProgramId]);
+        }
+
         // 5. Add school_year_id to attendance_records
         if (Schema::hasTable('attendance_records') && !Schema::hasColumn('attendance_records', 'school_year_id')) {
             Schema::table('attendance_records', function (Blueprint $table) use ($activeProgramId) {
