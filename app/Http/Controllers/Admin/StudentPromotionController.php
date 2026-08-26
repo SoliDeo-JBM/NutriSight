@@ -43,7 +43,11 @@ class StudentPromotionController extends Controller
             // Search by name or LRN
             if ($request->filled('search')) {
                 $search = trim($request->input('search'));
-                $searchTerm = '%' . strtolower($search) . '%';
+                if (mb_strlen($search) === 1) {
+                    $searchTerm = strtolower($search) . '%';
+                } else {
+                    $searchTerm = '%' . strtolower($search) . '%';
+                }
                 $query->where(function ($q) use ($searchTerm) {
                     $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
                       ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
