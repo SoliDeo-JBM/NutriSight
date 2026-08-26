@@ -25,16 +25,82 @@ class StudentPromotionController extends Controller
         // Previous school years for promotion source
         $sourceSyId = $request->input('source_school_year_id');
         $sourceStudents = collect();
+        $gradeLevels = [];
+        $sectionsList = [];
+        $sexes = ['Male', 'Female'];
+        $sortOptions = [
+            'name_az' => 'Name (A-Z)',
+            'name_za' => 'Name (Z-A)',
+            'lrn_asc' => 'LRN / ID (Ascending)',
+            'lrn_desc' => 'LRN / ID (Descending)',
+            'latest' => 'Latest to Oldest',
+            'oldest' => 'Oldest to Latest',
+        ];
 
         if ($sourceSyId) {
-            $sourceStudents = Student::with('section')
-                ->where('school_year_id', $sourceSyId)
-                ->get();
+            $query = Student::with('section')->where('school_year_id', $sourceSyId);
+
+            // Search by name or LRN
+            if ($request->filled('search')) {
+                $search = trim($request->input('search'));
+                $searchTerm = '%' . strtolower($search) . '%';
+                $query->where(function ($q) use ($searchTerm) {
+                    $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
+                      ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
+                      ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
+                      ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
+                });
+            }
+
+            // Grade level filter
+            if ($request->filled('grade_level')) {
+                $query->where('grade_level', $request->input('grade_level'));
+            }
+
+            // Section filter
+            if ($request->filled('section')) {
+                $query->where('section', $request->input('section'));
+            }
+
+            // Sex filter
+            if ($request->filled('sex')) {
+                $query->where('gender', $request->input('sex'));
+            }
+
+            // Sorting
+            $sort = $request->input('sort', 'name_az');
+            switch ($sort) {
+                case 'name_az':
+                    $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                    break;
+                case 'name_za':
+                    $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                    break;
+                case 'oldest':
+                    $query->orderBy('created_at', 'asc');
+                    break;
+                case 'lrn_asc':
+                    $query->orderBy('student_number', 'asc');
+                    break;
+                case 'lrn_desc':
+                    $query->orderBy('student_number', 'desc');
+                    break;
+                case 'latest':
+                default:
+                    $query->orderBy('created_at', 'desc');
+                    break;
+            }
+
+            $sourceStudents = $query->get();
+
+            $gradeLevels = Student::where('school_year_id', $sourceSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+            $sectionsList = Student::where('school_year_id', $sourceSyId)->whereNotNull('section')->distinct()->pluck('section');
         }
 
         $sections = Section::where('school_year_id', $activeSy?->id)->get();
+        $rolePrefix = auth()->user()->isSuperAdmin() ? 'super-admin' : 'admin';
 
-        return view('admin.students.promote', compact('activeSy', 'allSy', 'activeStudents', 'sourceSyId', 'sourceStudents', 'sections'));
+        return view('admin.students.promote', compact('activeSy', 'allSy', 'activeStudents', 'sourceSyId', 'sourceStudents', 'sections', 'gradeLevels', 'sectionsList', 'sexes', 'sortOptions', 'rolePrefix'));
     }
 
     public function store(Request $request)
@@ -88,7 +154,9 @@ class StudentPromotionController extends Controller
 
         AuditLogger::log('created', 'Student Promotion', 'Promoted / enrolled ' . $promotedCount . ' students into active school year (' . ($section?->name ?? '') . ')');
 
-        return redirect()->route('super-admin.students.promote')
+        $rolePrefix = auth()->user()->isSuperAdmin() ? 'super-admin' : 'admin';
+
+        return redirect()->route($rolePrefix . '.students.promote')
             ->with('success', 'Successfully promoted/enrolled ' . $promotedCount . ' students into the active school year.');
     }
 }

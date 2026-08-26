@@ -26,32 +26,88 @@
             </div>
         @endif
 
-        <!-- Source Selection Filter Card -->
+        <!-- Source Selection & Filters Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-filter text-blue-600 mr-2"></i> Select Source Academic Year</h2>
-            <form method="GET" action="{{ route('super-admin.students.promote') }}" class="flex flex-col sm:flex-row gap-4 items-end">
-                <div class="w-full sm:w-1/2">
-                    <label class="block text-sm font-semibold text-gray-700 mb-1">Source School Year</label>
-                    <select name="source_school_year_id" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
-                        <option value="">-- Select Source School Year --</option>
-                        @foreach($allSy as $sy)
-                            <option value="{{ $sy->id }}" {{ $sourceSyId == $sy->id ? 'selected' : '' }}>
-                                {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
-                            </option>
-                        @endforeach
-                    </select>
+            <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-filter text-blue-600 mr-2"></i> Select Source Academic Year & Filters</h2>
+            <form method="GET" action="{{ route($rolePrefix . '.students.promote') }}" class="space-y-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <!-- Source School Year -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Source School Year <span class="text-red-500">*</span></label>
+                        <select name="source_school_year_id" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="">-- Select Source School Year --</option>
+                            @foreach($allSy as $sy)
+                                <option value="{{ $sy->id }}" {{ $sourceSyId == $sy->id ? 'selected' : '' }}>
+                                    {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
+                                </option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Search -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Search Student / LRN</label>
+                        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search name, LRN..." class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
+                    </div>
+
+                    <!-- Grade Level Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Grade Level</label>
+                        <select name="grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="">All Grade Levels</option>
+                            @foreach($gradeLevels ?? [] as $grade)
+                                <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Section Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Section</label>
+                        <select name="section" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="">All Sections</option>
+                            @foreach($sectionsList ?? [] as $sec)
+                                <option value="{{ $sec }}" {{ request('section') == $sec ? 'selected' : '' }}>{{ $sec }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Sex Filter -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Sex</label>
+                        <select name="sex" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
+                            <option value="">All Sexes</option>
+                            @foreach($sexes ?? [] as $s)
+                                <option value="{{ $s }}" {{ request('sex') == $s ? 'selected' : '' }}>{{ $s }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <!-- Sort By -->
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Sort By</label>
+                        <select name="sort" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
+                            @foreach($sortOptions ?? [] as $key => $label)
+                                <option value="{{ $key }}" {{ request('sort', 'name_az') == $key ? 'selected' : '' }}>{{ $label }}</option>
+                            @endforeach
+                        </select>
+                    </div>
                 </div>
-                <div>
-                    <button type="submit" class="bg-blue-600 text-white font-semibold px-6 py-2.5 rounded-lg text-sm hover:bg-blue-700 transition">
-                        <i class="fas fa-search mr-1"></i> Load Students
+
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
+                        <i class="fas fa-search mr-1"></i> Filter & Load Students
                     </button>
+                    <a href="{{ route($rolePrefix . '.students.promote', ['source_school_year_id' => $sourceSyId]) }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
+                        <i class="fas fa-redo mr-1"></i> Reset
+                    </a>
                 </div>
             </form>
         </div>
 
         @if($sourceSyId)
         <!-- Promotion Form -->
-        <form method="POST" action="{{ route('super-admin.students.promote.store') }}" class="space-y-6">
+        <form method="POST" action="{{ route($rolePrefix . '.students.promote.store') }}" class="space-y-6">
             @csrf
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-user-graduate text-emerald-600 mr-2"></i> Target Assignment for Active Year ({{ $activeSy?->school_year ?? '' }})</h2>
@@ -107,7 +163,7 @@
                             </tr>
                             @empty
                             <tr>
-                                <td colspan="5" class="px-4 py-8 border text-center text-gray-500">No students found in the selected source school year.</td>
+                                <td colspan="5" class="px-4 py-8 border text-center text-gray-500">No students found matching your filters.</td>
                             </tr>
                             @endforelse
                         </tbody>
