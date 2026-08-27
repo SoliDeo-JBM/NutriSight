@@ -33,10 +33,10 @@
 
     <main>
         <section class="relative overflow-hidden bg-white">
-            <div class="mx-auto grid max-w-7xl lg:min-h-[620px] lg:grid-cols-2">
+            <div class="grid lg:min-h-[620px] lg:grid-cols-[1.1fr_0.9fr]">
                 <div class="relative flex min-h-[420px] items-center overflow-hidden bg-slate-900 px-6 py-16 sm:px-12 lg:px-16">
-                    <div class="absolute inset-0 bg-cover bg-center opacity-40" style="background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200');"></div>
-                    <div class="absolute inset-0 bg-slate-950/65"></div>
+                    <div class="absolute inset-0 h-full min-h-full w-full min-w-full bg-cover bg-center bg-no-repeat" style="background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200');"></div>
+                    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
                     <div class="relative z-10 max-w-lg">
                         <x-application-logo class="mb-8 h-20 w-20 fill-current text-white" />
                         <p class="mb-4 text-sm font-bold uppercase tracking-[0.25em] text-indigo-300">School-based feeding intelligence</p>
@@ -82,11 +82,11 @@
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
                         <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6" aria-hidden="true">
-                                <path stroke-linecap="round" stroke-linejoin="round" d="M3 5h18M5 3v4m14-4v4M4 9h16v10a2 2 0 01-2 2H6a2 2 0 01-2-2V9Zm4 4h.01M12 13h.01M16 13h.01M8 17h.01M12 17h.01M16 17h.01" />
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2Z" />
                             </svg>
                         </div>
-                        <h3 class="mt-6 text-xl font-bold text-slate-900">Attendance Tracking by Grade Level</h3>
-                        <p class="mt-3 leading-7 text-slate-600">Monitor attendance rates by grade level and keep a reliable record of daily participation in the feeding program.</p>
+                        <h3 class="mt-6 text-xl font-bold text-slate-900">Transparent Feeding Calendar</h3>
+                        <p class="mt-3 leading-7 text-slate-600">A public, photo-documented calendar of daily meals keeps the program auditable, with one-click DepEd School Form generation for administrators.</p>
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -106,7 +106,7 @@
                             </svg>
                         </div>
                         <h3 class="mt-6 text-xl font-bold text-slate-900">Role-based Dashboards</h3>
-                        <p class="mt-3 leading-7 text-slate-600">Give Super Admin, Admin, and Encoder accounts the right view and responsibilities for their level of program work.</p>
+                        <p class="mt-3 leading-7 text-slate-600">Give Super Admin, Admin, and Encoder accounts the right view for their level of program work, while parents get their own read-only transparency dashboard.</p>
                     </article>
                 </div>
             </div>
@@ -120,7 +120,7 @@
                 </div>
                 <div class="text-lg leading-8 text-slate-300">
                     <p>NutriSight supports the School-Based Feeding Program (SBFP) at Marisol Bliss Elementary School by bringing student nutrition, attendance, feeding, and assessment records into a shared system for better follow-through.</p>
-                    <p class="mt-5">The system supports multiple user roles: Super Admin for district-wide oversight, Admin for school-level management, and Encoder for day-to-day data entry. Clear permissions keep accountability visible at every level.</p>
+                    <p class="mt-5">The system supports multiple user roles: Super Admin for full system configuration and account management, Admin for day-to-day SBFP program administration and reporting, and Encoder for student profiling and attendance data entry. Parents and stakeholders get read-only access to a public transparency dashboard. Clear permissions keep accountability visible at every level.</p>
                 </div>
             </div>
         </section>

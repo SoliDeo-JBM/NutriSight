@@ -41,13 +41,11 @@ Route::middleware('guest')->group(function () {
 | Authenticated Routes
 |--------------------------------------------------------------------------
 */
+Route::get('/', function () {
+    return view('welcome');
+})->name('home');
+
 Route::middleware('auth')->group(function () {
-
-    // Home Page
-    Route::get('/', function () {
-        return view('welcome');
-    })->name('home');
-
     // Redirect /dashboard to the appropriate role-based dashboard
     Route::get('/dashboard', function () {
         return redirect()->route(Auth::user()->dashboardRoute());

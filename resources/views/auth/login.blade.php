@@ -21,8 +21,8 @@
     <div class="flex min-h-screen w-full overflow-hidden">
         
         <!-- LEFT COLUMN: Brand & Visuals -->
-        <!-- Visible on md (768px) and above. Exactly 50% width. -->
-        <div class="hidden md:flex md:w-1/2 relative items-center justify-center bg-cover bg-center" 
+        <!-- Visible on md (768px) and above. Slightly wider than the form panel. -->
+        <div class="hidden md:flex md:w-[55%] relative items-center justify-center bg-cover bg-center" 
              style="background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200');">
             
             <!-- High-contrast overlay for readability -->
@@ -43,8 +43,8 @@
         </div>
 
         <!-- RIGHT COLUMN: Authentication Form -->
-        <!-- 100% width on mobile, 50% on md and above -->
-        <div class="w-full md:w-1/2 flex items-center justify-center px-6 py-12 sm:px-12 lg:px-20 bg-white">
+        <!-- 100% width on mobile, 45% on md and above -->
+        <div class="w-full md:w-[45%] flex items-center justify-center px-6 py-12 sm:px-12 lg:px-20 bg-white">
             <div class="w-full max-w-md">
                 
                 <!-- Mobile Header: Only visible when the left column is hidden -->
