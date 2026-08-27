@@ -63,7 +63,7 @@
         <section id="features" class="bg-slate-50 px-6 py-20 sm:px-12 lg:px-8">
             <div class="mx-auto max-w-7xl">
                 <div class="max-w-2xl">
-                    <p class="text-sm font-bold uppercase tracking-[0.25em] text-indigo-600">One connected view</p>
+                    <p class="text-sm font-bold uppercase tracking-[0.25em] text-indigo-600">Features</p>
                     <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Built for accountable feeding programs</h2>
                     <p class="mt-4 text-lg leading-8 text-slate-600">NutriSight turns everyday school records into clear signals that help teams monitor learners and act at the right time.</p>
                 </div>
@@ -85,8 +85,8 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2Z" />
                             </svg>
                         </div>
-                        <h3 class="mt-6 text-xl font-bold text-slate-900">Transparent Feeding Calendar</h3>
-                        <p class="mt-3 leading-7 text-slate-600">A public, photo-documented calendar of daily meals keeps the program auditable, with one-click DepEd School Form generation for administrators.</p>
+                        <h3 class="mt-6 text-xl font-bold text-slate-900">Email Parent Notifications</h3>
+                        <p class="mt-3 leading-7 text-slate-600">Keep parents informed with timely updates on attendance, health status, and feeding program participation.</p>
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -105,7 +105,7 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m8-10a4 4 0 100-8 4 4 0 000 8Zm6-3a3 3 0 110-6m4 17v-2a4 4 0 00-3-3.87" />
                             </svg>
                         </div>
-                        <h3 class="mt-6 text-xl font-bold text-slate-900">Role-based Dashboards</h3>
+                        <h3 class="mt-6 text-xl font-bold text-slate-900">Transparency Dashboards</h3>
                         <p class="mt-3 leading-7 text-slate-600">Give Super Admin, Admin, and Encoder accounts the right view for their level of program work, while parents get their own read-only transparency dashboard.</p>
                     </article>
                 </div>
@@ -129,7 +129,7 @@
     <footer class="bg-slate-950 px-6 py-10 text-slate-300 sm:px-12 lg:px-8">
         <div class="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
-                <p class="font-bold text-white">Marisol Bliss Elementary School</p>
+                <p class="font-bold text-white">NutriSight</p>
                 <p class="mt-1 text-sm text-slate-400">A Capstone Project by Magtoto, Mungcal, Nicdao, and Santos</p>
             </div>
             <nav class="flex flex-wrap gap-x-6 gap-y-2 text-sm font-semibold" aria-label="Footer navigation">
