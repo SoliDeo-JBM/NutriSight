@@ -63,6 +63,16 @@ class AttendanceController extends Controller
             return response()->json(['error' => 'Student is disapproved for SBFP.'], 403);
         }
 
+        // Check if attendance already recorded today
+        $existingLog = AttendanceLog::where('student_id', $student->id)
+            ->where('date', now()->toDateString())
+            ->where('school_year_id', $activeSyId)
+            ->first();
+
+        if ($existingLog) {
+            return response()->json(['error' => 'Attendance already recorded for today.'], 409);
+        }
+
         // Automatically permit/include student in SBFP if scanned for attendance and not already disapproved
         if (!$student->is_permitted) {
             $student->update([
@@ -71,16 +81,12 @@ class AttendanceController extends Controller
             ]);
         }
 
-        AttendanceLog::updateOrCreate(
-            [
-                'student_id' => $student->id,
-                'date' => now()->toDateString(),
-                'school_year_id' => $activeSyId,
-            ],
-            [
-                'status' => 'present'
-            ]
-        );
+        AttendanceLog::create([
+            'student_id' => $student->id,
+            'date' => now()->toDateString(),
+            'school_year_id' => $activeSyId,
+            'status' => 'present'
+        ]);
 
         \App\Services\AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $student->first_name . ' ' . $student->last_name);
 

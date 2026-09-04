@@ -135,6 +135,9 @@
                 <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
             </div>
             <div class="header-right flex items-center gap-3">
+                <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" class="text-xs bg-indigo-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-indigo-700 transition">
+                    <i class="fas fa-qrcode mr-1"></i> Scan Attendance
+                </button>
                 <form method="POST" action="{{ route('school-years.switch') }}" class="flex items-center gap-2">
                     @csrf
                     <span class="text-xs font-semibold text-gray-600 hidden sm:inline"><i class="fas fa-calendar-alt mr-1"></i> School Year:</span>
@@ -173,6 +176,8 @@
             @yield('content')
         </div>
     </main>
+
+    <x-attendance-scanner-modal />
 
     <!-- Logout Confirmation Modal -->
     <div id="logoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">

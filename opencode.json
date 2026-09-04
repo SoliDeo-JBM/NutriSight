@@ -1,4 +1,4 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-    "plugin": ["@andrewhampton/opencode-handoff"]
+    "$schema": "https://opencode.ai/config.json",
+    "plugin": ["@andrewhampton/opencode-handoff", "opencode-parser"]
 }
