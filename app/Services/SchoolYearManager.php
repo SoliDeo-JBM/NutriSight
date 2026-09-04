@@ -44,8 +44,6 @@ class SchoolYearManager
 
     public static function allSchoolYears()
     {
-        return \Illuminate\Support\Facades\Cache::remember('school_years', 3600, function () {
-            return Program::orderBy('start_date', 'desc')->get();
-        });
+        return Program::orderBy('start_date', 'desc')->get();
     }
 }

@@ -147,9 +147,9 @@
                             $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
                         @endphp
                         @foreach($allSy as $sy)
-                            <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
-                                {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
-                            </option>
+                                <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
+                                    {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
+                                </option>
                         @endforeach
                     </select>
                 </form>
