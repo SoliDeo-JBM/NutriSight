@@ -4,30 +4,31 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class AttendanceRecord extends Model
+class StudentAttendanceRecord extends Model
 {
     use HasFactory;
 
     protected $fillable = [
-        'student_id',
+        'sbfp_participant_id',
         'recorded_by_user_id',
         'attendance_date',
         'status',
-        'notes',
     ];
 
-    protected $casts = [
-        'attendance_date' => 'date',
-    ];
-
-    public function student(): BelongsTo
+    protected function casts(): array
     {
-        return $this->belongsTo(Student::class);
+        return [
+            'attendance_date' => 'date',
+        ];
     }
 
-    public function recordedBy(): BelongsTo
+    public function sbfpParticipant()
+    {
+        return $this->belongsTo(SbfpParticipant::class);
+    }
+
+    public function recordedBy()
     {
         return $this->belongsTo(User::class, 'recorded_by_user_id');
     }

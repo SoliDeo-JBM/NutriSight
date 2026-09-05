@@ -11,9 +11,13 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->boolean('is_active')->default(true)->after('role');
-            $table->softDeletes();
+        Schema::create('school_years', function (Blueprint $table) {
+            $table->id();
+            $table->string('year')->unique();
+            $table->boolean('is_active')->default(false);
+            $table->date('start_date');
+            $table->date('end_date');
+            $table->timestamps();
         });
     }
 
@@ -22,9 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::table('users', function (Blueprint $table) {
-            $table->dropColumn('is_active');
-            $table->dropSoftDeletes();
-        });
+        Schema::dropIfExists('school_years');
     }
 };
