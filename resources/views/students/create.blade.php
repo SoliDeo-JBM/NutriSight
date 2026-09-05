@@ -64,18 +64,18 @@
                     <label class="block text-sm font-semibold mb-1">Grade Level <span class="text-red-500">*</span></label>
                     <select name="grade_level" required class="w-full border rounded p-2 text-sm">
                         <option value="">-- Select Grade Level --</option>
-                        <option value="0" {{ old('grade_level') == '0' ? 'selected' : '' }}>Kinder</option>
-                        <option value="1" {{ old('grade_level') == '1' ? 'selected' : '' }}>Grade 1</option>
-                        <option value="2" {{ old('grade_level') == '2' ? 'selected' : '' }}>Grade 2</option>
-                        <option value="3" {{ old('grade_level') == '3' ? 'selected' : '' }}>Grade 3</option>
-                        <option value="4" {{ old('grade_level') == '4' ? 'selected' : '' }}>Grade 4</option>
-                        <option value="5" {{ old('grade_level') == '5' ? 'selected' : '' }}>Grade 5</option>
-                        <option value="6" {{ old('grade_level') == '6' ? 'selected' : '' }}>Grade 6</option>
+                        <option value="0" {{ old('grade_level', $user->advisory_grade_level) == '0' ? 'selected' : '' }}>Kinder</option>
+                        <option value="1" {{ old('grade_level', $user->advisory_grade_level) == '1' ? 'selected' : '' }}>Grade 1</option>
+                        <option value="2" {{ old('grade_level', $user->advisory_grade_level) == '2' ? 'selected' : '' }}>Grade 2</option>
+                        <option value="3" {{ old('grade_level', $user->advisory_grade_level) == '3' ? 'selected' : '' }}>Grade 3</option>
+                        <option value="4" {{ old('grade_level', $user->advisory_grade_level) == '4' ? 'selected' : '' }}>Grade 4</option>
+                        <option value="5" {{ old('grade_level', $user->advisory_grade_level) == '5' ? 'selected' : '' }}>Grade 5</option>
+                        <option value="6" {{ old('grade_level', $user->advisory_grade_level) == '6' ? 'selected' : '' }}>Grade 6</option>
                     </select>
                 </div>
                 <div>
                     <label class="block text-sm font-semibold mb-1">Section <span class="text-red-500">*</span></label>
-                    <input type="text" name="section" value="{{ old('section', auth()->user()->advisory_section) }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Diamond">
+                    <input type="text" name="section" value="{{ old('section', $user->advisory_section) }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Diamond">
                 </div>
             </div>
 

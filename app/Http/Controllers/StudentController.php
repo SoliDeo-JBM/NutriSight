@@ -171,7 +171,8 @@ class StudentController extends Controller
 
     public function create()
     {
-        return view('students.create');
+        $user = auth()->user();
+        return view('students.create', compact('user'));
     }
 
     public function store(Request $request)
