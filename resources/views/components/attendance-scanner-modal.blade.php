@@ -15,7 +15,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({ student_number: this.scanValue })
+                body: JSON.stringify({ lrn: this.scanValue })
             })
             .then(async response => {
                 const data = await response.json();
