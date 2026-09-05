@@ -55,12 +55,26 @@ class AttendanceController extends Controller
             ->first();
 
         if (!$student) {
-            return response()->json(['error' => 'Student not found in active school year'], 404);
+            return response()->json([
+                'error' => 'Student not found in active school year',
+                'student_name' => null,
+                'grade_level' => null,
+                'section' => null
+            ], 404);
         }
+
+        $studentName = $student->first_name . ' ' . $student->last_name;
+        $gradeLevel = $student->grade_level;
+        $section = $student->section;
 
         // Check if student is disapproved for SBFP
         if ($student->parent_approval_status === 'disapproved') {
-            return response()->json(['error' => 'Student is disapproved for SBFP.'], 403);
+            return response()->json([
+                'error' => 'Student is disapproved for SBFP.',
+                'student_name' => $studentName,
+                'grade_level' => $gradeLevel,
+                'section' => $section
+            ], 403);
         }
 
         // Check if attendance already recorded today
@@ -70,7 +84,12 @@ class AttendanceController extends Controller
             ->first();
 
         if ($existingLog) {
-            return response()->json(['error' => 'Attendance already recorded for today.'], 409);
+            return response()->json([
+                'error' => 'Attendance already recorded for today.',
+                'student_name' => $studentName,
+                'grade_level' => $gradeLevel,
+                'section' => $section
+            ], 409);
         }
 
         // Automatically permit/include student in SBFP if scanned for attendance and not already disapproved
@@ -88,9 +107,14 @@ class AttendanceController extends Controller
             'status' => 'present'
         ]);
 
-        \App\Services\AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $student->first_name . ' ' . $student->last_name);
+        \App\Services\AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
 
-        return response()->json(['success' => 'Attendance logged for ' . $student->first_name . ' ' . $student->last_name]);
+        return response()->json([
+            'success' => 'Attendance logged successfully.',
+            'student_name' => $studentName,
+            'grade_level' => $gradeLevel,
+            'section' => $section
+        ]);
     }
 
     public function updateStatus(Request $request)
