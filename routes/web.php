@@ -127,13 +127,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/students/{student}/assessment', [App\Http\Controllers\StudentController::class, 'storeAssessment'])->name('students.assessment');
         Route::post('/students/{student}/email-feeding', [App\Http\Controllers\StudentController::class, 'emailFeedingNotice'])->name('students.email-feeding');
 
-        Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
-        Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
-        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
-
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
         Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
+    });
+
+    // Shared Attendance Routes
+    Route::middleware('role:encoder|admin|super_admin')->name('encoder.')->group(function () {
+        Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
+        Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
     });
 
     // Account & Profile

@@ -4,6 +4,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>NutriSight Dashboard</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
@@ -133,6 +135,9 @@
                 <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
             </div>
             <div class="header-right flex items-center gap-3">
+                <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" class="text-xs bg-indigo-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-indigo-700 transition">
+                    <i class="fas fa-qrcode mr-1"></i> Scan Attendance
+                </button>
                 <form method="POST" action="{{ route('school-years.switch') }}" class="flex items-center gap-2">
                     @csrf
                     <span class="text-xs font-semibold text-gray-600 hidden sm:inline"><i class="fas fa-calendar-alt mr-1"></i> School Year:</span>
@@ -142,9 +147,9 @@
                             $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
                         @endphp
                         @foreach($allSy as $sy)
-                            <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
-                                {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
-                            </option>
+                                <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
+                                    {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
+                                </option>
                         @endforeach
                     </select>
                 </form>
@@ -171,6 +176,8 @@
             @yield('content')
         </div>
     </main>
+
+    <x-attendance-scanner-modal />
 
     <!-- Logout Confirmation Modal -->
     <div id="logoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">

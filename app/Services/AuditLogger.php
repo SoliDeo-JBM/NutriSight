@@ -10,7 +10,7 @@ class AuditLogger
     public static function log(string $action, string $module, string $description): void
     {
         try {
-            AuditLog::create([
+            \App\Jobs\LogAuditEntry::dispatch([
                 'user_id' => auth()->id(),
                 'action' => $action,
                 'module' => $module,
