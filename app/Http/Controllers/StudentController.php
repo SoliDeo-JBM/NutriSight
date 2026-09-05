@@ -207,7 +207,7 @@ class StudentController extends Controller
             'sex' => $validated['sex'],
             'birth_date' => $validated['birth_date'],
             'guardian_name' => $validated['guardian_name'],
-            'guardian_email' => $validated['guardian_email'] ?? null,
+            'guardian_email' => $validated['guardian_email'] ?? 'none@example.com',
             'address' => $validated['address'],
         ]);
 
