@@ -72,8 +72,8 @@ class AttendanceController extends Controller
 
         if (!$student) {
             return response()->json([
-                'error' => 'Student not found in active school year',
-                'student_name' => null,
+                'error' => 'Invalid QR Code: Student not found in active school year.',
+                'student_name' => 'Invalid QR Code',
                 'grade_level' => null,
                 'section' => null
             ], 404);

@@ -26,8 +26,8 @@
                     this.statusClass = 'text-green-700 font-bold';
                     this.statusBg = 'bg-green-50 border-green-200';
                 } else {
-                    this.studentName = data.student_name || 'Unknown QR Code';
-                    this.studentDetails = data.grade_level && data.section ? (data.grade_level + ' - ' + data.section) : '';
+                    this.studentName = data.student_name || 'Invalid QR Code';
+                    this.studentDetails = (data.grade_level && data.section) ? (data.grade_level + ' - ' + data.section) : 'No valid student record found for this code.';
                     this.statusMessage = data.error;
                     if (response.status === 409) {
                         // Already recorded
