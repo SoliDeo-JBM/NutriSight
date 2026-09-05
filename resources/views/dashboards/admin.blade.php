@@ -38,7 +38,7 @@
         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
                 <h2 class="text-lg font-bold text-gray-800">BMI Status Distribution</h2>
-                <form method="GET" action="{{ route('dashboard.admin') }}" class="mt-2 sm:mt-0">
+                <form method="GET" action="{{ route('admin.dashboard') }}" class="mt-2 sm:mt-0">
                     <select name="term" onchange="this.form.submit()" class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1 px-2">
                         <option value="all" {{ ($selectedTerm ?? 'all') == 'all' ? 'selected' : '' }}>All Terms (Latest)</option>
                         <option value="Term 1" {{ ($selectedTerm ?? '') == 'Term 1' ? 'selected' : '' }}>Term 1</option>
@@ -53,9 +53,9 @@
         </div>
     </div>
 
-    <!-- Section Attendance Rate Chart -->
+    <!-- Grade Level Attendance Rate Chart -->
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Attendance Rate by Section (%)</h2>
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Attendance Rate by Grade Level (%)</h2>
         <div class="relative" style="height: 280px;">
             <canvas id="sectionAttendanceChart"></canvas>
         </div>

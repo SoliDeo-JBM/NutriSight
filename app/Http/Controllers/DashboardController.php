@@ -98,15 +98,21 @@ class DashboardController extends Controller
 
         $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
 
-        // 4. Section-wise Attendance Rate
-        $sections = \App\Models\Section::with('students.attendanceLogs')->get();
+        // 4. Grade Level-wise Attendance Rate
+        $gradeLevels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $sectionAttendanceLabels = [];
         $sectionAttendanceRates = [];
 
-        foreach ($sections as $section) {
+        foreach ($gradeLevels as $grade) {
             $totalLogs = 0;
             $presentLogs = 0;
-            foreach ($section->students as $student) {
+            $students = Student::where('school_year_id', $activeSyId)
+                ->where('grade_level', $grade)
+                ->with('attendanceLogs')
+                ->get();
+
+            foreach ($students as $student) {
                 foreach ($student->attendanceLogs as $log) {
                     $totalLogs++;
                     if ($log->status === 'present') {
@@ -115,7 +121,7 @@ class DashboardController extends Controller
                 }
             }
             $rate = $totalLogs > 0 ? round(($presentLogs / $totalLogs) * 100, 1) : 0;
-            $sectionAttendanceLabels[] = $section->name;
+            $sectionAttendanceLabels[] = $grade;
             $sectionAttendanceRates[] = $rate;
         }
 
@@ -223,15 +229,21 @@ class DashboardController extends Controller
 
         $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
 
-        // 4. Section-wise Attendance Rate
-        $sections = \App\Models\Section::with('students.attendanceLogs')->get();
+        // 4. Grade Level-wise Attendance Rate
+        $gradeLevels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
         $sectionAttendanceLabels = [];
         $sectionAttendanceRates = [];
 
-        foreach ($sections as $section) {
+        foreach ($gradeLevels as $grade) {
             $totalLogs = 0;
             $presentLogs = 0;
-            foreach ($section->students as $student) {
+            $students = Student::where('school_year_id', $activeSyId)
+                ->where('grade_level', $grade)
+                ->with('attendanceLogs')
+                ->get();
+
+            foreach ($students as $student) {
                 foreach ($student->attendanceLogs as $log) {
                     $totalLogs++;
                     if ($log->status === 'present') {
@@ -240,7 +252,7 @@ class DashboardController extends Controller
                 }
             }
             $rate = $totalLogs > 0 ? round(($presentLogs / $totalLogs) * 100, 1) : 0;
-            $sectionAttendanceLabels[] = $section->name;
+            $sectionAttendanceLabels[] = $grade;
             $sectionAttendanceRates[] = $rate;
         }
 
@@ -249,8 +261,24 @@ class DashboardController extends Controller
 
     public function encoder()
     {
-        $totalStudents = Student::count();
-        $totalSbfp = Student::where('is_permitted', true)->count();
+        $user = auth()->user();
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $studentQuery = Student::where('school_year_id', $activeSyId);
+        if ($user && $user->isEncoder()) {
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $studentQuery->whereIn('section_id', $activeSectionIds);
+        }
+
+        $totalStudents = (clone $studentQuery)->count();
+        $totalSbfp = (clone $studentQuery)->where(function ($q) {
+            $q->where('is_permitted', true)
+              ->orWhereHas('nutritionalRecords', function ($sub) {
+                  $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+              });
+        })->where(function ($q) {
+            $q->where('parent_approval_status', '!=', 'disapproved')
+              ->orWhereNull('parent_approval_status');
+        })->count();
         
         // Attendance chart data (last 7 days)
         $attendanceDates = [];
@@ -258,7 +286,16 @@ class DashboardController extends Controller
         for ($i = 6; $i >= 0; $i--) {
             $date = Carbon::today()->subDays($i)->toDateString();
             $attendanceDates[] = Carbon::parse($date)->format('M d');
-            $attendanceCounts[] = \App\Models\AttendanceLog::where('date', $date)->where('status', 'present')->count();
+            $attendanceCounts[] = \App\Models\AttendanceLog::where('date', $date)
+                ->where('school_year_id', $activeSyId)
+                ->where('status', 'present')
+                ->whereHas('student', function ($q) use ($user) {
+                    if ($user && $user->isEncoder()) {
+                        $activeSectionIds = $user->activeSections()->pluck('id');
+                        $q->whereIn('section_id', $activeSectionIds);
+                    }
+                })
+                ->count();
         }
 
         return view('dashboards.encoder', compact('totalStudents', 'totalSbfp', 'attendanceDates', 'attendanceCounts'));

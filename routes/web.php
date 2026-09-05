@@ -53,21 +53,66 @@ Route::middleware('auth')->group(function () {
         return redirect()->route(Auth::user()->dashboardRoute());
     })->name('dashboard');
 
+    // Shared Student Print/ID & School Year Switch
+    Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
+    Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
+    Route::post('/school-years/switch', [App\Http\Controllers\Admin\SchoolYearController::class, 'switch'])->name('school-years.switch');
+
+
+
     // Role-protected dashboards
-    Route::middleware('role:super_admin')->group(function () {
-        Route::get('/super-admin/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard.super-admin');
+    Route::middleware('role:super_admin')->prefix('super-admin')->name('super-admin.')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard');
+        Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
+        Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
+
+        Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::get('/students/promote', [App\Http\Controllers\Admin\StudentPromotionController::class, 'index'])->name('students.promote');
+        Route::post('/students/promote', [App\Http\Controllers\Admin\StudentPromotionController::class, 'store'])->name('students.promote.store');
+        Route::get('/sections', [App\Http\Controllers\Admin\SectionController::class, 'index'])->name('sections.index');
+        Route::post('/sections', [App\Http\Controllers\Admin\SectionController::class, 'store'])->name('sections.store');
+        Route::post('/sections/carry-over', [App\Http\Controllers\Admin\SectionController::class, 'carryOver'])->name('sections.carry-over');
+        Route::put('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'update'])->name('sections.update');
+        Route::delete('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'destroy'])->name('sections.destroy');
+        Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
+        Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
+        Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
+        Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
+
+        Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
+        Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
+        Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
     });
 
-    Route::middleware('role:admin')->group(function () {
-        Route::get('/admin/dashboard', [DashboardController::class, 'admin'])->name('dashboard.admin');
-        Route::get('/admin/reports', [App\Http\Controllers\ReportsController::class, 'admin'])->name('admin.reports');
-        Route::get('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('admin.accounts.index');
-        Route::get('/admin/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('admin.accounts.create');
-        Route::post('/admin/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('admin.accounts.store');
+    Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
+        Route::get('/reports', [App\Http\Controllers\ReportsController::class, 'admin'])->name('reports');
+        Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
+        Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
+        Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
+        Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::get('/sections', [App\Http\Controllers\Admin\SectionController::class, 'index'])->name('sections.index');
+        Route::post('/sections', [App\Http\Controllers\Admin\SectionController::class, 'store'])->name('sections.store');
+        Route::post('/sections/carry-over', [App\Http\Controllers\Admin\SectionController::class, 'carryOver'])->name('sections.carry-over');
+        Route::put('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'update'])->name('sections.update');
+        Route::delete('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'destroy'])->name('sections.destroy');
+        Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
+
+        Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
+        Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
+        Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
     });
 
-    Route::middleware('role:encoder')->group(function () {
-        Route::get('/encoder/dashboard', [DashboardController::class, 'encoder'])->name('dashboard.encoder');
+    Route::middleware('role:super_admin|admin')->group(function () {
+        Route::patch('/accounts/{user}/toggle-status', [App\Http\Controllers\Admin\AccountController::class, 'toggleStatus'])->name('accounts.toggle-status');
+        Route::delete('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'destroy'])->name('accounts.destroy');
+    });
+
+    Route::middleware('role:encoder')->prefix('encoder')->name('encoder.')->group(function () {
+        Route::get('/dashboard', [DashboardController::class, 'encoder'])->name('dashboard');
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');
@@ -77,7 +122,15 @@ Route::middleware('auth')->group(function () {
         Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
         Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
         Route::post('/students/{student}/assessment', [App\Http\Controllers\StudentController::class, 'storeAssessment'])->name('students.assessment');
+        Route::post('/students/{student}/email-feeding', [App\Http\Controllers\StudentController::class, 'emailFeedingNotice'])->name('students.email-feeding');
 
+        Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
+        Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
+        Route::put('/password', [App\Http\Controllers\AccountSettingsController::class, 'updatePassword'])->name('password.update');
+    });
+
+    // Shared Attendance Routes
+    Route::middleware('role:encoder|admin|super_admin')->name('encoder.')->group(function () {
         Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
         Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
         Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');

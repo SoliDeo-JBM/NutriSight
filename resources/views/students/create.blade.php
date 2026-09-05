@@ -14,7 +14,7 @@
             </div>
         @endif
 
-        <form action="{{ route('students.store') }}" method="POST" class="space-y-4">
+        <form action="{{ route('encoder.students.store') }}" method="POST" class="space-y-4">
             @csrf
 
             <div>
@@ -104,7 +104,7 @@
             </div>
 
             <div class="flex justify-end gap-3 pt-4">
-                <a href="{{ route('students.index') }}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancel</a>
+                <a href="{{ route('encoder.students.index') }}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancel</a>
                 <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-700">Save Student</button>
             </div>
         </form>

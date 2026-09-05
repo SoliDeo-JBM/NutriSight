@@ -9,7 +9,7 @@ class AttendanceLog extends Model
 {
     use HasFactory;
 
-    protected $fillable = ['student_id', 'date', 'status'];
+    protected $fillable = ['student_id', 'date', 'status', 'school_year_id'];
 
     public function student()
     {

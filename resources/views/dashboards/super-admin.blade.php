@@ -38,7 +38,7 @@
         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
             <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
                 <h2 class="text-lg font-bold text-gray-800">Overall BMI Status Distribution</h2>
-                <form method="GET" action="{{ route('dashboard.super-admin') }}" class="mt-2 sm:mt-0">
+                <form method="GET" action="{{ route('super-admin.dashboard') }}" class="mt-2 sm:mt-0">
                     <select name="term" onchange="this.form.submit()" class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1 px-2">
                         <option value="all" {{ ($selectedTerm ?? 'all') == 'all' ? 'selected' : '' }}>All Terms (Latest)</option>
                         <option value="Term 1" {{ ($selectedTerm ?? '') == 'Term 1' ? 'selected' : '' }}>Term 1</option>
@@ -53,9 +53,9 @@
         </div>
     </div>
 
-    <!-- Section Attendance Rate Chart -->
+    <!-- Grade Level Attendance Rate Chart -->
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 mb-8">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Attendance Rate by Section (%)</h2>
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Attendance Rate by Grade Level (%)</h2>
         <div class="relative" style="height: 280px;">
             <canvas id="sectionAttendanceChart"></canvas>
         </div>
@@ -65,8 +65,9 @@
         <h2 class="text-lg font-semibold mb-4 text-gray-800">System Administration & Quick Actions</h2>
         <p class="text-gray-600 mb-4">Manage user roles, permissions, system settings, and monitor overarching nutritional progress across all schools and sections.</p>
         <div class="flex flex-wrap gap-4">
-            <a href="{{ route('dashboard.admin') }}" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-semibold hover:bg-indigo-700 transition">View Admin Term Progress Report</a>
-            <a href="{{ route('students.index') }}" class="px-4 py-2 bg-gray-800 text-white rounded-md text-sm font-semibold hover:bg-gray-700 transition">Manage Students</a>
+            <a href="{{ route('super-admin.accounts.index') }}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition">Manage Admin Accounts</a>
+            <a href="{{ route('admin.dashboard') }}" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-semibold hover:bg-indigo-700 transition">View Admin Term Progress Report</a>
+            <a href="{{ route('super-admin.students.index') }}" class="px-4 py-2 bg-gray-800 text-white rounded-md text-sm font-semibold hover:bg-gray-700 transition">Manage Students</a>
         </div>
     </div>
 
