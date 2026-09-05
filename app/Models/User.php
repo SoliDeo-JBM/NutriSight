@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use App\Models\Enrollment; // Added this import so the method below works!
 
 #[Fillable(['name', 'email', 'password', 'role', 'deped_id', 'sex', 'birthdate', 'position', 'advisory_grade_level', 'advisory_section', 'is_active'])]
 #[Hidden(['password', 'remember_token'])]
@@ -60,14 +61,10 @@ class User extends Authenticatable
         };
     }
 
-    public function sections()
+    public function advisoryEnrollments()
     {
-        return $this->hasMany(Section::class, 'adviser_id');
-    }
-
-    public function activeSections()
-    {
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        return $this->sections()->where('school_year_id', $activeSyId);
+        // Matches the teacher's assigned section text directly to the enrollments table
+        return Enrollment::where('grade_level', $this->advisory_grade_level)
+                         ->where('section', $this->advisory_section);
     }
 }

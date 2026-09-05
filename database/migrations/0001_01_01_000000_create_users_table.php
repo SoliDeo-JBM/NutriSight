@@ -17,6 +17,16 @@ return new class extends Migration
             $table->string('email')->unique();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            
+            // NutriSight Custom Columns
+            $table->string('sex');
+            $table->string('role');
+            $table->date('birthdate');
+            $table->string('position');
+            $table->string('advisory_grade_level')->nullable();
+            $table->string('advisory_section')->nullable();
+            $table->bigInteger('deped_id')->nullable()->unique();
+            
             $table->rememberToken();
             $table->timestamps();
         });

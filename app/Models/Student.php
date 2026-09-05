@@ -4,36 +4,33 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Student extends Model
 {
-    use HasFactory, SoftDeletes;
+    use HasFactory;
 
     protected $fillable = [
-        'student_number', 'last_name', 'first_name', 'name_extension', 'middle_name',
-        'birth_date', 'gender', 'grade_level', 'section', 'guardian_name',
-        'guardian_contact', 'guardian_email', 'address', 'is_active', 'is_permitted',
-        'parent_approval_status', 'disapproval_reason', 'medical_condition_notes', 'section_id'
+        'lrn',
+        'first_name',
+        'last_name',
+        'name_extension',
+        'middle_name',
+        'sex',
+        'birth_date',
+        'guardian_name',
+        'guardian_email',
+        'address',
     ];
 
-    public function section()
+    protected function casts(): array
     {
-        return $this->belongsTo(Section::class);
+        return [
+            'birth_date' => 'date',
+        ];
     }
 
-    public function nutritionalRecords()
+    public function enrollments()
     {
-        return $this->hasMany(NutritionalRecord::class);
-    }
-
-    public function attendanceLogs()
-    {
-        return $this->hasMany(AttendanceLog::class);
-    }
-
-    public function assessments()
-    {
-        return $this->hasMany(StudentAssessment::class);
+        return $this->hasMany(Enrollment::class);
     }
 }
