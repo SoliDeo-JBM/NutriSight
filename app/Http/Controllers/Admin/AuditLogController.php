@@ -13,12 +13,20 @@ class AuditLogController extends Controller
         $currentUser = auth()->user();
         $query = AuditLog::with('user')->latest();
 
-        if ($currentUser && $currentUser->isAdmin()) {
+        // Super Admin sees actions done by both admins and encoders
+        if ($currentUser && $currentUser->isSuperAdmin()) {
+            $query->whereHas('user', function ($q) {
+                $q->whereIn('role', ['admin', 'encoder']);
+            });
+        } 
+        // Admin sees actions done by encoders only
+        elseif ($currentUser && $currentUser->isAdmin()) {
             $query->whereHas('user', function ($q) {
                 $q->where('role', 'encoder');
             });
         }
 
+        // Search description, module, action, or user name
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
             $query->where(function ($q) use ($search) {
@@ -31,10 +39,12 @@ class AuditLogController extends Controller
             });
         }
 
+        // Filter by module
         if ($request->filled('module')) {
             $query->where('module', $request->input('module'));
         }
 
+        // Filter by action
         if ($request->filled('action')) {
             $query->where('action', $request->input('action'));
         }
@@ -42,7 +52,11 @@ class AuditLogController extends Controller
         $auditLogs = $query->paginate(20)->withQueryString();
 
         $baseLogQuery = AuditLog::query();
-        if ($currentUser && $currentUser->isAdmin()) {
+        if ($currentUser && $currentUser->isSuperAdmin()) {
+            $baseLogQuery->whereHas('user', function ($q) {
+                $q->whereIn('role', ['admin', 'encoder']);
+            });
+        } elseif ($currentUser && $currentUser->isAdmin()) {
             $baseLogQuery->whereHas('user', function ($q) {
                 $q->where('role', 'encoder');
             });
