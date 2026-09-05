@@ -167,9 +167,9 @@
                         const alert = document.getElementById('success-alert');
                         if (alert) {
                             alert.style.opacity = '0';
-                            setTimeout(() => alert.remove(), 500);
+                            setTimeout(() => alert.remove(), 300);
                         }
-                    }, 3500);
+                    }, 2500);
                 </script>
             @endif
 
