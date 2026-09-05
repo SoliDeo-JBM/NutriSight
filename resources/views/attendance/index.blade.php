@@ -16,19 +16,19 @@
 
             <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
                 <div class="flex items-center gap-2">
-                    <a href="{{ route('attendance.index', ['date' => $prevMonth]) }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-semibold text-gray-700">
+                    <a href="{{ route('encoder.attendance.index', ['date' => $prevMonth]) }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-semibold text-gray-700">
                         <i class="fas fa-chevron-left mr-1"></i> Prev
                     </a>
-                    <a href="{{ route('attendance.index', ['date' => \Carbon\Carbon::today()->toDateString()]) }}" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded text-sm font-semibold">
+                    <a href="{{ route('encoder.attendance.index', ['date' => \Carbon\Carbon::today()->toDateString()]) }}" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded text-sm font-semibold">
                         Today
                     </a>
-                    <a href="{{ route('attendance.index', ['date' => $nextMonth]) }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-semibold text-gray-700">
+                    <a href="{{ route('encoder.attendance.index', ['date' => $nextMonth]) }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-semibold text-gray-700">
                         Next <i class="fas fa-chevron-right ml-1"></i>
                     </a>
                 </div>
 
                 <!-- Month & Year Dropdown Selectors -->
-                <form method="GET" action="{{ route('attendance.index') }}" class="flex items-center gap-2">
+                <form method="GET" action="{{ route('encoder.attendance.index') }}" class="flex items-center gap-2">
                     <select name="month" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
                         @for($m = 1; $m <= 12; $m++)
                             <option value="{{ $m }}" {{ $currentCarbon->month == $m ? 'selected' : '' }}>
@@ -71,7 +71,7 @@
                         $isSelected = $loopDate === $date;
                         $isToday = $loopDate === \Carbon\Carbon::today()->toDateString();
                     @endphp
-                    <a href="{{ route('attendance.index', ['date' => $loopDate]) }}" 
+                    <a href="{{ route('encoder.attendance.index', ['date' => $loopDate]) }}" 
                        class="p-4 rounded border text-sm font-semibold transition relative
                        @if($isSelected) ring-2 ring-blue-500 bg-blue-50 @endif
                        @if($hasLogs) bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-200 
@@ -104,7 +104,7 @@
                             <div class="text-xs text-gray-500">{{ $student->student_number }}</div>
                         </div>
 
-                        <form action="{{ route('attendance.update') }}" method="POST" class="flex gap-1">
+                        <form action="{{ route('encoder.attendance.update') }}" method="POST" class="flex gap-1">
                             @csrf
                             <input type="hidden" name="student_id" value="{{ $student->id }}">
                             <input type="hidden" name="date" value="{{ $date }}">

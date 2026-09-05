@@ -31,4 +31,9 @@ class Student extends Model
     {
         return $this->hasMany(AttendanceLog::class);
     }
+
+    public function assessments()
+    {
+        return $this->hasMany(StudentAssessment::class);
+    }
 }

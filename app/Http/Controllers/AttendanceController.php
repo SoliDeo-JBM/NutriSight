@@ -17,9 +17,15 @@ class AttendanceController extends Controller
         $defaultDate = Carbon::create($year, $month, 1)->toDateString();
         $date = $request->input('date', $defaultDate);
         
-        // Exclude disapproved students from attendance roster
-        $sbfpStudents = Student::with('nutritionalRecords')
-            ->get()
+        // Exclude disapproved students from attendance roster and scope to encoder's advisory section/grade level
+        $user = auth()->user();
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $studentQuery = Student::with('nutritionalRecords')->where('school_year_id', $activeSyId);
+        if ($user && $user->isEncoder()) {
+            $activeSectionIds = $user->activeSections()->pluck('id');
+            $studentQuery->whereIn('section_id', $activeSectionIds);
+        }
+        $sbfpStudents = $studentQuery->get()
             ->filter(function ($student) {
                 if ($student->parent_approval_status === 'disapproved') {
                     return false;
@@ -43,15 +49,47 @@ class AttendanceController extends Controller
     {
         $request->validate(['student_number' => 'required']);
 
-        $student = Student::where('student_number', $request->student_number)->first();
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+        $student = Student::where('student_number', $request->student_number)
+            ->where('school_year_id', $activeSyId)
+            ->first();
 
         if (!$student) {
-            return response()->json(['error' => 'Student not found'], 404);
+            return response()->json([
+                'error' => 'Student not found in active school year',
+                'student_name' => null,
+                'grade_level' => null,
+                'section' => null
+            ], 404);
         }
+
+        $studentName = $student->first_name . ' ' . $student->last_name;
+        $gradeLevel = $student->grade_level;
+        $section = $student->section;
 
         // Check if student is disapproved for SBFP
         if ($student->parent_approval_status === 'disapproved') {
-            return response()->json(['error' => 'Student is disapproved for SBFP.'], 403);
+            return response()->json([
+                'error' => 'Student is disapproved for SBFP.',
+                'student_name' => $studentName,
+                'grade_level' => $gradeLevel,
+                'section' => $section
+            ], 403);
+        }
+
+        // Check if attendance already recorded today
+        $existingLog = AttendanceLog::where('student_id', $student->id)
+            ->where('date', now()->toDateString())
+            ->where('school_year_id', $activeSyId)
+            ->first();
+
+        if ($existingLog) {
+            return response()->json([
+                'error' => 'Attendance already recorded for today.',
+                'student_name' => $studentName,
+                'grade_level' => $gradeLevel,
+                'section' => $section
+            ], 409);
         }
 
         // Automatically permit/include student in SBFP if scanned for attendance and not already disapproved
@@ -62,17 +100,21 @@ class AttendanceController extends Controller
             ]);
         }
 
-        AttendanceLog::updateOrCreate(
-            [
-                'student_id' => $student->id,
-                'date' => now()->toDateString(),
-            ],
-            [
-                'status' => 'present'
-            ]
-        );
+        AttendanceLog::create([
+            'student_id' => $student->id,
+            'date' => now()->toDateString(),
+            'school_year_id' => $activeSyId,
+            'status' => 'present'
+        ]);
 
-        return response()->json(['success' => 'Attendance logged for ' . $student->first_name . ' ' . $student->last_name]);
+        \App\Services\AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
+
+        return response()->json([
+            'success' => 'Attendance logged successfully.',
+            'student_name' => $studentName,
+            'grade_level' => $gradeLevel,
+            'section' => $section
+        ]);
     }
 
     public function updateStatus(Request $request)
@@ -83,15 +125,20 @@ class AttendanceController extends Controller
             'status' => 'required|in:present,absent,tardy'
         ]);
 
+        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+
         AttendanceLog::updateOrCreate(
             [
                 'student_id' => $request->student_id,
                 'date' => $request->date,
+                'school_year_id' => $activeSyId,
             ],
             [
                 'status' => $request->status
             ]
         );
+
+        \App\Services\AuditLogger::log('Updated', 'Attendance', 'Updated attendance status for student ID ' . $request->student_id . ' on ' . $request->date);
 
         return back()->with('success', 'Attendance updated.');
     }

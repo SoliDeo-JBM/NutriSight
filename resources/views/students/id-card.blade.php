@@ -2,6 +2,8 @@
 <html>
 <head>
     <title>Student ID - {{ $student->first_name }} {{ $student->last_name }}</title>
+    <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="{{ asset('favicon.svg') }}">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @media print {
