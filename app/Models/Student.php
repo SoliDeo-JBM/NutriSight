@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Services\SchoolYearManager;
 
 class Student extends Model
 {
@@ -29,8 +30,28 @@ class Student extends Model
         ];
     }
 
+    public function getStudentNumberAttribute()
+    {
+        return $this->lrn;
+    }
+
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);
+    }
+
+    public function nutritionalRecords()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        if ($enrollment && $enrollment->sbfpParticipant) {
+            return $enrollment->sbfpParticipant->nutritionMeasurements();
+        }
+        return NutritionMeasurement::whereRaw('1 = 0');
+    }
+
+    public function assessments()
+    {
+        return $this->nutritionalRecords();
     }
 }
