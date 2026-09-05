@@ -65,7 +65,7 @@
                         <tbody class="divide-y divide-gray-200">
                             @forelse($schoolYears as $sy)
                             <tr class="hover:bg-gray-50 {{ $sy->is_active ? 'bg-emerald-50/50' : '' }}">
-                                <td class="px-4 py-3 border font-bold text-gray-900">{{ $sy->school_year }}</td>
+                                 <td class="px-4 py-3 border font-bold text-gray-900">{{ $sy->year }}</td>
                                 <td class="px-4 py-3 border whitespace-nowrap text-gray-600">{{ \Carbon\Carbon::parse($sy->start_date)->format('M d, Y') }}</td>
                                 <td class="px-4 py-3 border whitespace-nowrap text-gray-600">{{ \Carbon\Carbon::parse($sy->end_date)->format('M d, Y') }}</td>
                                 <td class="px-4 py-3 border text-center whitespace-nowrap">

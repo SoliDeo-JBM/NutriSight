@@ -148,7 +148,7 @@
                         @endphp
                         @foreach($allSy as $sy)
                                 <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
-                                    {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
+                                     {{ $sy->year }} {{ $sy->is_active ? '(Active)' : '' }}
                                 </option>
                         @endforeach
                     </select>

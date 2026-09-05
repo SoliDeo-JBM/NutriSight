@@ -6,7 +6,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">Student Promotion & Annual Enrollment</h1>
-                <p class="text-sm text-gray-500 mt-1">Promote and enroll students from previous academic years into the active school year ({{ $activeSy?->school_year ?? 'N/A' }}).</p>
+                <p class="text-sm text-gray-500 mt-1">Promote and enroll students from previous academic years into the active school year ({{ $activeSy?->year ?? 'N/A' }}).</p>
             </div>
         </div>
 
@@ -38,7 +38,7 @@
                             <option value="">-- Select Source School Year --</option>
                             @foreach($allSy as $sy)
                                 <option value="{{ $sy->id }}" {{ $sourceSyId == $sy->id ? 'selected' : '' }}>
-                                    {{ $sy->school_year }} {{ $sy->is_active ? '(Active)' : '' }}
+                                     {{ $sy->year }} {{ $sy->is_active ? '(Active)' : '' }}
                                 </option>
                             @endforeach
                         </select>
@@ -113,7 +113,7 @@
         <form method="POST" action="{{ route($rolePrefix . '.students.promote.store') }}" class="space-y-6">
             @csrf
             <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-user-graduate text-emerald-600 mr-2"></i> Target Assignment for Active Year ({{ $activeSy?->school_year ?? '' }})</h2>
+                <h2 class="text-lg font-bold text-gray-800 mb-4"><i class="fas fa-user-graduate text-emerald-600 mr-2"></i> Target Assignment for Active Year ({{ $activeSy?->year ?? '' }})</h2>
                 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                     <div>
