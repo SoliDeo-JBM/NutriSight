@@ -5,8 +5,8 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
             <!-- Header -->
             <div class="mb-8">
-                <h1 class="text-2xl font-bold text-gray-900">Add New Adviser Account</h1>
-                <p class="text-sm text-gray-500 mt-2">Create a new teacher/adviser account with advisory assignment.</p>
+                <h1 class="text-2xl font-bold text-gray-900">{{ $isSuperAdmin ? 'Add New Admin Account' : 'Add New Adviser Account' }}</h1>
+                <p class="text-sm text-gray-500 mt-2">{{ $isSuperAdmin ? 'Create a new administrator account.' : 'Create a new teacher/adviser account with advisory assignment.' }}</p>
             </div>
 
             <!-- Error Messages -->
@@ -24,7 +24,7 @@
             @endif
 
             <!-- Form -->
-            <form action="{{ route('admin.accounts.store') }}" method="POST" class="space-y-6">
+            <form action="{{ route($isSuperAdmin ? 'super-admin.accounts.store' : 'admin.accounts.store') }}" method="POST" class="space-y-6">
                 @csrf
 
                 <!-- DepEd ID & Full Name -->
@@ -235,24 +235,26 @@
                     @enderror
                 </div>
 
-                <!-- Position & Advisory Grade Level -->
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                            Position <span class="text-red-500">*</span>
-                        </label>
-                        <select name="position" required 
-                                class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('position') border-red-500 @enderror">
-                            <option value="">Select Position</option>
-                            @foreach($positions as $position)
-                                <option value="{{ $position }}" {{ old('position') == $position ? 'selected' : '' }}>{{ $position }}</option>
-                            @endforeach
-                        </select>
-                        @error('position')
-                            <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                        @enderror
-                    </div>
+                <!-- Position -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        Position <span class="text-red-500">*</span>
+                    </label>
+                    <select name="position" required 
+                            class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('position') border-red-500 @enderror">
+                        <option value="">Select Position</option>
+                        @foreach($positions as $position)
+                            <option value="{{ $position }}" {{ old('position') == $position ? 'selected' : '' }}>{{ $position }}</option>
+                        @endforeach
+                    </select>
+                    @error('position')
+                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
 
+                @if(!$isSuperAdmin)
+                <!-- Advisory Grade Level & Section (For Encoders / Advisers only) -->
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">
                             Advisory Grade Level <span class="text-red-500">*</span>
@@ -268,28 +270,28 @@
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
                     </div>
-                </div>
 
-                <!-- Advisory Section -->
-                <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">
-                        Advisory Section <span class="text-red-500">*</span>
-                    </label>
-                    <input type="text" name="advisory_section" value="{{ old('advisory_section') }}" required 
-                           class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('advisory_section') border-red-500 @enderror"
-                           placeholder="e.g., Diamond, Sapphire, Emerald">
-                    @error('advisory_section')
-                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
-                    @enderror
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">
+                            Advisory Section <span class="text-red-500">*</span>
+                        </label>
+                        <input type="text" name="advisory_section" value="{{ old('advisory_section') }}" required 
+                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('advisory_section') border-red-500 @enderror"
+                               placeholder="e.g., Diamond, Sapphire, Emerald">
+                        @error('advisory_section')
+                            <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                        @enderror
+                    </div>
                 </div>
+                @endif
 
                 <!-- Form Actions -->
                 <div class="flex gap-3 pt-6 border-t border-gray-200">
-                    <a href="{{ route('admin.accounts.index') }}" class="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
+                    <a href="{{ route($isSuperAdmin ? 'super-admin.accounts.index' : 'admin.accounts.index') }}" class="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
                         Cancel
                     </a>
                     <button type="submit" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition flex items-center gap-2">
-                        <i class="fas fa-save"></i> Create Adviser Account
+                        <i class="fas fa-save"></i> {{ $isSuperAdmin ? 'Create Admin Account' : 'Create Adviser Account' }}
                     </button>
                 </div>
             </form>

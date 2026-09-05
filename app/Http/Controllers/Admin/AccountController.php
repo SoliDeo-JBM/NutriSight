@@ -72,20 +72,23 @@ class AccountController extends Controller
 
     public function create()
     {
+        $currentUser = auth()->user();
+        $isSuperAdmin = $currentUser->isSuperAdmin();
         $positions = [
             'Teacher I', 'Teacher II', 'Teacher III', 'Master Teacher I', 'Master Teacher II'
         ];
         $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
         $sexes = ['Male', 'Female'];
 
-        return view('admin.accounts.create', compact('positions', 'gradeLevels', 'sexes'));
+        return view('admin.accounts.create', compact('positions', 'gradeLevels', 'sexes', 'isSuperAdmin'));
     }
 
     public function store(Request $request)
     {
         $currentUser = auth()->user();
-        $targetRole = $currentUser->isSuperAdmin() ? 'admin' : 'encoder';
-        $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
+        $isSuperAdmin = $currentUser->isSuperAdmin();
+        $targetRole = $isSuperAdmin ? 'admin' : 'encoder';
+        $redirectRoute = $isSuperAdmin ? 'super-admin.accounts.index' : 'admin.accounts.index';
 
         $validated = $request->validate([
             'deped_id' => 'required|string|unique:users,deped_id',
@@ -95,8 +98,8 @@ class AccountController extends Controller
             'sex' => 'required|in:Male,Female',
             'birthdate' => 'required|date|before:today',
             'position' => 'required|string',
-            'advisory_grade_level' => 'required|integer',
-            'advisory_section' => 'required|string|max:255',
+            'advisory_grade_level' => $isSuperAdmin ? 'nullable' : 'required|integer',
+            'advisory_section' => $isSuperAdmin ? 'nullable|string|max:255' : 'required|string|max:255',
         ]);
 
         User::create([
@@ -107,8 +110,8 @@ class AccountController extends Controller
             'sex' => $validated['sex'],
             'birthdate' => $validated['birthdate'],
             'position' => $validated['position'],
-            'advisory_grade_level' => (int)$validated['advisory_grade_level'],
-            'advisory_section' => ucfirst(strtolower($validated['advisory_section'])),
+            'advisory_grade_level' => $isSuperAdmin ? null : (int)$validated['advisory_grade_level'],
+            'advisory_section' => $isSuperAdmin ? null : ucfirst(strtolower($validated['advisory_section'])),
             'role' => $targetRole,
             'is_active' => true,
         ]);
