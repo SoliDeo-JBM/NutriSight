@@ -16,13 +16,36 @@ class SectionController extends Controller
     {
         $activeSy = SchoolYearManager::activeSchoolYear();
         
-        // Get unique sections from enrollments for active school year
-        $sections = Enrollment::where('school_year_id', $activeSy?->id)
+        // 1. Get sections from enrollments
+        $enrollmentSections = Enrollment::where('school_year_id', $activeSy?->id)
             ->select('grade_level', 'section')
             ->distinct()
-            ->orderBy('grade_level')
-            ->orderBy('section')
             ->get();
+
+        // 2. Get sections from teacher users' advisory assignments
+        $userSections = User::whereIn('role', [User::ROLE_ENCODER, User::ROLE_ADMIN])
+            ->whereNotNull('advisory_grade_level')
+            ->whereNotNull('advisory_section')
+            ->select('advisory_grade_level as grade_level', 'advisory_section as section')
+            ->distinct()
+            ->get();
+
+        // Merge and unique by grade_level + section
+        $allSections = $enrollmentSections->concat($userSections)->unique(fn($item) => $item->grade_level . '-' . strtolower($item->section));
+
+        $sections = $allSections->values()->map(function($item, $index) {
+            $adviser = User::where('advisory_grade_level', $item->grade_level)
+                ->whereRaw('LOWER(advisory_section) = ?', [strtolower($item->section)])
+                ->first();
+            
+            return (object)[
+                'id' => $index + 1,
+                'grade_level' => $item->grade_level,
+                'name' => $item->section,
+                'adviser' => $adviser,
+                'adviser_id' => $adviser?->id,
+            ];
+        })->sortBy([['grade_level', 'asc'], ['name', 'asc']]);
 
         $encoders = User::whereIn('role', [User::ROLE_ENCODER, User::ROLE_ADMIN])
             ->where('is_active', true)
@@ -37,24 +60,53 @@ class SectionController extends Controller
 
     public function store(Request $request)
     {
-        $activeSyId = SchoolYearManager::activeSchoolYearId();
-
         $validated = $request->validate([
             'grade_level' => 'required|integer',
             'name' => 'required|string|max:255',
+            'adviser_id' => 'nullable|exists:users,id',
         ]);
 
         $gradeLevel = (int)$validated['grade_level'];
         $sectionName = ucfirst(strtolower($validated['name']));
 
+        if (!empty($validated['adviser_id'])) {
+            $user = User::find($validated['adviser_id']);
+            if ($user) {
+                $user->update([
+                    'advisory_grade_level' => $gradeLevel,
+                    'advisory_section' => $sectionName,
+                ]);
+            }
+        }
+
         AuditLogger::log('created', 'Sections', 'Created section Grade ' . $gradeLevel . ' - ' . $sectionName);
 
-        return back()->with('success', 'Section created successfully.');
+        return back()->with('success', 'Section created and adviser assigned successfully.');
     }
 
     public function update(Request $request, $id)
     {
-        // Sections are tied to enrollments in the new schema
+        $validated = $request->validate([
+            'grade_level' => 'required|integer',
+            'name' => 'required|string|max:255',
+            'adviser_id' => 'nullable|exists:users,id',
+        ]);
+
+        $gradeLevel = (int)$validated['grade_level'];
+        $sectionName = ucfirst(strtolower($validated['name']));
+
+        if (!empty($validated['adviser_id'])) {
+            $user = User::find($validated['adviser_id']);
+            if ($user) {
+                $user->update([
+                    'advisory_grade_level' => $gradeLevel,
+                    'advisory_section' => $sectionName,
+                ]);
+            }
+        }
+
+        AuditLogger::log('updated', 'Sections', 'Updated section Grade ' . $gradeLevel . ' - ' . $sectionName);
+
         return back()->with('success', 'Section updated successfully.');
     }
 
@@ -73,14 +125,16 @@ class SectionController extends Controller
             return back()->withErrors(['carry_over' => 'No previous school year found to carry over from.']);
         }
 
-        $prevSections = Enrollment::where('school_year_id', $previousSy->id)
+        $prevEnrollments = Enrollment::where('school_year_id', $previousSy->id)
             ->select('grade_level', 'section')
             ->distinct()
             ->get();
 
         $carriedCount = 0;
-        foreach ($prevSections as $prev) {
-            $exists = Enrollment::where('school_year_id', $activeSy->id)
+        $activeSyId = $activeSy->id;
+
+        foreach ($prevEnrollments as $prev) {
+            $exists = Enrollment::where('school_year_id', $activeSyId)
                 ->where('grade_level', $prev->grade_level)
                 ->where('section', $prev->section)
                 ->exists();
