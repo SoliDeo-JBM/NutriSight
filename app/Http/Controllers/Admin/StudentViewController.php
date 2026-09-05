@@ -4,48 +4,49 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\Student;
-use App\Models\Section;
+use App\Models\Enrollment;
+use App\Services\SchoolYearManager;
 use Illuminate\Http\Request;
 
 class StudentViewController extends Controller
 {
     public function index(Request $request)
     {
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        $query = Student::with(['section', 'nutritionalRecords'])->where('school_year_id', $activeSyId);
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+            ->whereHas('enrollments', function($q) use ($activeSyId) {
+                $q->where('school_year_id', $activeSyId);
+            });
 
-        // Search by name or student number (LRN)
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
-            if (mb_strlen($search) === 1) {
-                $searchTerm = strtolower($search) . '%';
-            } else {
-                $searchTerm = '%' . strtolower($search) . '%';
-            }
+            $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
-        // Filter by grade level
         if ($request->filled('grade_level')) {
-            $query->where('grade_level', $request->input('grade_level'));
+            $gradeLevel = $request->input('grade_level');
+            $query->whereHas('enrollments', function($q) use ($activeSyId, $gradeLevel) {
+                $q->where('school_year_id', $activeSyId)->where('grade_level', $gradeLevel);
+            });
         }
 
-        // Filter by section
         if ($request->filled('section')) {
-            $query->where('section', $request->input('section'));
+            $section = $request->input('section');
+            $query->whereHas('enrollments', function($q) use ($activeSyId, $section) {
+                $q->where('school_year_id', $activeSyId)->where('section', $section);
+            });
         }
 
-        // Filter by sex
         if ($request->filled('sex')) {
-            $query->where('gender', $request->input('sex'));
+            $query->where('sex', $request->input('sex'));
         }
 
-        // Sorting
         $sort = $request->input('sort', 'latest');
         switch ($sort) {
             case 'name_az':
@@ -58,10 +59,10 @@ class StudentViewController extends Controller
                 $query->orderBy('created_at', 'asc');
                 break;
             case 'lrn_asc':
-                $query->orderBy('student_number', 'asc');
+                $query->orderBy('lrn', 'asc');
                 break;
             case 'lrn_desc':
-                $query->orderBy('student_number', 'desc');
+                $query->orderBy('lrn', 'desc');
                 break;
             case 'latest':
             default:
@@ -71,8 +72,8 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Student::whereNotNull('grade_level')->distinct()->pluck('grade_level');
-        $sections = Section::pluck('name');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+        $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $sortOptions = [
             'latest' => 'Latest to Oldest',
@@ -88,89 +89,62 @@ class StudentViewController extends Controller
 
     public function sbfpIndex(Request $request)
     {
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        $query = Student::with(['section', 'nutritionalRecords', 'assessments'])
-            ->where('school_year_id', $activeSyId)
-            ->where(function ($q) {
-                $q->where('is_permitted', true)
-                  ->orWhereHas('nutritionalRecords', function ($sub) {
-                      $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                  });
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+            ->whereHas('enrollments', function($q) use ($activeSyId) {
+                $q->where('school_year_id', $activeSyId);
             })
-            ->where(function ($q) {
-                $q->where('parent_approval_status', '!=', 'disapproved')
-                  ->orWhereNull('parent_approval_status');
+            ->whereHas('enrollments.sbfpParticipant', function($q) {
+                $q->where(function($sub) {
+                    $sub->where('parent_consent', '!=', 'disapproved')
+                        ->orWhereNull('parent_consent');
+                })->where(function($sub) {
+                    $sub->whereHas('nutritionMeasurements', function($m) {
+                        $m->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                    });
+                });
             });
 
-        // Search by name or student number (LRN)
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
-            if (mb_strlen($search) === 1) {
-                $searchTerm = strtolower($search) . '%';
-            } else {
-                $searchTerm = '%' . strtolower($search) . '%';
-            }
+            $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
-        // Filter by grade level
         if ($request->filled('grade_level')) {
-            $query->where('grade_level', $request->input('grade_level'));
+            $gradeLevel = $request->input('grade_level');
+            $query->whereHas('enrollments', function($q) use ($activeSyId, $gradeLevel) {
+                $q->where('school_year_id', $activeSyId)->where('grade_level', $gradeLevel);
+            });
         }
 
-        // Filter by section
         if ($request->filled('section')) {
-            $query->where('section', $request->input('section'));
+            $section = $request->input('section');
+            $query->whereHas('enrollments', function($q) use ($activeSyId, $section) {
+                $q->where('school_year_id', $activeSyId)->where('section', $section);
+            });
         }
 
-        // Filter by sex
         if ($request->filled('sex')) {
-            $query->where('gender', $request->input('sex'));
+            $query->where('sex', $request->input('sex'));
         }
 
-        // Filter by approval status
         if ($request->filled('approval_status')) {
             $approvalStatus = $request->input('approval_status');
-            if ($approvalStatus === 'approved') {
-                $query->where('parent_approval_status', 'approved');
-            } elseif ($approvalStatus === 'disapproved') {
-                $query->where('parent_approval_status', 'disapproved');
-            }
-        }
-
-        // Sorting
-        $sort = $request->input('sort', 'latest');
-        switch ($sort) {
-            case 'name_az':
-                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
-                break;
-            case 'name_za':
-                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
-                break;
-            case 'oldest':
-                $query->orderBy('created_at', 'asc');
-                break;
-            case 'lrn_asc':
-                $query->orderBy('student_number', 'asc');
-                break;
-            case 'lrn_desc':
-                $query->orderBy('student_number', 'desc');
-                break;
-            case 'latest':
-            default:
-                $query->orderBy('created_at', 'desc');
-                break;
+            $query->whereHas('enrollments.sbfpParticipant', function($q) use ($approvalStatus) {
+                $q->where('parent_consent', $approvalStatus);
+            });
         }
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Student::whereNotNull('grade_level')->distinct()->pluck('grade_level');
-        $sections = Section::pluck('name');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+        $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $approvalStatuses = [
             'approved' => 'Approved',

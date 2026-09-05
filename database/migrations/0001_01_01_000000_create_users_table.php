@@ -26,6 +26,8 @@ return new class extends Migration
             $table->string('advisory_grade_level')->nullable();
             $table->string('advisory_section')->nullable();
             $table->bigInteger('deped_id')->nullable()->unique();
+            $table->boolean('is_active')->default(true);
+            $table->softDeletes();
             
             $table->rememberToken();
             $table->timestamps();

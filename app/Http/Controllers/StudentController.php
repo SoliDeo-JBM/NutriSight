@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-use App\Models\Section;
-use App\Models\NutritionalRecord;
+use App\Models\Enrollment;
+use App\Models\SbfpParticipant;
+use App\Models\NutritionMeasurement;
 use App\Services\NutriCalculationService;
+use App\Services\SchoolYearManager;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 
 class StudentController extends Controller
 {
@@ -20,24 +24,24 @@ class StudentController extends Controller
     public function index(Request $request)
     {
         $user = auth()->user();
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        $query = Student::with(['section', 'nutritionalRecords'])->where('school_year_id', $activeSyId);
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
 
-        if ($user && $user->isEncoder()) {
-            $activeSectionIds = $user->activeSections()->pluck('id');
-            $query->whereIn('section_id', $activeSectionIds);
-        }
+        $query = Student::with(['enrollments' => function($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements']);
+        }])->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+            $q->where('school_year_id', $activeSyId);
+            if ($user && $user->isEncoder()) {
+                $q->where('grade_level', $user->advisory_grade_level)
+                  ->where('section', $user->advisory_section);
+            }
+        });
 
-        // Search by name or student number (LRN)
+        // Search by name or LRN
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
-            if (mb_strlen($search) === 1) {
-                $searchTerm = strtolower($search) . '%';
-            } else {
-                $searchTerm = '%' . strtolower($search) . '%';
-            }
+            $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
@@ -46,13 +50,13 @@ class StudentController extends Controller
 
         // Filter by sex
         if ($request->filled('sex')) {
-            $query->where('gender', $request->input('sex'));
+            $query->where('sex', $request->input('sex'));
         }
 
         // Filter by BMI category
         if ($request->filled('bmi_category')) {
             $bmiCategory = $request->input('bmi_category');
-            $query->whereHas('nutritionalRecords', function ($q) use ($bmiCategory) {
+            $query->whereHas('enrollments.sbfpParticipant.nutritionMeasurements', function ($q) use ($bmiCategory) {
                 $q->where('bmi_category', $bmiCategory);
             });
         }
@@ -70,10 +74,10 @@ class StudentController extends Controller
                 $query->orderBy('created_at', 'asc');
                 break;
             case 'lrn_asc':
-                $query->orderBy('student_number', 'asc');
+                $query->orderBy('lrn', 'asc');
                 break;
             case 'lrn_desc':
-                $query->orderBy('student_number', 'desc');
+                $query->orderBy('lrn', 'desc');
                 break;
             case 'latest':
             default:
@@ -99,82 +103,51 @@ class StudentController extends Controller
     public function sbfpIndex(Request $request)
     {
         $user = auth()->user();
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        $query = Student::with(['section', 'nutritionalRecords', 'assessments'])
-            ->where('school_year_id', $activeSyId)
-            ->where(function ($q) {
-                $q->where('is_permitted', true)
-                  ->orWhereHas('nutritionalRecords', function ($sub) {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+
+        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+            ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+                $q->where('school_year_id', $activeSyId);
+                if ($user && $user->isEncoder()) {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                      ->where('section', $user->advisory_section);
+                }
+            })
+            ->whereHas('enrollments.sbfpParticipant', function($q) {
+                $q->where('parent_consent', 'approved')
+                  ->orWhereHas('nutritionMeasurements', function($sub) {
                       $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
                   });
             });
 
-        if ($user && $user->isEncoder()) {
-            $activeSectionIds = $user->activeSections()->pluck('id');
-            $query->whereIn('section_id', $activeSectionIds);
-        }
-
-        // Search by name or student number (LRN)
+        // Search by name or LRN
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
-            if (mb_strlen($search) === 1) {
-                $searchTerm = strtolower($search) . '%';
-            } else {
-                $searchTerm = '%' . strtolower($search) . '%';
-            }
+            $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(student_number) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
-        // Filter by sex
         if ($request->filled('sex')) {
-            $query->where('gender', $request->input('sex'));
+            $query->where('sex', $request->input('sex'));
         }
 
-        // Filter by BMI category
         if ($request->filled('bmi_category')) {
             $bmiCategory = $request->input('bmi_category');
-            $query->whereHas('nutritionalRecords', function ($q) use ($bmiCategory) {
+            $query->whereHas('enrollments.sbfpParticipant.nutritionMeasurements', function ($q) use ($bmiCategory) {
                 $q->where('bmi_category', $bmiCategory);
             });
         }
 
-        // Filter by approval status
         if ($request->filled('approval_status')) {
             $approvalStatus = $request->input('approval_status');
-            if ($approvalStatus === 'approved') {
-                $query->where('parent_approval_status', 'approved');
-            } elseif ($approvalStatus === 'disapproved') {
-                $query->where('parent_approval_status', 'disapproved');
-            }
-        }
-
-        // Sorting
-        $sort = $request->input('sort', 'latest');
-        switch ($sort) {
-            case 'name_az':
-                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
-                break;
-            case 'name_za':
-                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
-                break;
-            case 'oldest':
-                $query->orderBy('created_at', 'asc');
-                break;
-            case 'lrn_asc':
-                $query->orderBy('student_number', 'asc');
-                break;
-            case 'lrn_desc':
-                $query->orderBy('student_number', 'desc');
-                break;
-            case 'latest':
-            default:
-                $query->orderBy('created_at', 'desc');
-                break;
+            $query->whereHas('enrollments.sbfpParticipant', function($q) use ($approvalStatus) {
+                $q->where('parent_consent', $approvalStatus);
+            });
         }
 
         $students = $query->paginate(15)->withQueryString();
@@ -198,172 +171,105 @@ class StudentController extends Controller
 
     public function create()
     {
-        $sections = Section::all();
-        return view('students.create', compact('sections'));
+        return view('students.create');
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'student_number' => 'required|unique:students,student_number',
+            'lrn' => 'required|unique:students,lrn',
             'last_name' => 'required',
             'first_name' => 'required',
             'name_extension' => 'nullable',
             'middle_name' => 'nullable',
             'birth_date' => 'required|date',
-            'gender' => 'required',
-            'grade_level' => 'required',
-            'section' => 'required',
+            'sex' => 'required',
+            'grade_level' => 'required|integer',
+            'section' => 'required|string',
             'weight' => 'required|numeric',
             'height' => 'required|numeric',
             'guardian_name' => 'required',
             'guardian_contact' => 'required',
             'guardian_email' => 'nullable|email',
             'address' => 'required',
-            'section_id' => 'required|exists:sections,id',
         ]);
 
-        // Calculate BMI & Category
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
-        
-        // Auto permit if Severely Wasted or Wasted
         $isWasted = in_array($metrics['category'], ['Severely Wasted', 'Wasted']);
 
         $student = Student::create([
-            'school_year_id' => \App\Services\SchoolYearManager::activeSchoolYearId(),
-            'student_number' => $validated['student_number'],
+            'lrn' => $validated['lrn'],
             'last_name' => $validated['last_name'],
             'first_name' => $validated['first_name'],
             'name_extension' => $validated['name_extension'] ?? null,
             'middle_name' => $validated['middle_name'] ?? null,
+            'sex' => $validated['sex'],
             'birth_date' => $validated['birth_date'],
-            'gender' => $validated['gender'],
-            'grade_level' => $validated['grade_level'],
-            'section' => $validated['section'],
             'guardian_name' => $validated['guardian_name'],
-            'guardian_contact' => $validated['guardian_contact'],
             'guardian_email' => $validated['guardian_email'] ?? null,
             'address' => $validated['address'],
-            'is_permitted' => $isWasted,
-            'parent_approval_status' => $isWasted ? 'approved' : null,
-            'section_id' => $validated['section_id'],
         ]);
 
-        \App\Services\AuditLogger::log('Created', 'Students', 'Added advisory student ' . $student->first_name . ' ' . $student->last_name);
-
-        NutritionalRecord::create([
+        $enrollment = Enrollment::create([
             'student_id' => $student->id,
-            'type' => 'baseline',
-            'weight' => $validated['weight'],
+            'school_year_id' => SchoolYearManager::activeSchoolYearId(),
+            'grade_level' => (int)$validated['grade_level'],
+            'section' => ucfirst(strtolower($validated['section'])),
+            'status' => 'enrolled',
+        ]);
+
+        $participant = SbfpParticipant::create([
+            'enrollment_id' => $enrollment->id,
+            'parent_consent' => $isWasted ? 'approved' : 'pending',
+        ]);
+
+        NutritionMeasurement::create([
+            'sbfp_participant_id' => $participant->id,
             'height' => $validated['height'],
+            'weight' => $validated['weight'],
             'bmi' => $metrics['bmi'],
             'bmi_category' => $metrics['category'],
-            'height_for_age' => 'Normal',
-            'remarks' => 'Initial encoder entry'
+            'hfa' => 'Normal',
+            'measurement_period' => 'baseline',
+            'remarks' => 'Initial encoder entry',
         ]);
 
-        $heightInMeters = $validated['height'] / 100;
-\App\Models\StudentAssessment::create([
-    'student_id' => $student->id,
-    'assessed_by_user_id' => auth()->id(),
-    'assessment_date' => \Carbon\Carbon::createFromFormat('Y-m-d', date('Y') . '-01-01'),
-    'weight_kg' => $validated['weight'],
-    'height_m' => round($heightInMeters, 2),
-    'bmi' => $metrics['bmi'],
-    'nutritional_status' => $this->getNutritionalStatus($metrics['bmi']),
-]);
+        AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
 
         return redirect()->route('encoder.students.index')->with('success', 'Student added successfully.');
     }
 
-public function storeAssessment(Request $request, Student $student)
-{
-    $validated = $request->validate([
-        'term' => 'required|in:1,2,3',
-        'weight_kg' => 'required|numeric|min:0',
-        'height_cm' => 'required|numeric|min:0',
-    ]);
-
-    // Convert height from cm to meters for storage
-    $heightM = $validated['height_cm'] / 100;
-    $bmi = $validated['weight_kg'] / ($heightM ** 2);
-    $nutritionalStatus = $this->getNutritionalStatus($bmi);
-    
-    // Use fixed dates for each term (month identifies the term)
-    $termDates = [
-        1 => date('Y') . '-01-01',  // Term 1
-        2 => date('Y') . '-02-01',  // Term 2
-        3 => date('Y') . '-03-01',  // Term 3
-    ];
-    
-    $assessmentDate = \Carbon\Carbon::createFromFormat('Y-m-d', $termDates[$validated['term']]);
-
-    // Check if assessment already exists for this term
-    $existingAssessment = \App\Models\StudentAssessment::where('student_id', $student->id)
-        ->whereMonth('assessment_date', $validated['term'])
-        ->latest('assessment_date')
-        ->first();
-
-    if ($existingAssessment) {
-        // Update existing assessment
-        $existingAssessment->update([
-            'assessed_by_user_id' => auth()->id(),
-            'weight_kg' => $validated['weight_kg'],
-            'height_m' => round($heightM, 2),
-            'bmi' => round($bmi, 2),
-            'nutritional_status' => $nutritionalStatus,
-        ]);
-    } else {
-        // Create new assessment
-        \App\Models\StudentAssessment::create([
-            'student_id' => $student->id,
-            'assessed_by_user_id' => auth()->id(),
-            'assessment_date' => $assessmentDate,
-            'weight_kg' => $validated['weight_kg'],
-            'height_m' => round($heightM, 2),
-            'bmi' => round($bmi, 2),
-            'nutritional_status' => $nutritionalStatus,
-        ]);
-    }
-
-    \App\Services\AuditLogger::log('Updated', 'Assessments', 'Recorded term progress for student ' . $student->first_name . ' ' . $student->last_name);
-    return back()->with('success', 'Term progress recorded successfully.');
-}
-
-private function getNutritionalStatus($bmi)
-{
-    if ($bmi < 16) return 'Severely Wasted';
-    if ($bmi < 18.5) return 'Wasted';
-    if ($bmi < 25) return 'Normal';
-    if ($bmi < 30) return 'Overweight';
-    return 'Obese';
-}
-
     public function updateApproval(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'parent_approval_status' => 'required|in:approved,disapproved',
-            'disapproval_reason' => 'nullable|in:unwilling,medical_condition',
-            'medical_condition_notes' => 'nullable|string',
+            'parent_consent' => 'required|in:approved,disapproved',
+            'disapproval_reason' => 'nullable|string',
         ]);
 
-        $student->update([
-            'parent_approval_status' => $validated['parent_approval_status'],
-            'disapproval_reason' => $validated['parent_approval_status'] === 'disapproved' ? $validated['disapproval_reason'] : null,
-            'medical_condition_notes' => ($validated['parent_approval_status'] === 'disapproved' && $validated['disapproval_reason'] === 'medical_condition') ? $validated['medical_condition_notes'] : null,
-            'is_permitted' => $validated['parent_approval_status'] === 'approved'
-        ]);
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
 
-        \App\Services\AuditLogger::log('Updated', 'SBFP Approval', 'Updated parent approval status for student ' . $student->first_name . ' ' . $student->last_name . ' to ' . $validated['parent_approval_status']);
+        if ($enrollment && $enrollment->sbfpParticipant) {
+            $enrollment->sbfpParticipant->update([
+                'parent_consent' => $validated['parent_consent'],
+                'disapproval_reason' => $validated['parent_consent'] === 'disapproved' ? ($validated['disapproval_reason'] ?? null) : null,
+            ]);
+        }
 
-        return back()->with('success', 'Parent approval status updated.');
+        AuditLogger::log('Updated', 'SBFP Approval', 'Updated parent consent for student ' . $student->first_name . ' ' . $student->last_name . ' to ' . $validated['parent_consent']);
+
+        return back()->with('success', 'Parent consent updated.');
     }
 
     public function destroy(Student $student)
     {
-        $student->delete(); 
-        \App\Services\AuditLogger::log('Archived', 'Students', 'Archived student ' . $student->first_name . ' ' . $student->last_name);
-        return back()->with('success', 'Student archived.');
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
+        if ($enrollment) {
+            $enrollment->delete();
+        }
+        AuditLogger::log('Archived', 'Students', 'Archived student enrollment for ' . $student->first_name . ' ' . $student->last_name);
+        return back()->with('success', 'Student enrollment archived.');
     }
 
     public function generateIdCard(Student $student)
@@ -374,20 +280,30 @@ private function getNutritionalStatus($bmi)
     public function printBatch()
     {
         $user = auth()->user();
-        $query = Student::with('nutritionalRecords');
-        if ($user && $user->isEncoder()) {
-            $activeSectionIds = $user->activeSections()->pluck('id');
-            $query->whereIn('section_id', $activeSectionIds);
-        }
-        $students = $query->get()
-            ->filter(function ($student) {
-                if ($student->parent_approval_status === 'disapproved') {
-                    return false;
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        
+        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+            ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+                $q->where('school_year_id', $activeSyId);
+                if ($user && $user->isEncoder()) {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                      ->where('section', $user->advisory_section);
                 }
-                $latestRecord = $student->nutritionalRecords()->latest()->first();
-                $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
-                return $student->is_permitted || $isWasted;
             });
+
+        $students = $query->get()->filter(function ($student) use ($activeSyId) {
+            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
+            if (!$enrollment || !$enrollment->sbfpParticipant) {
+                return false;
+            }
+            $participant = $enrollment->sbfpParticipant;
+            if ($participant->parent_consent === 'disapproved') {
+                return false;
+            }
+            $latestMeasurement = $participant->nutritionMeasurements()->latest()->first();
+            $isWasted = $latestMeasurement && in_array($latestMeasurement->bmi_category, ['Wasted', 'Severely Wasted']);
+            return $participant->parent_consent === 'approved' || $isWasted;
+        });
 
         return view('students.print-batch', compact('students'));
     }
@@ -408,7 +324,7 @@ private function getNutritionalStatus($bmi)
             new \App\Mail\FeedingDayNotice($student, $validated['meal'], $validated['date'], $validated['notes'])
         );
 
-        \App\Services\AuditLogger::log('Created', 'Email', 'Sent feeding day email notice to guardian of ' . $student->first_name . ' ' . $student->last_name);
+        AuditLogger::log('Created', 'Email', 'Sent feeding day email notice to guardian of ' . $student->first_name . ' ' . $student->last_name);
 
         return back()->with('success', 'Feeding day notice email sent successfully to ' . $student->guardian_email);
     }

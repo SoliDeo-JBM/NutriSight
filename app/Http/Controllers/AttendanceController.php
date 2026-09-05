@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-use App\Models\AttendanceLog;
+use App\Models\StudentAttendanceRecord;
+use App\Services\SchoolYearManager;
+use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
 
@@ -17,29 +19,43 @@ class AttendanceController extends Controller
         $defaultDate = Carbon::create($year, $month, 1)->toDateString();
         $date = $request->input('date', $defaultDate);
         
-        // Exclude disapproved students from attendance roster and scope to encoder's advisory section/grade level
         $user = auth()->user();
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        $studentQuery = Student::with('nutritionalRecords')->where('school_year_id', $activeSyId);
-        if ($user && $user->isEncoder()) {
-            $activeSectionIds = $user->activeSections()->pluck('id');
-            $studentQuery->whereIn('section_id', $activeSectionIds);
-        }
-        $sbfpStudents = $studentQuery->get()
-            ->filter(function ($student) {
-                if ($student->parent_approval_status === 'disapproved') {
-                    return false;
-                }
-                $latestRecord = $student->nutritionalRecords()->latest()->first();
-                $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
-                return $student->is_permitted || $isWasted;
-            });
-        
-        $attendanceLogs = AttendanceLog::where('date', $date)->get()->keyBy('student_id');
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
 
-        $loggedDates = AttendanceLog::select('date')
+        $studentQuery = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+            ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+                $q->where('school_year_id', $activeSyId);
+                if ($user && $user->isEncoder()) {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                      ->where('section', $user->advisory_section);
+                }
+            });
+
+        $sbfpStudents = $studentQuery->get()->filter(function ($student) use ($activeSyId) {
+            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
+            if (!$enrollment || !$enrollment->sbfpParticipant) {
+                return false;
+            }
+            $participant = $enrollment->sbfpParticipant;
+            if ($participant->parent_consent === 'disapproved') {
+                return false;
+            }
+            $latestMeasurement = $participant->nutritionMeasurements()->latest()->first();
+            $isWasted = $latestMeasurement && in_array($latestMeasurement->bmi_category, ['Wasted', 'Severely Wasted']);
+            return $participant->parent_consent === 'approved' || $isWasted;
+        });
+        
+        // Get attendance logs for the date keyed by sbfp_participant_id
+        $participantIds = $sbfpStudents->pluck('enrollments')->flatten()->pluck('sbfpParticipant.id')->filter();
+        $attendanceLogs = StudentAttendanceRecord::where('attendance_date', $date)
+            ->whereIn('sbfp_participant_id', $participantIds)
+            ->get()
+            ->keyBy('sbfp_participant_id');
+
+        $loggedDates = StudentAttendanceRecord::select('attendance_date')
             ->distinct()
-            ->pluck('date')
+            ->pluck('attendance_date')
+            ->map(fn($d) => Carbon::parse($d)->toDateString())
             ->toArray();
 
         return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'loggedDates'));
@@ -47,12 +63,12 @@ class AttendanceController extends Controller
 
     public function scan(Request $request)
     {
-        $request->validate(['student_number' => 'required']);
+        $request->validate(['lrn' => 'required']);
 
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-        $student = Student::where('student_number', $request->student_number)
-            ->where('school_year_id', $activeSyId)
-            ->first();
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $student = Student::with(['enrollments' => function($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->with('sbfpParticipant');
+        }])->where('lrn', $request->lrn)->first();
 
         if (!$student) {
             return response()->json([
@@ -63,82 +79,83 @@ class AttendanceController extends Controller
             ], 404);
         }
 
-        $studentName = $student->first_name . ' ' . $student->last_name;
-        $gradeLevel = $student->grade_level;
-        $section = $student->section;
+        $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
+        if (!$enrollment || !$enrollment->sbfpParticipant) {
+            return response()->json([
+                'error' => 'Student is not an SBFP participant in the active school year.',
+                'student_name' => $student->first_name . ' ' . $student->last_name,
+                'grade_level' => $enrollment?->grade_level,
+                'section' => $enrollment?->section
+            ], 404);
+        }
 
-        // Check if student is disapproved for SBFP
-        if ($student->parent_approval_status === 'disapproved') {
+        $participant = $enrollment->sbfpParticipant;
+        $studentName = $student->first_name . ' ' . $student->last_name;
+
+        if ($participant->parent_consent === 'disapproved') {
             return response()->json([
                 'error' => 'Student is disapproved for SBFP.',
                 'student_name' => $studentName,
-                'grade_level' => $gradeLevel,
-                'section' => $section
+                'grade_level' => $enrollment->grade_level,
+                'section' => $enrollment->section
             ], 403);
         }
 
-        // Check if attendance already recorded today
-        $existingLog = AttendanceLog::where('student_id', $student->id)
-            ->where('date', now()->toDateString())
-            ->where('school_year_id', $activeSyId)
+        $today = now()->toDateString();
+        $existingLog = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
+            ->where('attendance_date', $today)
             ->first();
 
         if ($existingLog) {
             return response()->json([
                 'error' => 'Attendance already recorded for today.',
                 'student_name' => $studentName,
-                'grade_level' => $gradeLevel,
-                'section' => $section
+                'grade_level' => $enrollment->grade_level,
+                'section' => $enrollment->section
             ], 409);
         }
 
-        // Automatically permit/include student in SBFP if scanned for attendance and not already disapproved
-        if (!$student->is_permitted) {
-            $student->update([
-                'is_permitted' => true,
-                'parent_approval_status' => 'approved'
-            ]);
+        if ($participant->parent_consent !== 'approved') {
+            $participant->update(['parent_consent' => 'approved']);
         }
 
-        AttendanceLog::create([
-            'student_id' => $student->id,
-            'date' => now()->toDateString(),
-            'school_year_id' => $activeSyId,
-            'status' => 'present'
+        StudentAttendanceRecord::create([
+            'sbfp_participant_id' => $participant->id,
+            'recorded_by_user_id' => auth()->id(),
+            'attendance_date' => $today,
+            'status' => 'present',
         ]);
 
-        \App\Services\AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
+        AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
 
         return response()->json([
             'success' => 'Attendance logged successfully.',
             'student_name' => $studentName,
-            'grade_level' => $gradeLevel,
-            'section' => $section
+            'grade_level' => $enrollment->grade_level,
+            'section' => $enrollment->section
         ]);
     }
 
     public function updateStatus(Request $request)
     {
         $request->validate([
-            'student_id' => 'required|exists:students,id',
+            'sbfp_participant_id' => 'required|exists:sbfp_participants,id',
             'date' => 'required|date',
             'status' => 'required|in:present,absent,tardy'
         ]);
 
-        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
-
-        AttendanceLog::updateOrCreate(
+        StudentAttendanceRecord::updateOrCreate(
             [
-                'student_id' => $request->student_id,
-                'date' => $request->date,
-                'school_year_id' => $activeSyId,
+                'sbfp_participant_id' => $request->sbfp_participant_id,
+                'attendance_date' => $request->date,
             ],
             [
+                'recorded_by_user_id' => auth()->id(),
                 'status' => $request->status
             ]
         );
 
-        \App\Services\AuditLogger::log('Updated', 'Attendance', 'Updated attendance status for student ID ' . $request->student_id . ' on ' . $request->date);
+        AuditLogger::log('Updated', 'Attendance', 'Updated attendance status for participant ID ' . $request->sbfp_participant_id . ' on ' . $request->date);
 
         return back()->with('success', 'Attendance updated.');
     }

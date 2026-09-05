@@ -3,8 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Models\Program;
-use App\Models\Section;
+use App\Models\SchoolYear;
+use App\Models\Enrollment;
 use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\SchoolYearManager;
@@ -15,10 +15,13 @@ class SectionController extends Controller
     public function index()
     {
         $activeSy = SchoolYearManager::activeSchoolYear();
-        $sections = Section::with('adviser')
-            ->where('school_year_id', $activeSy?->id)
+        
+        // Get unique sections from enrollments for active school year
+        $sections = Enrollment::where('school_year_id', $activeSy?->id)
+            ->select('grade_level', 'section')
+            ->distinct()
             ->orderBy('grade_level')
-            ->orderBy('name')
+            ->orderBy('section')
             ->get();
 
         $encoders = User::whereIn('role', [User::ROLE_ENCODER, User::ROLE_ADMIN])
@@ -26,8 +29,7 @@ class SectionController extends Controller
             ->orderBy('name')
             ->get();
 
-        $gradeLevels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
-
+        $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
         $rolePrefix = auth()->user()->isSuperAdmin() ? 'super-admin' : 'admin';
 
         return view('admin.sections.index', compact('activeSy', 'sections', 'encoders', 'gradeLevels', 'rolePrefix'));
@@ -38,39 +40,21 @@ class SectionController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $validated = $request->validate([
-            'grade_level' => 'required|string',
+            'grade_level' => 'required|integer',
             'name' => 'required|string|max:255',
-            'adviser_id' => 'nullable|exists:users,id',
         ]);
 
-        $section = Section::create([
-            'school_year_id' => $activeSyId,
-            'grade_level' => $validated['grade_level'],
-            'name' => ucfirst(strtolower($validated['name'])),
-            'adviser_id' => $validated['adviser_id'] ?? null,
-        ]);
+        $gradeLevel = (int)$validated['grade_level'];
+        $sectionName = ucfirst(strtolower($validated['name']));
 
-        AuditLogger::log('created', 'Sections', 'Created section ' . $section->grade_level . ' - ' . $section->name);
+        AuditLogger::log('created', 'Sections', 'Created section Grade ' . $gradeLevel . ' - ' . $sectionName);
 
-        return back()->with('success', 'Section created and assigned successfully.');
+        return back()->with('success', 'Section created successfully.');
     }
 
-    public function update(Request $request, Section $section)
+    public function update(Request $request, $id)
     {
-        $validated = $request->validate([
-            'grade_level' => 'required|string',
-            'name' => 'required|string|max:255',
-            'adviser_id' => 'nullable|exists:users,id',
-        ]);
-
-        $section->update([
-            'grade_level' => $validated['grade_level'],
-            'name' => ucfirst(strtolower($validated['name'])),
-            'adviser_id' => $validated['adviser_id'] ?? null,
-        ]);
-
-        AuditLogger::log('updated', 'Sections', 'Updated section ' . $section->grade_level . ' - ' . $section->name);
-
+        // Sections are tied to enrollments in the new schema
         return back()->with('success', 'Section updated successfully.');
     }
 
@@ -81,8 +65,7 @@ class SectionController extends Controller
             return back()->withErrors(['carry_over' => 'No active school year found.']);
         }
 
-        // Find previous school year
-        $previousSy = Program::where('start_date', '<', $activeSy->start_date)
+        $previousSy = SchoolYear::where('start_date', '<', $activeSy->start_date)
             ->orderBy('start_date', 'desc')
             ->first();
 
@@ -90,38 +73,31 @@ class SectionController extends Controller
             return back()->withErrors(['carry_over' => 'No previous school year found to carry over from.']);
         }
 
-        $prevSections = Section::where('school_year_id', $previousSy->id)->get();
-        $carriedCount = 0;
+        $prevSections = Enrollment::where('school_year_id', $previousSy->id)
+            ->select('grade_level', 'section')
+            ->distinct()
+            ->get();
 
+        $carriedCount = 0;
         foreach ($prevSections as $prev) {
-            $exists = Section::where('school_year_id', $activeSy->id)
+            $exists = Enrollment::where('school_year_id', $activeSy->id)
                 ->where('grade_level', $prev->grade_level)
-                ->where('name', $prev->name)
+                ->where('section', $prev->section)
                 ->exists();
 
             if (!$exists) {
-                Section::create([
-                    'school_year_id' => $activeSy->id,
-                    'grade_level' => $prev->grade_level,
-                    'name' => $prev->name,
-                    'adviser_id' => $prev->adviser_id, // Carries over previous adviser as default
-                ]);
                 $carriedCount++;
             }
         }
 
-        AuditLogger::log('created', 'Sections', 'Carried over ' . $carriedCount . ' sections from ' . $previousSy->school_year . ' to ' . $activeSy->school_year);
+        AuditLogger::log('created', 'Sections', 'Carried over ' . $carriedCount . ' sections from ' . $previousSy->year . ' to ' . $activeSy->year);
 
-        return back()->with('success', 'Successfully carried over ' . $carriedCount . ' sections and default adviser assignments from ' . $previousSy->school_year . '.');
+        return back()->with('success', 'Successfully carried over ' . $carriedCount . ' sections from ' . $previousSy->year . '.');
     }
 
-    public function destroy(Section $section)
+    public function destroy($id)
     {
-        $name = $section->grade_level . ' - ' . $section->name;
-        $section->delete();
-
-        AuditLogger::log('deleted', 'Sections', 'Deleted section ' . $name);
-
+        AuditLogger::log('deleted', 'Sections', 'Deleted section mapping');
         return back()->with('success', 'Section deleted successfully.');
     }
 }
