@@ -16,7 +16,7 @@ body {
 /* Sidebar & Drawer */
 .sidebar {
     width: 16rem;
-    background-color: #0f172a;
+    background-color: #1c1917;
     color: #ffffff;
     display: flex;
     flex-direction: column;
@@ -44,7 +44,7 @@ body {
     padding: 1.5rem;
     font-size: 1.5rem;
     font-weight: bold;
-    border-bottom: 1px solid #1e293b;
+    border-bottom: 1px solid #292524;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -53,7 +53,7 @@ body {
 .sidebar-close-btn {
     background: none;
     border: none;
-    color: #94a3b8;
+    color: #a8a29e;
     font-size: 1.25rem;
     cursor: pointer;
 }
@@ -74,7 +74,7 @@ body {
     padding: 1rem 1rem 0.5rem 1rem;
     font-size: 0.75rem;
     font-weight: 600;
-    color: #64748b;
+    color: #78716c;
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
@@ -83,15 +83,17 @@ body {
     display: flex;
     align-items: center;
     padding: 0.75rem 1rem;
-    color: #cbd5e1;
+    color: #d6d3d1;
     text-decoration: none;
     font-size: 0.875rem;
-    transition: background-color 0.15s ease-in-out;
+    transition: background-color 0.15s ease-in-out, border-color 0.15s ease-in-out;
+    border-left: 3px solid transparent;
 }
 
 .nav-link:hover {
-    background-color: #1e293b;
+    background-color: #292524;
     color: #ffffff;
+    border-left-color: #f97316;
 }
 
 .nav-link i {
@@ -102,7 +104,7 @@ body {
 
 .sidebar-footer {
     padding: 1rem;
-    border-top: 1px solid #1e293b;
+    border-top: 1px solid #292524;
 }
 
 .logout-btn {
@@ -121,7 +123,7 @@ body {
 }
 
 .logout-btn:hover {
-    background-color: #1e293b;
+    background-color: #292524;
 }
 
 .logout-btn i {

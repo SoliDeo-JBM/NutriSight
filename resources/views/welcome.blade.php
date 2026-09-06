@@ -22,26 +22,26 @@
     <header class="border-b border-slate-200 bg-white">
         <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8" aria-label="Main navigation">
             <a href="{{ route('home') }}" class="flex items-center gap-3" aria-label="NutriSight home">
-                <x-application-logo class="h-9 w-9 fill-current text-indigo-600" />
+                <x-application-logo class="h-9 w-9 fill-current text-orange-600" />
                 <span class="text-xl font-extrabold tracking-tight text-slate-900">NutriSight</span>
             </a>
 
             <div class="hidden items-center gap-8 md:flex">
-                <a href="#features" class="text-sm font-semibold text-slate-600 transition hover:text-indigo-600">Features</a>
-                <a href="#about" class="text-sm font-semibold text-slate-600 transition hover:text-indigo-600">About</a>
-                <a href="{{ route('login') }}" class="rounded-lg bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Login</a>
+                <a href="#features" class="text-sm font-semibold text-slate-600 transition hover:text-orange-600">Features</a>
+                <a href="#about" class="text-sm font-semibold text-slate-600 transition hover:text-orange-600">About</a>
+                <a href="{{ route('login') }}" class="rounded-lg bg-orange-600 px-5 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">Login</a>
             </div>
 
-            <a href="{{ route('login') }}" class="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 md:hidden">Login</a>
+            <a href="{{ route('login') }}" class="rounded-lg bg-orange-600 px-4 py-2 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 md:hidden">Login</a>
         </nav>
     </header>
 
     <main>
         <section class="relative overflow-hidden bg-white">
             <div class="grid lg:min-h-[620px] lg:grid-cols-[1.1fr_0.9fr]">
-                <div class="relative flex min-h-[420px] items-center overflow-hidden bg-slate-900 px-6 py-16 sm:px-12 lg:px-16">
+                <div class="relative flex min-h-[420px] items-center overflow-hidden bg-stone-900 px-6 py-16 sm:px-12 lg:px-16">
                     <div class="absolute inset-0 h-full min-h-full w-full min-w-full bg-cover bg-center bg-no-repeat" style="background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200');"></div>
-                    <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+                    <div class="absolute inset-0 bg-stone-900/60 backdrop-blur-sm"></div>
                     <div class="relative z-10 max-w-lg">
                         <x-application-logo class="mb-8 h-20 w-20 fill-current text-white" />
                         <p class="mb-4 text-sm font-bold uppercase tracking-[0.25em] text-indigo-300">School-based feeding intelligence</p>
@@ -51,14 +51,14 @@
 
                 <div class="flex items-center px-6 py-16 sm:px-12 lg:px-16">
                     <div class="max-w-xl">
-                        <p class="mb-4 text-sm font-bold uppercase tracking-[0.25em] text-indigo-600">A clearer view of every learner</p>
+                        <p class="mb-4 text-sm font-bold uppercase tracking-[0.25em] text-orange-600">A clearer view of every learner</p>
                         <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                            Welcome to <span class="text-indigo-600">NutriSight</span>
+                            Welcome to <span class="text-orange-600">NutriSight</span>
                         </h1>
                         <p class="mt-6 max-w-lg text-lg leading-8 text-slate-600">Bring student nutrition, attendance, and feeding program progress into one focused workspace for Marisol Bliss Elementary School.</p>
                         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
-                            <a href="{{ route('login') }}" class="inline-flex items-center justify-center rounded-lg bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Get Started</a>
-                            <a href="#features" class="inline-flex items-center justify-center rounded-lg border border-indigo-600 px-6 py-3 text-sm font-bold text-indigo-600 transition hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Learn More</a>
+                            <a href="{{ route('login') }}" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">Get Started</a>
+                            <a href="#features" class="inline-flex items-center justify-center rounded-lg border border-orange-600 px-6 py-3 text-sm font-bold text-orange-600 transition hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">Learn More</a>
                         </div>
                     </div>
                 </div>
@@ -68,14 +68,14 @@
         <section id="features" class="bg-slate-50 px-6 py-20 sm:px-12 lg:px-8">
             <div class="mx-auto max-w-7xl">
                 <div class="max-w-2xl">
-                    <p class="text-sm font-bold uppercase tracking-[0.25em] text-indigo-600">Features</p>
+                    <p class="text-sm font-bold uppercase tracking-[0.25em] text-orange-600">Features</p>
                     <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Built for accountable feeding programs</h2>
                     <p class="mt-4 text-lg leading-8 text-slate-600">NutriSight turns everyday school records into clear signals that help teams monitor learners and act at the right time.</p>
                 </div>
 
                 <div class="mt-12 grid gap-6 md:grid-cols-2">
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M3 3v18h18M7 16l3-4 3 2 5-7" />
                             </svg>
@@ -85,7 +85,7 @@
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2Z" />
                             </svg>
@@ -95,7 +95,7 @@
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-4M9 5a3 3 0 016 0M8 11h8M8 15h5" />
                             </svg>
@@ -105,7 +105,7 @@
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
-                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                        <div class="flex h-12 w-12 items-center justify-center rounded-xl bg-orange-50 text-orange-600">
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-6 w-6" aria-hidden="true">
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M16 21v-2a4 4 0 00-4-4H6a4 4 0 00-4 4v2m8-10a4 4 0 100-8 4 4 0 000 8Zm6-3a3 3 0 110-6m4 17v-2a4 4 0 00-3-3.87" />
                             </svg>
@@ -117,10 +117,10 @@
             </div>
         </section>
 
-        <section id="about" class="bg-slate-900 px-6 py-20 sm:px-12 lg:px-8">
+        <section id="about" class="bg-stone-900 px-6 py-20 sm:px-12 lg:px-8">
             <div class="mx-auto grid max-w-7xl gap-10 lg:grid-cols-[0.8fr_1.2fr] lg:items-center">
                 <div>
-                    <p class="text-sm font-bold uppercase tracking-[0.25em] text-indigo-300">About NutriSight</p>
+                    <p class="text-sm font-bold uppercase tracking-[0.25em] text-orange-400">About NutriSight</p>
                     <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-white sm:text-4xl">Every record supports a healthier future.</h2>
                 </div>
                 <div class="text-lg leading-8 text-slate-300">
@@ -131,7 +131,7 @@
         </section>
     </main>
 
-    <footer class="bg-slate-950 px-6 py-10 text-slate-300 sm:px-12 lg:px-8">
+    <footer class="bg-stone-950 px-6 py-10 text-slate-300 sm:px-12 lg:px-8">
         <div class="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
             <div>
                 <p class="font-bold text-white">NutriSight</p>
@@ -141,7 +141,7 @@
                 <a href="{{ route('home') }}" class="transition hover:text-white">Home</a>
                 <a href="#features" class="transition hover:text-white">Features</a>
                 <a href="#about" class="transition hover:text-white">About</a>
-                <a href="{{ route('login') }}" class="text-indigo-300 transition hover:text-indigo-200">Login</a>
+                <a href="{{ route('login') }}" class="text-orange-400 transition hover:text-orange-300">Login</a>
             </nav>
         </div>
     </footer>

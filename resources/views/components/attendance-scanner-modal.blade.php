@@ -56,7 +56,7 @@
             });
         }
     }">
-        <h2 class="text-lg font-medium text-gray-900 mb-4"><i class="fas fa-qrcode text-indigo-600 mr-2"></i> Scan Student QR Code</h2>
+        <h2 class="text-lg font-medium text-gray-900 mb-4"><i class="fas fa-qrcode text-orange-600 mr-2"></i> Scan Student QR Code</h2>
         
         <input type="text" 
                x-ref="scannerInput"
@@ -64,7 +64,7 @@
                x-on:keyup.enter="processScan()"
                x-on:change="processScan()"
                x-on:open-modal.window="$event.detail == 'attendance-scanner' ? setTimeout(() => $refs.scannerInput.focus(), 100) : null"
-               class="w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 p-2.5 text-sm"
+               class="w-full border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500 p-2.5 text-sm"
                placeholder="Ready for scan (press Enter or blur)..." />
         
         <template x-if="studentName">

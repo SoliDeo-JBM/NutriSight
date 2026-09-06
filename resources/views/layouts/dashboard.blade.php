@@ -34,28 +34,28 @@
             @if(Auth::user()->role === 'super_admin')
             <!-- Student Management Dropdown -->
             <div x-data="{ open: true }" class="my-1">
-                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
                     <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Management</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
-                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('super-admin.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete Student List</a>
-                    <a href="{{ route('super-admin.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete SBFP List</a>
-                    <a href="{{ route('super-admin.students.promote') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Student Promotion</a>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('super-admin.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Complete Student List</a>
+                    <a href="{{ route('super-admin.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Complete SBFP List</a>
+                    <a href="{{ route('super-admin.students.promote') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Student Promotion</a>
                 </div>
             </div>
 
             <!-- System Administration Dropdown -->
             <div x-data="{ open: true }" class="my-1">
-                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
                     <span class="flex items-center gap-3"><i class="fas fa-cogs w-5 text-center"></i> Administration</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
-                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('super-admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
-                    <a href="{{ route('super-admin.school-years.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">School Years</a>
-                    <a href="{{ route('super-admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Admin Accounts</a>
-                    <a href="{{ route('super-admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Audit Logs</a>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('super-admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
+                    <a href="{{ route('super-admin.school-years.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">School Years</a>
+                    <a href="{{ route('super-admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Admin Accounts</a>
+                    <a href="{{ route('super-admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Audit Logs</a>
                 </div>
             </div>
 
@@ -67,14 +67,14 @@
             @if(Auth::user()->role === 'encoder')
             <!-- Student Management Dropdown -->
             <div x-data="{ open: true }" class="my-1">
-                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
                     <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Records</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
-                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('encoder.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Advisory Student List</a>
-                    <a href="{{ route('encoder.students.create') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Add Advisory Student</a>
-                    <a href="{{ route('encoder.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Advisory SBFP List</a>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('encoder.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Advisory Student List</a>
+                    <a href="{{ route('encoder.students.create') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Add Advisory Student</a>
+                    <a href="{{ route('encoder.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Advisory SBFP List</a>
                 </div>
             </div>
 
@@ -89,27 +89,27 @@
             @if(Auth::user()->role === 'admin')
             <!-- Student Management Dropdown -->
             <div x-data="{ open: true }" class="my-1">
-                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
                     <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Management</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
-                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('admin.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete Student List</a>
-                    <a href="{{ route('admin.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Complete SBFP List</a>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('admin.students.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Complete Student List</a>
+                    <a href="{{ route('admin.students.sbfp') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Complete SBFP List</a>
                 </div>
             </div>
 
             <!-- Management & Reports Dropdown -->
             <div x-data="{ open: true }" class="my-1">
-                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800 hover:text-white transition">
+                <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
                     <span class="flex items-center gap-3"><i class="fas fa-folder-open w-5 text-center"></i> Management & Reports</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
-                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-slate-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
-                    <a href="{{ route('admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Encoder Accounts</a>
-                    <a href="{{ route('admin.reports') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">SBFP Reports</a>
-                    <a href="{{ route('admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-slate-800 transition" onclick="toggleSidebar()">Audit Logs</a>
+                <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
+                    <a href="{{ route('admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
+                    <a href="{{ route('admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Encoder Accounts</a>
+                    <a href="{{ route('admin.reports') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">SBFP Reports</a>
+                    <a href="{{ route('admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Audit Logs</a>
                 </div>
             </div>
 
@@ -135,7 +135,7 @@
                 <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
             </div>
             <div class="header-right flex items-center gap-3">
-                <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" class="text-xs bg-indigo-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-indigo-700 transition">
+                <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" class="text-xs bg-blue-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-blue-700 transition">
                     <i class="fas fa-qrcode mr-1"></i> Scan Attendance
                 </button>
                 <form method="POST" action="{{ route('school-years.switch') }}" class="flex items-center gap-2">
