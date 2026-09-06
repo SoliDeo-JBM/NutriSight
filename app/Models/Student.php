@@ -35,6 +35,27 @@ class Student extends Model
         return $this->lrn;
     }
 
+    public function getParentApprovalStatusAttribute()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        return $enrollment?->sbfpParticipant?->parent_consent;
+    }
+
+    public function getDisapprovalReasonAttribute()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        return $enrollment?->sbfpParticipant?->disapproval_reason;
+    }
+
+    public function getIsPermittedAttribute()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        return $enrollment?->sbfpParticipant?->parent_consent === 'approved';
+    }
+
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);
