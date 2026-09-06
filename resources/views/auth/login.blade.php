@@ -28,7 +28,7 @@
              style="background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200');">
             
             <!-- High-contrast overlay for readability -->
-            <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm"></div>
+            <div class="absolute inset-0 bg-stone-900/70 backdrop-blur-sm"></div>
             
             <!-- Centered Brand Content -->
             <div class="relative z-10 text-center px-12 max-w-xl">
@@ -36,7 +36,7 @@
                     <x-application-logo class="w-24 h-24 fill-current text-white" />
                 </div>
                 <h1 class="text-4xl md:text-5xl font-bold text-white mb-6 tracking-tight">
-                    Welcome to <span class="text-indigo-400">NutriSight</span>
+                    Welcome to <span class="text-orange-400">NutriSight</span>
                 </h1>
                 <p class="text-lg text-slate-200 leading-relaxed">
                     Empowering school-based feeding programs with precision tracking and nutritional intelligence for a healthier future.
@@ -52,7 +52,7 @@
                 <!-- Mobile Header: Only visible when the left column is hidden -->
                 <div class="md:hidden mb-10 text-center">
                     <a href="/" class="inline-block">
-                        <x-application-logo class="w-20 h-20 fill-current text-indigo-600 mx-auto" />
+                        <x-application-logo class="w-20 h-20 fill-current text-orange-600 mx-auto" />
                     </a>
                     <h2 class="mt-4 text-2xl font-bold text-gray-900">Sign In to NutriSight</h2>
                 </div>
@@ -81,7 +81,7 @@
                                    value="{{ old('email') }}" 
                                    required 
                                    autofocus 
-                                   class="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900 placeholder-gray-400" 
+                                   class="block w-full px-4 py-3 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-gray-900 placeholder-gray-400" 
                                    placeholder="name@company.com">
                         </div>
                         <x-input-error :messages="$errors->get('email')" class="mt-2" />
@@ -94,7 +94,7 @@
                                 Password
                             </label>
                             @if (Route::has('password.request'))
-                                <a class="text-sm font-medium text-indigo-600 hover:text-indigo-500 transition-colors" href="{{ route('password.request') }}">
+                                <a class="text-sm font-medium text-orange-600 hover:text-orange-500 transition-colors" href="{{ route('password.request') }}">
                                     Forgot Password?
                                 </a>
                             @endif
@@ -105,12 +105,12 @@
                                    type="password" 
                                    required 
                                    autocomplete="current-password" 
-                                   class="block w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-all duration-200 text-gray-900" 
+                                   class="block w-full px-4 py-3 pr-12 rounded-lg border border-gray-300 shadow-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all duration-200 text-gray-900" 
                                    placeholder="••••••••">
                             
                             <button type="button" 
                                      id="togglePassword" 
-                                     class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-indigo-600 transition-colors focus:outline-none">
+                                     class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-orange-600 transition-colors focus:outline-none">
                                 <!-- Eye Icon (Visible when password is hidden) -->
                                 <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" class="w-5 h-5" style="display: block;">
                                     <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.43 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
@@ -132,7 +132,7 @@
                             <input id="remember" 
                                    name="remember" 
                                    type="checkbox" 
-                                   class="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 transition-all" />
+                                   class="h-4 w-4 rounded border-gray-300 text-orange-600 focus:ring-orange-500 transition-all" />
                             <label for="remember" class="ms-2 block text-sm text-gray-600">
                                 Remember me
                             </label>
@@ -142,7 +142,7 @@
                     <!-- Submit Button -->
                     <div>
                         <button type="submit" 
-                                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform active:scale-[0.98]">
+                                class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-orange-600 hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-orange-500 transition-all duration-200 transform active:scale-[0.98]">
                             Sign In
                         </button>
                     </div>
