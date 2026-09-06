@@ -34,7 +34,7 @@ class SectionController extends Controller
         $allSections = $enrollmentSections->concat($userSections)->unique(fn($item) => $item->grade_level . '-' . strtolower($item->section));
 
         $sections = $allSections->values()->map(function($item, $index) {
-            $adviser = User::where('advisory_grade_level', $item->grade_level)
+            $adviser = User::where('advisory_grade_level', (string)$item->grade_level)
                 ->whereRaw('LOWER(advisory_section) = ?', [strtolower($item->section)])
                 ->first();
             
