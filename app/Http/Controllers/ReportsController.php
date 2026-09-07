@@ -5,7 +5,11 @@ namespace App\Http\Controllers;
 use App\Exports\DepEdForm1Export;
 use App\Models\ReportPeriod;
 use App\Models\ReportPeriodRow;
+use App\Models\AttendanceReportMonth;
+use App\Models\AttendanceReportSection;
+use App\Exports\AttendanceReportExport;
 use App\Models\SchoolYear;
+use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
 use App\Services\SchoolYearManager;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -57,9 +61,175 @@ class ReportsController extends Controller
     }
 
     // Attendance Summary Report
-    public function sbfpAttendance()
+    public function sbfpAttendance(Request $request)
     {
-        return view('admin.reports.attendance.index');
+        $schoolYears = SchoolYear::orderByDesc('start_date')->get();
+        $schoolYears->load(['attendanceReportMonths' => fn($query) => $query->orderBy('month')]);
+
+        return view('admin.reports.attendance.index', compact('schoolYears'));
+    }
+
+    public function storeAttendanceMonth(Request $request)
+    {
+        $validated = $request->validate(['school_year_id' => 'required|exists:school_years,id', 'month' => 'required|integer|between:1,12']);
+        if (AttendanceReportMonth::where($validated)->exists()) {
+            return redirect()->back()->withErrors(['month' => 'This month already exists for the selected school year. Choose another month.'])->withInput();
+        }
+        $month = AttendanceReportMonth::create($validated);
+
+        return redirect()->route('admin.reports.sbfp.attendance.month', $month)->with('success', 'Attendance month created.');
+    }
+
+    public function updateAttendanceMonth(Request $request, AttendanceReportMonth $month)
+    {
+        $validated = $request->validate(['month' => 'required|integer|between:1,12']);
+        $duplicate = AttendanceReportMonth::where('school_year_id', $month->school_year_id)
+            ->where('month', $validated['month'])->where('id', '!=', $month->id)->exists();
+        if ($duplicate) {
+            return redirect()->back()->withErrors(['month' => 'This month already exists for the selected school year. Choose another month.'])->withInput();
+        }
+        $month->update(['month' => $validated['month']]);
+
+        return redirect()->back()->with('success', 'Attendance month updated.');
+    }
+
+    public function destroyAttendanceMonth(AttendanceReportMonth $month)
+    {
+        $month->delete();
+
+        return redirect()->route('admin.reports.sbfp.attendance')->with('success', 'Attendance month deleted.');
+    }
+
+    public function showAttendanceMonth(Request $request, AttendanceReportMonth $month)
+    {
+        $month->load('schoolYear');
+        $selectedGrade = $request->filled('grade') ? (int) $request->input('grade') : null;
+        $selectedSection = $request->filled('section') ? $request->input('section') : null;
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection);
+        $grades = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('grade_level')->distinct()->orderBy('grade_level')->pluck('grade_level');
+        $sections = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('section')->distinct()->orderBy('section')->pluck('section');
+        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $this->attendanceCalendarYear($month->schoolYear, $month->month), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection]);
+    }
+
+    public function storeAttendanceSection(Request $request, AttendanceReportMonth $month)
+    {
+        $validated = $request->validate(['grade_level' => 'required|integer|between:0,7', 'section' => 'required|string|max:100']);
+        $validated['section'] = trim($validated['section']);
+        if (AttendanceReportSection::where('attendance_report_month_id', $month->id)->where($validated)->exists()) {
+            return redirect()->back()->withErrors(['section' => 'This section already exists for the selected grade and month.'])->withInput();
+        }
+        $section = AttendanceReportSection::create(['attendance_report_month_id' => $month->id] + $validated);
+        return redirect()->route('admin.reports.sbfp.attendance.grade', [$month, $section->grade_level])->with('success', 'Attendance section created.');
+    }
+
+    public function showAttendanceGrade(AttendanceReportMonth $month, int $grade)
+    {
+        abort_unless($grade >= 0 && $grade <= 7, 404);
+        $month->load(['schoolYear', 'sections' => fn($query) => $query->where('grade_level', $grade)->orderBy('section')]);
+        return view('admin.reports.attendance.sections', compact('month', 'grade'));
+    }
+
+    public function showAttendanceSection(AttendanceReportSection $section)
+    {
+        $section->load('month.schoolYear');
+        $students = $this->attendanceStudents($section->month->schoolYear, $section->month->month, $section->grade_level, $section->section);
+        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $this->attendanceCalendarYear($section->month->schoolYear, $section->month->month), 'students' => $students]);
+    }
+
+    public function showAttendanceGradeSummary(AttendanceReportMonth $month, int $grade)
+    {
+        abort_unless($grade >= 0 && $grade <= 7, 404);
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, $grade);
+        return view('admin.reports.attendance.summary', ['schoolYear' => $month->schoolYear, 'students' => $students, 'month' => $month, 'grade' => $grade]);
+    }
+
+    public function showAttendanceSummary(SchoolYear $schoolYear)
+    {
+        $students = Student::with(['enrollments' => fn($query) => $query->where('school_year_id', $schoolYear->id)->with('sbfpParticipant.attendanceRecords')])
+            ->whereHas('enrollments', fn($query) => $query->where('school_year_id', $schoolYear->id))->orderBy('last_name')->orderBy('first_name')->get()
+            ->map(function (Student $student) use ($schoolYear) {
+                $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
+                $present = $records->filter(fn($record) => in_array(strtolower((string) $record->status), ['present', 'p', 'served']))->count();
+                return ['name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'present' => $present, 'recorded' => $records->count()];
+            });
+        return view('admin.reports.attendance.summary', compact('schoolYear', 'students'));
+    }
+
+    private function attendanceStudents(SchoolYear $schoolYear, int $month, ?int $grade = null, ?string $section = null)
+    {
+        $calendarYear = $this->attendanceCalendarYear($schoolYear, $month);
+        return Student::with([
+            'enrollments' => function ($query) use ($schoolYear, $grade, $section) {
+                $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section))->with('sbfpParticipant.attendanceRecords');
+            }
+        ])
+            ->whereHas('enrollments', function ($query) use ($schoolYear, $grade, $section) {
+                $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section));
+            })->orderBy('last_name')->orderBy('first_name')->get()
+            ->map(function (Student $student, int $index) use ($month, $calendarYear) {
+                $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
+                $days = [];
+                for ($day = 1; $day <= 20; $day++) {
+                    $record = $records->first(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
+                    $days[$day] = $record?->status;
+                }
+                return ['number' => $index + 1, 'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'grade_level' => $student->enrollments->first()?->grade_level, 'section' => $student->enrollments->first()?->section, 'days' => $days];
+            });
+    }
+
+    public function exportAttendanceExcel(AttendanceReportMonth $month)
+    {
+        $month->load('schoolYear');
+        return Excel::download(new AttendanceReportExport($this->attendanceStudents($month->schoolYear, $month->month), $month), 'attendance-' . $month->month . '.xlsx');
+    }
+
+    public function exportAttendanceDocx(AttendanceReportMonth $month)
+    {
+        $month->load('schoolYear');
+        $students = $this->attendanceStudents($month->schoolYear, $month->month);
+        $word = new PhpWord();
+        $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
+        $section->addText('SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING', ['bold' => true, 'size' => 13]);
+        $section->addText('For the month of ' . date('F', mktime(0, 0, 0, $month->month, 1)) . ', SY ' . $month->schoolYear->year);
+        $table = $section->addTable(['borderSize' => 6]);
+        $table->addRow();
+        foreach (AttendanceReportExport::columnHeadings() as $heading)
+            $table->addCell(700)->addText($heading, ['bold' => true, 'size' => 7]);
+        foreach ($students as $student) {
+            $table->addRow();
+            foreach (AttendanceReportExport::values($student) as $value)
+                $table->addCell(700)->addText((string) $value, ['size' => 7]);
+        }
+        $path = tempnam(sys_get_temp_dir(), 'nutrisight-attendance-') . '.docx';
+        IOFactory::createWriter($word, 'Word2007')->save($path);
+        return response()->download($path, 'attendance-report.docx')->deleteFileAfterSend(true);
+    }
+
+    public function exportAttendancePdf(AttendanceReportMonth $month)
+    {
+        $month->load('schoolYear');
+        $students = $this->attendanceStudents($month->schoolYear, $month->month);
+        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
+    }
+
+    public function exportAttendanceSql(AttendanceReportMonth $month): Response
+    {
+        $month->load('schoolYear');
+        $participantIds = Student::whereHas('enrollments', fn($q) => $q->where('school_year_id', $month->school_year_id))->with('enrollments.sbfpParticipant')->get()->flatMap(fn($s) => $s->enrollments->flatMap(fn($e) => $e->sbfpParticipant?->id))->filter()->unique();
+        $sql = "-- NutriSight attendance records\n";
+        foreach (DB::table('student_attendance_records')->whereIn('sbfp_participant_id', $participantIds)->whereYear('attendance_date', $this->attendanceCalendarYear($month->schoolYear, $month->month))->whereMonth('attendance_date', $month->month)->get() as $record) {
+            $attributes = (array) $record;
+            $columns = implode(', ', array_map(fn($column) => '`' . $column . '`', array_keys($attributes)));
+            $values = implode(', ', array_map(fn($value) => $value === null ? 'NULL' : DB::getPdo()->quote((string) $value), $attributes));
+            $sql .= "INSERT INTO `student_attendance_records` ({$columns}) VALUES ({$values});\n";
+        }
+        return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="attendance-report.sql"']);
+    }
+
+    private function attendanceCalendarYear(?SchoolYear $schoolYear, int $month): int
+    {
+        $startYear = (int) substr((string) ($schoolYear?->year ?? now()->year), 0, 4);
+        return $month >= 6 ? $startYear : $startYear + 1;
     }
 
     // Annual Consolidated Report hierarchy

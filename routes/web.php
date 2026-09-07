@@ -105,6 +105,15 @@ Route::middleware('auth')->group(function () {
         Route::prefix('reports/sbfp')->name('reports.sbfp.')->group(function () {
             Route::get('/', [App\Http\Controllers\ReportsController::class, 'sbfpIndex'])->name('index');
             Route::get('/attendance', [App\Http\Controllers\ReportsController::class, 'sbfpAttendance'])->name('attendance');
+            Route::post('/attendance/months', [App\Http\Controllers\ReportsController::class, 'storeAttendanceMonth'])->name('attendance.months.store');
+            Route::get('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'showAttendanceMonth'])->name('attendance.month');
+            Route::get('/attendance/month/{month}/excel', [App\Http\Controllers\ReportsController::class, 'exportAttendanceExcel'])->name('attendance.month.excel');
+            Route::get('/attendance/month/{month}/docx', [App\Http\Controllers\ReportsController::class, 'exportAttendanceDocx'])->name('attendance.month.docx');
+            Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
+            Route::get('/attendance/month/{month}/sql', [App\Http\Controllers\ReportsController::class, 'exportAttendanceSql'])->name('attendance.month.sql');
+            Route::patch('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'updateAttendanceMonth'])->name('attendance.month.update');
+            Route::delete('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'destroyAttendanceMonth'])->name('attendance.month.destroy');
+            Route::get('/attendance/summary/{schoolYear}', [App\Http\Controllers\ReportsController::class, 'showAttendanceSummary'])->name('attendance.summary');
             Route::get('/annual-consolidated', [App\Http\Controllers\ReportsController::class, 'sbfpYearly'])->name('annual');
             Route::post('/annual-consolidated/periods', [App\Http\Controllers\ReportsController::class, 'storeReportPeriod'])->name('annual.periods.store');
             Route::get('/annual-consolidated/summary/{schoolYear}', [App\Http\Controllers\ReportsController::class, 'showAnnualSummary'])->name('annual.summary');

@@ -14,6 +14,7 @@
     .report-data-table th:nth-child(n+3) { width: 3.3rem; }
     .report-back-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid #dbeafe; border-radius: .5rem; padding: .4rem .65rem; color: #2563eb; background: #eff6ff; font-size: .75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease; }
     .report-back-link:hover { border-color: #93c5fd; background: #dbeafe; }
+    .no-print > div:last-child > form:nth-of-type(2), .no-print > div:last-child > form:nth-of-type(3) { display: none !important; }
     @media print {.sidebar,.sidebar-backdrop,.top-header,.no-print{display:none!important}.main-content{margin-left:0!important;width:100%!important}.content-body{padding:0!important}@page{size:landscape;margin:6mm}}
 </style>
 <div class="flex flex-col gap-5">
