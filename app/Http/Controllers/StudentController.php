@@ -231,7 +231,7 @@ class StudentController extends Controller
             'bmi' => $metrics['bmi'],
             'bmi_category' => $metrics['category'],
             'hfa' => 'Normal',
-            'measurement_period' => 'baseline',
+            'measurement_period' => 'Term 1',
             'remarks' => 'Initial encoder entry',
         ]);
 

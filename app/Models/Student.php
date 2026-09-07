@@ -64,9 +64,10 @@ class Student extends Model
 
         $terms = ['Term 1' => [], 'Term 2' => [], 'Term 3' => []];
         foreach ($measurements as $m) {
-            if ($m->measurement_period === 'Term 1' || $m->created_at->month == 1) {
+            $period = strtolower($m->measurement_period ?? '');
+            if ($period === 'term 1' || $period === 'baseline' || $m->created_at?->month == 1) {
                 $terms['Term 1'][] = $m;
-            } elseif ($m->measurement_period === 'Term 2' || $m->created_at->month == 2) {
+            } elseif ($period === 'term 2' || $period === 'mid' || $m->created_at?->month == 2) {
                 $terms['Term 2'][] = $m;
             } else {
                 $terms['Term 3'][] = $m;
