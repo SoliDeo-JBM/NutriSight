@@ -294,7 +294,7 @@ class StudentController extends Controller
         return back()->with('success', 'Term progress recorded successfully.');
     }
 
-    public function updateApproval
+    public function updateApproval(Request $request, Student $student)
     {
         $validated = $request->validate([
             'parent_consent' => 'required|in:approved,disapproved',
