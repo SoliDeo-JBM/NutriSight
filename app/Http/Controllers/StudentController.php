@@ -240,7 +240,61 @@ class StudentController extends Controller
         return redirect()->route('encoder.students.index')->with('success', 'Student added successfully.');
     }
 
-    public function updateApproval(Request $request, Student $student)
+    public function storeAssessment(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'term' => 'required|in:1,2,3',
+            'weight_kg' => 'required|numeric|min:0',
+            'height_cm' => 'required|numeric|min:0',
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
+        if (!$enrollment || !$enrollment->sbfpParticipant) {
+            return back()->withErrors(['error' => 'Student is not an SBFP participant for the active school year.']);
+        }
+
+        $participant = $enrollment->sbfpParticipant;
+        $heightM = $validated['height_cm'] / 100;
+        $metrics = $this->nutriService->calculateBMI($validated['weight_kg'], $heightM);
+
+        $periodMap = [
+            1 => 'Term 1',
+            2 => 'Term 2',
+            3 => 'Term 3',
+        ];
+        $measurementPeriod = $periodMap[$validated['term']] ?? 'Term ' . $validated['term'];
+
+        $existing = NutritionMeasurement::where('sbfp_participant_id', $participant->id)
+            ->where('measurement_period', $measurementPeriod)
+            ->first();
+
+        if ($existing) {
+            $existing->update([
+                'weight' => $validated['weight_kg'],
+                'height' => $validated['height_cm'],
+                'bmi' => $metrics['bmi'],
+                'bmi_category' => $metrics['category'],
+                'hfa' => 'Normal',
+            ]);
+        } else {
+            NutritionMeasurement::create([
+                'sbfp_participant_id' => $participant->id,
+                'measurement_period' => $measurementPeriod,
+                'weight' => $validated['weight_kg'],
+                'height' => $validated['height_cm'],
+                'bmi' => $metrics['bmi'],
+                'bmi_category' => $metrics['category'],
+                'hfa' => 'Normal',
+                'remarks' => 'Term ' . $validated['term'] . ' progress assessment',
+            ]);
+        }
+
+        AuditLogger::log('Updated', 'Assessments', 'Recorded term progress for student ' . $student->first_name . ' ' . $student->last_name);
+        return back()->with('success', 'Term progress recorded successfully.');
+    }
+
+    public function updateApproval
     {
         $validated = $request->validate([
             'parent_consent' => 'required|in:approved,disapproved',

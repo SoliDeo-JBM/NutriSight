@@ -56,6 +56,25 @@ class Student extends Model
         return $enrollment?->sbfpParticipant?->parent_consent === 'approved';
     }
 
+    public function getTermProgressAttribute()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        $measurements = $enrollment?->sbfpParticipant?->nutritionMeasurements ?? collect();
+
+        $terms = ['Term 1' => [], 'Term 2' => [], 'Term 3' => []];
+        foreach ($measurements as $m) {
+            if ($m->measurement_period === 'Term 1' || $m->created_at->month == 1) {
+                $terms['Term 1'][] = $m;
+            } elseif ($m->measurement_period === 'Term 2' || $m->created_at->month == 2) {
+                $terms['Term 2'][] = $m;
+            } else {
+                $terms['Term 3'][] = $m;
+            }
+        }
+        return $terms;
+    }
+
     public function enrollments()
     {
         return $this->hasMany(Enrollment::class);

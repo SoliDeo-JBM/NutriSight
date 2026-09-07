@@ -24,4 +24,24 @@ class NutritionMeasurement extends Model
     {
         return $this->belongsTo(SbfpParticipant::class);
     }
+
+    public function getWeightKgAttribute()
+    {
+        return $this->weight;
+    }
+
+    public function getHeightMAttribute()
+    {
+        return is_numeric($this->height) ? ($this->height > 3 ? $this->height / 100 : $this->height) : 0;
+    }
+
+    public function getNutritionalStatusAttribute()
+    {
+        return $this->bmi_category;
+    }
+
+    public function getAssessmentDateAttribute()
+    {
+        return $this->created_at;
+    }
 }
