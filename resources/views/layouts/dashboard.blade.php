@@ -28,7 +28,12 @@
         </div>
         <nav class="sidebar-nav">
             <div class="nav-section-title">Menu</div>
-            <a href="{{ route(Auth::user()->dashboardRoute()) }}" class="nav-link" onclick="toggleSidebar()">
+            
+            @php
+                /** @var \App\Models\User $user */
+                $user = Auth::user();
+            @endphp
+            <a href="{{ route($user->dashboardRoute()) }}" class="nav-link" onclick="toggleSidebar()">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             @if(Auth::user()->role === 'super_admin')
@@ -108,7 +113,7 @@
                 <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
                     <a href="{{ route('admin.sections.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Sections & Advisers</a>
                     <a href="{{ route('admin.accounts.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Encoder Accounts</a>
-                    <a href="{{ route('admin.reports') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">SBFP Reports</a>
+                    <a href="{{ route('admin.reports.sbfp.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">SBFP Reports</a>
                     <a href="{{ route('admin.audit-logs.index') }}" class="flex items-center gap-3 pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800 transition" onclick="toggleSidebar()">Audit Logs</a>
                 </div>
             </div>

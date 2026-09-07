@@ -5,6 +5,13 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
+/**
+ * @property int $id
+ * @property string $year
+ * @property bool $is_active
+ * @property \Carbon\CarbonInterface $start_date
+ * @property \Carbon\CarbonInterface $end_date
+ */
 class SchoolYear extends Model
 {
     use HasFactory;
@@ -23,5 +30,10 @@ class SchoolYear extends Model
             'start_date' => 'date',
             'end_date' => 'date',
         ];
+    }
+
+    public function reportPeriods()
+    {
+        return $this->hasMany(ReportPeriod::class);
     }
 }

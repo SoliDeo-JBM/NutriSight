@@ -53,7 +53,10 @@ Route::middleware('guest')->group(function () {
 Route::middleware('auth')->group(function () {
     // Redirect /dashboard to the appropriate role-based dashboard
     Route::get('/dashboard', function () {
-        return redirect()->route(Auth::user()->dashboardRoute());
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+
+        return redirect()->route($user->dashboardRoute());
     })->name('dashboard');
 
     // Shared Student Print/ID & School Year Switch
@@ -81,6 +84,8 @@ Route::middleware('auth')->group(function () {
         Route::delete('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'destroy'])->name('sections.destroy');
         Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
         Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
+        Route::patch('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'update'])->name('school-years.update');
+        Route::delete('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'destroy'])->name('school-years.destroy');
         Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
 
@@ -91,7 +96,33 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
-        Route::get('/reports', [App\Http\Controllers\ReportsController::class, 'admin'])->name('reports');
+        Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
+        Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
+        Route::patch('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'update'])->name('school-years.update');
+        Route::delete('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'destroy'])->name('school-years.destroy');
+        Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
+
+        Route::prefix('reports/sbfp')->name('reports.sbfp.')->group(function () {
+            Route::get('/', [App\Http\Controllers\ReportsController::class, 'sbfpIndex'])->name('index');
+            Route::get('/attendance', [App\Http\Controllers\ReportsController::class, 'sbfpAttendance'])->name('attendance');
+            Route::get('/annual-consolidated', [App\Http\Controllers\ReportsController::class, 'sbfpYearly'])->name('annual');
+            Route::post('/annual-consolidated/periods', [App\Http\Controllers\ReportsController::class, 'storeReportPeriod'])->name('annual.periods.store');
+            Route::get('/annual-consolidated/summary/{schoolYear}', [App\Http\Controllers\ReportsController::class, 'showAnnualSummary'])->name('annual.summary');
+            Route::get('/annual-consolidated/summary/{schoolYear}/excel', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummaryExcel'])->name('annual.summary.excel');
+            Route::get('/annual-consolidated/summary/{schoolYear}/docx', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummaryDocx'])->name('annual.summary.docx');
+            Route::get('/annual-consolidated/summary/{schoolYear}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummaryPdf'])->name('annual.summary.pdf');
+            Route::get('/annual-consolidated/summary/{schoolYear}/sql', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummarySql'])->name('annual.summary.sql');
+            Route::get('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'showReportPeriod'])->name('annual.period');
+            Route::patch('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'updateReportPeriod'])->name('annual.period.update');
+            Route::delete('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'destroyReportPeriod'])->name('annual.period.destroy');
+            Route::post('/annual-consolidated/period/{period}/generate', [App\Http\Controllers\ReportsController::class, 'generateReportPeriod'])->name('annual.period.generate');
+            Route::get('/annual-consolidated/period/{period}/excel', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodExcel'])->name('annual.period.excel');
+            Route::get('/annual-consolidated/period/{period}/docx', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodDocx'])->name('annual.period.docx');
+            Route::get('/annual-consolidated/period/{period}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodPdf'])->name('annual.period.pdf');
+            Route::get('/annual-consolidated/period/{period}/sql', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodSql'])->name('annual.period.sql');
+            Route::get('/assessment', [App\Http\Controllers\ReportsController::class, 'sbfpAssessment'])->name('assessment');
+        });
+
         Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
         Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
