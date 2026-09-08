@@ -32,7 +32,7 @@ class StudentController extends Controller
             $q->where('school_year_id', $activeSyId);
             if ($user && $user->isEncoder()) {
                 $q->where('grade_level', $user->advisory_grade_level)
-                  ->where('section', $user->advisory_section);
+                  ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
             }
         });
 
@@ -114,10 +114,9 @@ class StudentController extends Controller
                 }
             })
             ->whereHas('enrollments.sbfpParticipant', function($q) {
-                $q->where('parent_consent', 'approved')
-                  ->orWhereHas('nutritionMeasurements', function($sub) {
-                      $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                  });
+                $q->whereHas('nutritionMeasurements', function($sub) {
+                    $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                });
             });
 
         // Search by name or LRN
