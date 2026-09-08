@@ -35,8 +35,8 @@ class DatabaseSeeder extends Seeder
                 'role' => User::ROLE_ADMIN,
                 'birthdate' => '1990-01-01',
                 'position' => 'Master Teacher I',
-                'advisory_grade_level' => 1,
-                'advisory_section' => 'B',
+                'advisory_grade_level' => null,
+                'advisory_section' => null,
                 'deped_id' => 100002,
                 'is_active' => true,
             ]

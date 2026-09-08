@@ -2,7 +2,9 @@
 
 use Illuminate\Support\Str;
 
-$mysqlAttrSslCa = class_exists(\Pdo\Mysql::class) ? \Pdo\Mysql::ATTR_SSL_CA : \PDO::MYSQL_ATTR_SSL_CA;
+$mysqlAttrSslCa = class_exists(\Pdo\Mysql::class) 
+    ? \Pdo\Mysql::ATTR_SSL_CA 
+    : (defined('PDO::MYSQL_ATTR_SSL_CA') ? \PDO::MYSQL_ATTR_SSL_CA : 1012);
 
 return [
 
