@@ -22,7 +22,7 @@ class AccountController extends Controller
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
                 $q->whereRaw('LOWER(name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(deped_id) LIKE ?', [$searchTerm]);
+                  ->orWhereRaw('LOWER(CAST(deped_id AS TEXT)) LIKE ?', [$searchTerm]);
             });
         }
 

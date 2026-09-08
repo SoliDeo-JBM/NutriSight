@@ -22,7 +22,7 @@ class StudentViewController extends Controller
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
@@ -109,7 +109,7 @@ class StudentViewController extends Controller
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
