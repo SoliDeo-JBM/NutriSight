@@ -25,18 +25,27 @@ class AttendanceController extends Controller
         $studentQuery = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
             ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
-                if ($user && $user->isEncoder()) {
+                if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                     $q->where('grade_level', $user->advisory_grade_level)
-                      ->where('section', $user->advisory_section);
+                      ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                 }
             });
 
-        $sbfpStudents = $studentQuery->get()->filter(function ($student) use ($activeSyId) {
+        $sbfpStudents = $studentQuery->get()->filter(function ($student) use ($activeSyId, $date) {
             $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
             if (!$enrollment || !$enrollment->sbfpParticipant) {
                 return false;
             }
             $participant = $enrollment->sbfpParticipant;
+
+            // If attendance record exists for this date, ALWAYS include them (e.g. from QR scan)
+            $hasAttendance = StudentAttendanceRecord::where('attendance_date', $date)
+                ->where('sbfp_participant_id', $participant->id)
+                ->exists();
+            if ($hasAttendance) {
+                return true;
+            }
+
             if ($participant->parent_consent === 'disapproved') {
                 return false;
             }

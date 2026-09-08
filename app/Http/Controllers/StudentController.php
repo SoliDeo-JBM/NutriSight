@@ -32,9 +32,9 @@ class StudentController extends Controller
             }
         ])->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
-            if ($user && $user->isEncoder()) {
+            if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                 $q->where('grade_level', $user->advisory_grade_level)
-                    ->where('section', $user->advisory_section);
+                  ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
             }
         });
 
@@ -43,10 +43,10 @@ class StudentController extends Controller
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
+                $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -127,10 +127,10 @@ class StudentController extends Controller
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
+                $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
+                  ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -233,13 +233,67 @@ class StudentController extends Controller
             'bmi' => $metrics['bmi'],
             'bmi_category' => $metrics['category'],
             'hfa' => 'Normal',
-            'measurement_period' => 'baseline',
+            'measurement_period' => 'Term 1',
             'remarks' => 'Initial encoder entry',
         ]);
 
         AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
 
         return redirect()->route('encoder.students.index')->with('success', 'Student added successfully.');
+    }
+
+    public function storeAssessment(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'term' => 'required|in:1,2,3',
+            'weight_kg' => 'required|numeric|min:0',
+            'height_cm' => 'required|numeric|min:0',
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
+        if (!$enrollment || !$enrollment->sbfpParticipant) {
+            return back()->withErrors(['error' => 'Student is not an SBFP participant for the active school year.']);
+        }
+
+        $participant = $enrollment->sbfpParticipant;
+        $heightM = $validated['height_cm'] / 100;
+        $metrics = $this->nutriService->calculateBMI($validated['weight_kg'], $heightM);
+
+        $periodMap = [
+            1 => 'Term 1',
+            2 => 'Term 2',
+            3 => 'Term 3',
+        ];
+        $measurementPeriod = $periodMap[$validated['term']] ?? 'Term ' . $validated['term'];
+
+        $existing = NutritionMeasurement::where('sbfp_participant_id', $participant->id)
+            ->where('measurement_period', $measurementPeriod)
+            ->first();
+
+        if ($existing) {
+            $existing->update([
+                'weight' => $validated['weight_kg'],
+                'height' => $validated['height_cm'],
+                'bmi' => $metrics['bmi'],
+                'bmi_category' => $metrics['category'],
+                'hfa' => 'Normal',
+            ]);
+        } else {
+            NutritionMeasurement::create([
+                'sbfp_participant_id' => $participant->id,
+                'measurement_period' => $measurementPeriod,
+                'weight' => $validated['weight_kg'],
+                'height' => $validated['height_cm'],
+                'bmi' => $metrics['bmi'],
+                'bmi_category' => $metrics['category'],
+                'hfa' => 'Normal',
+                'remarks' => 'Term ' . $validated['term'] . ' progress assessment',
+            ]);
+        }
+
+        AuditLogger::log('Updated', 'Assessments', 'Recorded term progress for student ' . $student->first_name . ' ' . $student->last_name);
+        return back()->with('success', 'Term progress recorded successfully.');
     }
 
     public function updateApproval(Request $request, Student $student)

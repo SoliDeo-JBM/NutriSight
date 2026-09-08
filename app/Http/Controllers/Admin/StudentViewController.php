@@ -22,7 +22,7 @@ class StudentViewController extends Controller
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
@@ -72,7 +72,7 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $sortOptions = [
@@ -109,7 +109,7 @@ class StudentViewController extends Controller
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
-                $q->whereRaw('LOWER(lrn) LIKE ?', [$searchTerm])
+                $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
                   ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
@@ -143,7 +143,7 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $approvalStatuses = [

@@ -30,7 +30,7 @@
                         <select name="grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All Grades</option>
                             @foreach($gradeLevels as $grade)
-                                <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade }}</option>
+                                <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -100,13 +100,15 @@
                             <th class="px-4 py-3 border">No.</th>
                             <th class="px-4 py-3 border">LRN / ID</th>
                             <th class="px-4 py-3 border">Learner's Name</th>
+                            <th class="px-4 py-3 border">Grade</th>
+                            <th class="px-4 py-3 border">Section</th>
                             <th class="px-4 py-3 border">Birthdate / Age / Sex</th>
                             <th class="px-4 py-3 border text-center" colspan="3">Term Progress</th>
                             <th class="px-4 py-3 border">Parent's Approval</th>
                             <th class="px-4 py-3 border text-center">Student QR Code</th>
                         </tr>
                         <tr>
-                            <th colspan="4" class="px-4 py-2 border"></th>
+                            <th colspan="6" class="px-4 py-2 border"></th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Term 1</th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Term 2</th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Term 3</th>
@@ -119,15 +121,17 @@
                             $latestRecord = $student->nutritionalRecords()->latest()->first();
                             $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
                             $termData = [
-                                'Term 1' => $student->assessments()->where('measurement_period', 'baseline')->latest()->first(),
-                                'Term 2' => $student->assessments()->where('measurement_period', 'mid')->latest()->first(),
-                                'Term 3' => $student->assessments()->where('measurement_period', 'end')->latest()->first(),
+                                'Term 1' => $student->termProgress['Term 1'][0] ?? null,
+                                'Term 2' => $student->termProgress['Term 2'][0] ?? null,
+                                'Term 3' => $student->termProgress['Term 3'][0] ?? null,
                             ];
                         @endphp
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->grade_level == 0 ? 'Kinder' : 'Grade ' . $student->grade_level }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->section }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }} ({{ $student->gender }})</td>
                             
                             <!-- Term Data Columns -->
