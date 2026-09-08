@@ -8,6 +8,7 @@ use App\Models\ReportPeriodRow;
 use App\Models\AttendanceReportMonth;
 use App\Models\AttendanceReportSection;
 use App\Exports\AttendanceReportExport;
+use App\Exports\AssessmentReportExport;
 use App\Models\SchoolYear;
 use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
@@ -586,7 +587,114 @@ class ReportsController extends Controller
     // SBFP Assessment Report
     public function sbfpAssessment()
     {
-        return view('admin.reports.assessment.index');
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+        $assessment = $this->assessmentData($schoolYear);
+
+        return view('admin.reports.assessment.index', compact('schoolYear', 'assessment'));
+    }
+
+    public function exportAssessmentExcel()
+    {
+        return Excel::download(new AssessmentReportExport($this->assessmentData(SchoolYearManager::activeSchoolYear())), 'sbfp-assessment.xlsx');
+    }
+
+    public function exportAssessmentDocx()
+    {
+        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
+        $word = new PhpWord();
+        $section = $word->addSection(['orientation' => 'landscape', 'margin' => 600]);
+        $section->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
+        $section->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
+        $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
+        $table->addRow();
+        foreach (AssessmentReportExport::columnHeadings() as $heading) {
+            $table->addCell(2600)->addText($heading, ['bold' => true]);
+        }
+        foreach (AssessmentReportExport::values($assessment) as $row) {
+            $table->addRow();
+            foreach ($row as $value) {
+                $table->addCell(2600)->addText((string) $value);
+            }
+        }
+        $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
+        IOFactory::createWriter($word, 'Word2007')->save($path);
+
+        return response()->download($path, 'sbfp-assessment.docx')->deleteFileAfterSend(true);
+    }
+
+    public function exportAssessmentPdf()
+    {
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+        $assessment = $this->assessmentData($schoolYear);
+
+        return Pdf::loadView('admin.reports.assessment.print', compact('schoolYear', 'assessment'))->setPaper('a4', 'landscape')->download('sbfp-assessment.pdf');
+    }
+
+    public function exportAssessmentSql(): Response
+    {
+        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
+        $columns = implode(', ', array_map(fn ($column) => '`' . $column . '`', AssessmentReportExport::columnKeys()));
+        $values = implode(', ', array_map(fn ($value) => DB::getPdo()->quote((string) $value), AssessmentReportExport::values($assessment)));
+        $sql = "-- NutriSight SBFP Assessment report export\nINSERT INTO `sbfp_assessment_report_exports` ({$columns}) VALUES ({$values});\n";
+
+        return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="sbfp-assessment.sql"']);
+    }
+
+    private function assessmentData(?SchoolYear $schoolYear): array
+    {
+        $students = Student::with([
+            'enrollments' => function ($query) use ($schoolYear) {
+                $query->where('school_year_id', $schoolYear?->id)
+                    ->with(['sbfpParticipant.nutritionMeasurements', 'sbfpParticipant.attendanceRecords']);
+            },
+        ])->whereHas('enrollments', function ($query) use ($schoolYear) {
+            $query->where('school_year_id', $schoolYear?->id)
+                ->whereHas('sbfpParticipant', fn ($participant) => $participant->where('parent_consent', 'approved'));
+        })->get();
+
+        $attendanceStudents = 0;
+        $completeAttendance = 0;
+        $malnourished = 0;
+        $recovered = 0;
+
+        foreach ($students as $student) {
+            $enrollment = $student->enrollments->first();
+            $participant = $enrollment?->sbfpParticipant;
+            $records = $participant?->attendanceRecords ?? collect();
+            if ($records->isNotEmpty()) {
+                $attendanceStudents++;
+                if ($records->every(fn ($record) => strtolower((string) $record->status) !== 'absent')) {
+                    $completeAttendance++;
+                }
+            }
+
+            $measurements = $participant?->nutritionMeasurements?->sortByDesc('created_at') ?? collect();
+            $baseline = $measurements->where('measurement_period', 'baseline')->first()
+                ?? $measurements->sortBy('created_at')->first();
+            if ($baseline && in_array($baseline->bmi_category, ['Wasted', 'Severely Wasted'], true)) {
+                $malnourished++;
+                if ($measurements->first()?->bmi_category === 'Normal') {
+                    $recovered++;
+                }
+            }
+        }
+
+        $withAbsences = $attendanceStudents - $completeAttendance;
+        $stillNeedingSupport = $malnourished - $recovered;
+
+        return [
+            'school_year' => $schoolYear?->year ?? 'No active school year',
+            'attendance_students' => $attendanceStudents,
+            'complete_attendance' => $completeAttendance,
+            'complete_attendance_rate' => $attendanceStudents ? round($completeAttendance / $attendanceStudents * 100, 1) : 0,
+            'with_absences' => $withAbsences,
+            'with_absences_rate' => $attendanceStudents ? round($withAbsences / $attendanceStudents * 100, 1) : 0,
+            'malnourished' => $malnourished,
+            'recovered' => $recovered,
+            'recovered_rate' => $malnourished ? round($recovered / $malnourished * 100, 1) : 0,
+            'still_needing_support' => $stillNeedingSupport,
+            'still_needing_support_rate' => $malnourished ? round($stillNeedingSupport / $malnourished * 100, 1) : 0,
+        ];
     }
 
     private function groupMeasurementsByQuarter($measurements)

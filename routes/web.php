@@ -130,6 +130,10 @@ Route::middleware('auth')->group(function () {
             Route::get('/annual-consolidated/period/{period}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodPdf'])->name('annual.period.pdf');
             Route::get('/annual-consolidated/period/{period}/sql', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodSql'])->name('annual.period.sql');
             Route::get('/assessment', [App\Http\Controllers\ReportsController::class, 'sbfpAssessment'])->name('assessment');
+            Route::get('/assessment/excel', [App\Http\Controllers\ReportsController::class, 'exportAssessmentExcel'])->name('assessment.excel');
+            Route::get('/assessment/docx', [App\Http\Controllers\ReportsController::class, 'exportAssessmentDocx'])->name('assessment.docx');
+            Route::get('/assessment/pdf', [App\Http\Controllers\ReportsController::class, 'exportAssessmentPdf'])->name('assessment.pdf');
+            Route::get('/assessment/sql', [App\Http\Controllers\ReportsController::class, 'exportAssessmentSql'])->name('assessment.sql');
         });
 
         Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
