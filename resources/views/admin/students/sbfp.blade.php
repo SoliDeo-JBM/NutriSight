@@ -172,7 +172,7 @@
                                 @if($student->is_permitted || $isWasted)
                                     <div class="flex flex-col items-center justify-center">
                                         <div class="p-1 bg-white border inline-block shadow-sm rounded">
-                                            {!! QrCode::size(60)->generate($student->student_number) !!}
+                                             {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
                                         </div>
                                         <a href="{{ route('students.id-card', $student->id) }}" target="_blank" class="text-[11px] text-blue-600 hover:underline mt-1">Print ID</a>
                                     </div>

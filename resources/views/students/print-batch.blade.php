@@ -56,7 +56,7 @@
             
             <div class="my-auto flex flex-col items-center">
                 <div class="bg-white p-1 border shadow-sm rounded mb-1">
-                    {!! QrCode::size(75)->generate($student->student_number) !!}
+                    {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(75)->generate($student->student_number) !!}
                 </div>
                 <div class="text-xs font-bold text-slate-900 truncate w-full text-center">{{ $student->last_name }}, {{ $student->first_name }}</div>
                 <div class="text-[9px] text-slate-600">{{ $student->student_number }}</div>
