@@ -1,7 +1,20 @@
 @extends('layouts.dashboard')
 
 @section('content')
-    <h1 class="text-2xl font-bold mb-6">Encoder Dashboard</h1>
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+        <h1 class="text-2xl font-bold">Encoder Dashboard</h1>
+        @if(Auth::user()->advisory_grade_level && Auth::user()->advisory_section)
+            <div class="text-sm text-blue-800 bg-blue-50 border border-blue-200 rounded-lg px-4 py-2.5 inline-flex items-center gap-2 shadow-sm">
+                <i class="fas fa-chalkboard-teacher text-blue-600"></i>
+                <span>Advisory: <strong class="font-bold">Grade {{ Auth::user()->advisory_grade_level }} - Section {{ Auth::user()->advisory_section }}</strong></span>
+            </div>
+        @else
+            <div class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 inline-flex items-center gap-2 shadow-sm">
+                <i class="fas fa-info-circle text-amber-600"></i>
+                <span>Advisory: <strong class="italic">Not yet assigned</strong></span>
+            </div>
+        @endif
+    </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">

@@ -98,27 +98,27 @@
                         $log = $attendanceLogs[$student->id] ?? null;
                         $status = $log ? $log->status : 'absent';
                     @endphp
-                    <div class="flex items-center justify-between p-3 border rounded-lg bg-gray-50">
+                    <div class="flex flex-col p-3 border rounded-lg bg-gray-50 gap-2">
                         <div>
-                            <div class="font-semibold text-sm">{{ $student->last_name }}, {{ $student->first_name }}</div>
+                            <div class="font-semibold text-sm leading-snug">{{ $student->last_name }}, {{ $student->first_name }}</div>
                             <div class="text-xs text-gray-500">{{ $student->student_number }}</div>
                         </div>
 
-                        <form action="{{ route('encoder.attendance.update') }}" method="POST" class="flex gap-1">
+                        <form action="{{ route('encoder.attendance.update') }}" method="POST" class="grid grid-cols-3 gap-1.5 w-full">
                             @csrf
                             <input type="hidden" name="student_id" value="{{ $student->id }}">
                             <input type="hidden" name="date" value="{{ $date }}">
                             
                             <button type="submit" name="status" value="present" 
-                                class="px-2.5 py-1 text-xs rounded font-medium {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                class="py-1 text-xs rounded font-medium text-center {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
                                 Present
                             </button>
                             <button type="submit" name="status" value="absent" 
-                                class="px-2.5 py-1 text-xs rounded font-medium {{ $status === 'absent' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                class="py-1 text-xs rounded font-medium text-center {{ $status === 'absent' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
                                 Absent
                             </button>
                             <button type="submit" name="status" value="tardy" 
-                                class="px-2.5 py-1 text-xs rounded font-medium {{ $status === 'tardy' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
+                                class="py-1 text-xs rounded font-medium text-center {{ $status === 'tardy' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
                                 Tardy
                             </button>
                         </form>
