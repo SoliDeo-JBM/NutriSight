@@ -10,12 +10,13 @@ RUN apt-get update && apt-get install -y \
     zip \
     unzip \
     libpq-dev \
+    libzip-dev \
     && curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
     && apt-get install -y nodejs \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions required by Laravel and Supabase
-RUN docker-php-ext-install pdo pdo_pgsql mbstring pcntl bcmath gd
+RUN docker-php-ext-install pdo pdo_pgsql mbstring pcntl bcmath gd zip
 
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
