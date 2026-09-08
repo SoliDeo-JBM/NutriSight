@@ -11,12 +11,29 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use App\Models\Enrollment; // Added this import so the method below works!
 
-#[Fillable(['name', 'email', 'password', 'role', 'deped_id', 'sex', 'birthdate', 'position', 'advisory_grade_level', 'advisory_section', 'is_active'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable, SoftDeletes;
+
+    protected $fillable = [
+        'name',
+        'email',
+        'password',
+        'role',
+        'deped_id',
+        'sex',
+        'birthdate',
+        'position',
+        'advisory_grade_level',
+        'advisory_section',
+        'is_active',
+    ];
+
+    protected $hidden = [
+        'password',
+        'remember_token',
+    ];
 
     public const ROLE_SUPER_ADMIN = 'super_admin';
     public const ROLE_ADMIN = 'admin';
