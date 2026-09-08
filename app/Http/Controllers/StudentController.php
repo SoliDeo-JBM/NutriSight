@@ -26,9 +26,11 @@ class StudentController extends Controller
         $user = auth()->user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
-        $query = Student::with(['enrollments' => function($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements']);
-        }])->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+        $query = Student::with([
+            'enrollments' => function ($q) use ($activeSyId) {
+                $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements']);
+            }
+        ])->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
             if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                 $q->where('grade_level', $user->advisory_grade_level)
@@ -106,17 +108,18 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
-            ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+            ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
                     $q->where('grade_level', $user->advisory_grade_level)
-                      ->where('section', $user->advisory_section);
+                        ->where('section', $user->advisory_section);
                 }
             })
-            ->whereHas('enrollments.sbfpParticipant', function($q) {
-                $q->whereHas('nutritionMeasurements', function($sub) {
-                    $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                });
+            ->whereHas('enrollments.sbfpParticipant', function ($q) {
+                $q->where('parent_consent', 'approved')
+                    ->orWhereHas('nutritionMeasurements', function ($sub) {
+                        $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                    });
             });
 
         // Search by name or LRN
@@ -144,7 +147,7 @@ class StudentController extends Controller
 
         if ($request->filled('approval_status')) {
             $approvalStatus = $request->input('approval_status');
-            $query->whereHas('enrollments.sbfpParticipant', function($q) use ($approvalStatus) {
+            $query->whereHas('enrollments.sbfpParticipant', function ($q) use ($approvalStatus) {
                 $q->where('parent_consent', $approvalStatus);
             });
         }
@@ -213,7 +216,7 @@ class StudentController extends Controller
         $enrollment = Enrollment::create([
             'student_id' => $student->id,
             'school_year_id' => SchoolYearManager::activeSchoolYearId(),
-            'grade_level' => (int)$validated['grade_level'],
+            'grade_level' => (int) $validated['grade_level'],
             'section' => ucfirst(strtolower($validated['section'])),
             'status' => 'enrolled',
         ]);
@@ -318,6 +321,7 @@ class StudentController extends Controller
     public function destroy(Student $student)
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
+        /** @var Enrollment|null $enrollment */
         $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
         if ($enrollment) {
             $enrollment->delete();
@@ -335,13 +339,13 @@ class StudentController extends Controller
     {
         $user = auth()->user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        
+
         $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
-            ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+            ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
                     $q->where('grade_level', $user->advisory_grade_level)
-                      ->where('section', $user->advisory_section);
+                        ->where('section', $user->advisory_section);
                 }
             });
 

@@ -140,14 +140,14 @@
                                 @if($termData[$term])
                                     @php $data = $termData[$term]; @endphp
                                     <div class="text-xs space-y-1 bg-gray-50 p-2 rounded">
-                                        <div><strong>W:</strong> {{ $data->weight_kg }}kg</div>
-                                        <div><strong>H:</strong> {{ $data->height_m * 100 }}cm</div>
+                                        <div><strong>W:</strong> {{ $data->weight }}kg</div>
+                                        <div><strong>H:</strong> {{ $data->height }}cm</div>
                                         <div><strong>BMI:</strong> {{ $data->bmi }}</div>
                                         <div class="text-xs font-semibold
-                                            @if($data->nutritional_status == 'Normal') text-green-700
-                                            @elseif(in_array($data->nutritional_status, ['Wasted', 'Severely Wasted'])) text-red-700
+                                            @if($data->bmi_category == 'Normal') text-green-700
+                                            @elseif(in_array($data->bmi_category, ['Wasted', 'Severely Wasted'])) text-red-700
                                             @else text-yellow-700 @endif">
-                                            {{ $data->nutritional_status }}
+                                            {{ $data->bmi_category }}
                                         </div>
                                     </div>
                                 @else

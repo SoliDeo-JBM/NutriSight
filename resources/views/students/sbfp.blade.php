@@ -125,14 +125,14 @@
                                 @if($termData[$term])
                                     @php $data = $termData[$term]; @endphp
                                     <div class="text-xs space-y-1 bg-gray-50 p-2 rounded">
-                                        <div><strong>W:</strong> {{ $data->weight_kg }}kg</div>
-                                        <div><strong>H:</strong> {{ $data->height_m * 100 }}cm</div>
+                                        <div><strong>W:</strong> {{ $data->weight }}kg</div>
+                                        <div><strong>H:</strong> {{ $data->height }}cm</div>
                                         <div><strong>BMI:</strong> {{ $data->bmi }}</div>
                                         <div class="text-xs font-semibold
-                                            @if($data->nutritional_status == 'Normal') text-green-700
-                                            @elseif(in_array($data->nutritional_status, ['Wasted', 'Severely Wasted'])) text-red-700
+                                            @if($data->bmi_category == 'Normal') text-green-700
+                                            @elseif(in_array($data->bmi_category, ['Wasted', 'Severely Wasted'])) text-red-700
                                             @else text-yellow-700 @endif">
-                                            {{ $data->nutritional_status }}
+                                            {{ $data->bmi_category }}
                                         </div>
                                         <button @click="openProgressModal({{ $student->id }}, {{ $termIndex + 1 }})" class="mt-1 text-blue-600 hover:underline text-xs">Edit</button>
                                     </div>
@@ -223,22 +223,22 @@
                     
                     <div class="mb-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Term</label>
-                        <select name="term" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <select name="measurement_period" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Select Term</option>
-                            <option value="1" :selected="currentTerm == 1">Term 1 (Jun - Sep)</option>
-                            <option value="2" :selected="currentTerm == 2">Term 2 (Sep - Dec)</option>
-                            <option value="3" :selected="currentTerm == 3">Term 3 (Jan - Apr)</option>
+                            <option value="baseline" :selected="currentTerm == 1">Term 1 (Baseline)</option>
+                            <option value="mid" :selected="currentTerm == 2">Term 2 (Midline)</option>
+                            <option value="end" :selected="currentTerm == 3">Term 3 (Endline)</option>
                         </select>
                     </div>
 
                     <div class="mb-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Height (centimeters)</label>
-                        <input type="number" name="height_cm" step="0.1" placeholder="150" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <input type="number" name="height" step="0.1" placeholder="150" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
                     </div>
 
                     <div class="mb-6">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Weight (kg)</label>
-                        <input type="number" name="weight_kg" step="0.1" placeholder="45.5" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <input type="number" name="weight" step="0.1" placeholder="45.5" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
                     </div>
 
                     <div class="flex gap-2">

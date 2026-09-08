@@ -6,6 +6,10 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use App\Services\SchoolYearManager;
 
+/**
+ * @property int $id
+ * @property string $guardian_email
+ */
 class Student extends Model
 {
     use HasFactory;
