@@ -116,6 +116,26 @@ class DashboardController extends Controller
         }
 
         $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
+        $stillNeedingSupportCount = $malnourishedTerm1Count - $recoveredCount;
+        $stillNeedingSupportRate = $malnourishedTerm1Count > 0 ? round(($stillNeedingSupportCount / $malnourishedTerm1Count) * 100, 1) : 0;
+
+        $attendanceByParticipant = DB::table('student_attendance_records')
+            ->whereIn('sbfp_participant_id', $sbfpStudents->map(function ($student) use ($activeSyId) {
+                return $student->enrollments->where('school_year_id', $activeSyId)->first()?->sbfpParticipant?->id;
+            })->filter())
+            ->groupBy('sbfp_participant_id')
+            ->select([
+                'sbfp_participant_id',
+                DB::raw('COUNT(*) as total_records'),
+                DB::raw("SUM(CASE WHEN status = 'absent' THEN 1 ELSE 0 END) as absent_records"),
+            ])
+            ->get();
+
+        $attendanceStudentCount = $attendanceByParticipant->count();
+        $completeAttendanceCount = $attendanceByParticipant->where('absent_records', 0)->count();
+        $attendanceWithAbsencesCount = $attendanceStudentCount - $completeAttendanceCount;
+        $completeAttendanceRate = $attendanceStudentCount > 0 ? round(($completeAttendanceCount / $attendanceStudentCount) * 100, 1) : 0;
+        $attendanceWithAbsencesRate = $attendanceStudentCount > 0 ? round(($attendanceWithAbsencesCount / $attendanceStudentCount) * 100, 1) : 0;
 
         // Aggregate attendance in one query instead of loading every log per grade.
         $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
@@ -143,7 +163,7 @@ class DashboardController extends Controller
                 : 0;
         })->all();
 
-        return view('dashboards.admin', compact('sbfpStudents', 'bmiDistribution', 'termBmiChartLabels', 'termBmiChartData', 'malnourishedTerm1Count', 'recoveredCount', 'recoveryRate', 'selectedTerm', 'sectionAttendanceLabels', 'sectionAttendanceRates'));
+        return view('dashboards.admin', compact('sbfpStudents', 'bmiDistribution', 'termBmiChartLabels', 'termBmiChartData', 'malnourishedTerm1Count', 'recoveredCount', 'recoveryRate', 'stillNeedingSupportCount', 'stillNeedingSupportRate', 'selectedTerm', 'sectionAttendanceLabels', 'sectionAttendanceRates', 'attendanceStudentCount', 'completeAttendanceCount', 'attendanceWithAbsencesCount', 'completeAttendanceRate', 'attendanceWithAbsencesRate'));
     }
 
     public function encoder()
