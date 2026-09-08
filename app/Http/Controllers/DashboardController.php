@@ -7,6 +7,7 @@ use App\Models\StudentAttendanceRecord;
 use App\Services\SchoolYearManager;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -116,33 +117,31 @@ class DashboardController extends Controller
 
         $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
 
-        // Grade Level Attendance Rate
-        $gradeLevels = [0, 1, 2, 3, 4, 5, 6]; // or kindergarten/grades
+        // Aggregate attendance in one query instead of loading every log per grade.
+        $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
         $gradeLabels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
         $sectionAttendanceLabels = $gradeLabels;
-        $sectionAttendanceRates = [];
+        $attendanceByGrade = DB::table('student_attendance_records as records')
+            ->join('sbfp_participants as participants', 'participants.id', '=', 'records.sbfp_participant_id')
+            ->join('enrollments', 'enrollments.id', '=', 'participants.enrollment_id')
+            ->where('enrollments.school_year_id', $activeSyId)
+            ->whereIn('enrollments.grade_level', $gradeLevels)
+            ->groupBy('enrollments.grade_level')
+            ->select([
+                'enrollments.grade_level',
+                DB::raw('COUNT(*) as total_logs'),
+                DB::raw("SUM(CASE WHEN records.status = 'present' THEN 1 ELSE 0 END) as present_logs"),
+            ])
+            ->get()
+            ->keyBy('grade_level');
 
-        foreach ($gradeLevels as $index => $gradeVal) {
-            $totalLogs = 0;
-            $presentLogs = 0;
-            $gradeStudents = Student::with(['enrollments.sbfpParticipant.attendanceRecords'])
-                ->whereHas('enrollments', function($q) use ($activeSyId, $gradeVal) {
-                    $q->where('school_year_id', $activeSyId)->where('grade_level', $gradeVal);
-                })->get();
+        $sectionAttendanceRates = collect($gradeLevels)->map(function ($gradeLevel) use ($attendanceByGrade) {
+            $attendance = $attendanceByGrade->get($gradeLevel);
 
-            foreach ($gradeStudents as $student) {
-                $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
-                if ($enrollment && $enrollment->sbfpParticipant) {
-                    foreach ($enrollment->sbfpParticipant->attendanceRecords as $log) {
-                        $totalLogs++;
-                        if ($log->status === 'present') {
-                            $presentLogs++;
-                        }
-                    }
-                }
-            }
-            $sectionAttendanceRates[] = $totalLogs > 0 ? round(($presentLogs / $totalLogs) * 100, 1) : 0;
-        }
+            return $attendance && $attendance->total_logs > 0
+                ? round(($attendance->present_logs / $attendance->total_logs) * 100, 1)
+                : 0;
+        })->all();
 
         return view('dashboards.admin', compact('sbfpStudents', 'bmiDistribution', 'termBmiChartLabels', 'termBmiChartData', 'malnourishedTerm1Count', 'recoveredCount', 'recoveryRate', 'selectedTerm', 'sectionAttendanceLabels', 'sectionAttendanceRates'));
     }
@@ -166,22 +165,27 @@ class DashboardController extends Controller
         })->count();
         
         $attendanceDates = [];
-        $attendanceCounts = [];
         for ($i = 6; $i >= 0; $i--) {
-            $date = Carbon::today()->subDays($i)->toDateString();
-            $attendanceDates[] = Carbon::parse($date)->format('M d');
-            
-            $attendanceCounts[] = StudentAttendanceRecord::where('attendance_date', $date)
-                ->where('status', 'present')
-                ->whereHas('sbfpParticipant.enrollment', function($q) use ($activeSyId, $user) {
-                    $q->where('school_year_id', $activeSyId);
-                    if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
-                        $q->where('grade_level', $user->advisory_grade_level)
-                          ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
-                    }
-                })
-                ->count();
+            $attendanceDates[] = Carbon::today()->subDays($i)->toDateString();
         }
+
+        $attendanceCountsByDate = StudentAttendanceRecord::query()
+            ->join('sbfp_participants', 'sbfp_participants.id', '=', 'student_attendance_records.sbfp_participant_id')
+            ->join('enrollments', 'enrollments.id', '=', 'sbfp_participants.enrollment_id')
+            ->where('enrollments.school_year_id', $activeSyId)
+            ->whereIn('student_attendance_records.attendance_date', $attendanceDates)
+            ->where('student_attendance_records.status', 'present')
+            ->when($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section, function ($query) use ($user) {
+                $query->where('enrollments.grade_level', $user->advisory_grade_level)
+                    ->whereRaw('LOWER(TRIM(enrollments.section)) = ?', [strtolower(trim($user->advisory_section))]);
+            })
+            ->groupBy('student_attendance_records.attendance_date')
+            ->selectRaw('student_attendance_records.attendance_date, COUNT(*) as total_count')
+            ->pluck('total_count', 'student_attendance_records.attendance_date');
+
+        $attendanceCounts = collect($attendanceDates)
+            ->map(fn ($date) => (int) ($attendanceCountsByDate[$date] ?? 0))
+            ->all();
 
         return view('dashboards.encoder', compact('totalStudents', 'totalSbfp', 'attendanceDates', 'attendanceCounts'));
     }
