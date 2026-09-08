@@ -154,7 +154,7 @@ class DashboardController extends Controller
         
         $studentQuery = Student::whereHas('enrollments', function($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
-            if ($user && $user->isEncoder()) {
+            if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                 $q->where('grade_level', $user->advisory_grade_level)
                   ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
             }
@@ -175,9 +175,9 @@ class DashboardController extends Controller
                 ->where('status', 'present')
                 ->whereHas('sbfpParticipant.enrollment', function($q) use ($activeSyId, $user) {
                     $q->where('school_year_id', $activeSyId);
-                    if ($user && $user->isEncoder()) {
+                    if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                         $q->where('grade_level', $user->advisory_grade_level)
-                          ->where('section', $user->advisory_section);
+                          ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                     }
                 })
                 ->count();

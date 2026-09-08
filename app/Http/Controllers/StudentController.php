@@ -30,7 +30,7 @@ class StudentController extends Controller
             $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements']);
         }])->whereHas('enrollments', function($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
-            if ($user && $user->isEncoder()) {
+            if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                 $q->where('grade_level', $user->advisory_grade_level)
                   ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
             }
