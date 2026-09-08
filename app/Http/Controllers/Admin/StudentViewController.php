@@ -72,7 +72,7 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $sortOptions = [
@@ -143,7 +143,7 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->distinct()->pluck('grade_level');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $approvalStatuses = [
