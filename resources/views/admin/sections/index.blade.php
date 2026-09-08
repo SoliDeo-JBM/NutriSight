@@ -6,7 +6,7 @@
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">Sections & Adviser Assignments</h1>
-                <p class="text-sm text-gray-500 mt-1">Manage class sections and assign teacher advisers for the active school year ({{ $activeSy?->school_year ?? 'N/A' }}).</p>
+                <p class="text-sm text-gray-500 mt-1">Manage class sections and assign teacher advisers for the active school year ({{ $activeSy?->year ?? 'N/A' }}).</p>
             </div>
             <div>
                 <form method="POST" action="{{ route($rolePrefix . '.sections.carry-over') }}">

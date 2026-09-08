@@ -2,29 +2,29 @@
 
 namespace App\Services;
 
-use App\Models\Program;
+use App\Models\SchoolYear;
 use Illuminate\Support\Facades\Session;
 
 class SchoolYearManager
 {
-    public static function activeSchoolYear(): ?Program
+    public static function activeSchoolYear(): ?SchoolYear
     {
         $activeId = Session::get('active_school_year_id');
 
         if ($activeId) {
-            $program = Program::find($activeId);
-            if ($program) {
-                return $program;
+            $schoolYear = SchoolYear::find($activeId);
+            if ($schoolYear) {
+                return $schoolYear;
             }
         }
 
-        $program = Program::where('is_active', true)->first() ?? Program::latest('id')->first();
+        $schoolYear = SchoolYear::where('is_active', true)->first() ?? SchoolYear::latest('id')->first();
         
-        if ($program) {
-            Session::put('active_school_year_id', $program->id);
+        if ($schoolYear) {
+            Session::put('active_school_year_id', $schoolYear->id);
         }
 
-        return $program;
+        return $schoolYear;
     }
 
     public static function activeSchoolYearId(): ?int
@@ -34,9 +34,9 @@ class SchoolYearManager
 
     public static function setActiveSchoolYear(int $id): bool
     {
-        $program = Program::find($id);
-        if ($program) {
-            Session::put('active_school_year_id', $program->id);
+        $schoolYear = SchoolYear::find($id);
+        if ($schoolYear) {
+            Session::put('active_school_year_id', $schoolYear->id);
             return true;
         }
         return false;
@@ -44,6 +44,6 @@ class SchoolYearManager
 
     public static function allSchoolYears()
     {
-        return Program::orderBy('start_date', 'desc')->get();
+        return SchoolYear::orderBy('start_date', 'desc')->get();
     }
 }

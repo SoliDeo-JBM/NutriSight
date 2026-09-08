@@ -13,10 +13,14 @@ class AuditLogController extends Controller
         $currentUser = auth()->user();
         $query = AuditLog::with('user')->latest();
 
-        // If user is Admin (not Super Admin), restrict to encoder actions only
-        if ($currentUser && $currentUser->isAdmin()) {
+        // Super Admin sees actions done by all roles
+        if ($currentUser && $currentUser->isSuperAdmin()) {
+            // no restriction or all roles
+        } 
+        // Admin sees actions done by other admins and encoders
+        elseif ($currentUser && $currentUser->isAdmin()) {
             $query->whereHas('user', function ($q) {
-                $q->where('role', 'encoder');
+                $q->whereIn('role', ['admin', 'encoder']);
             });
         }
 
@@ -48,7 +52,7 @@ class AuditLogController extends Controller
         $baseLogQuery = AuditLog::query();
         if ($currentUser && $currentUser->isAdmin()) {
             $baseLogQuery->whereHas('user', function ($q) {
-                $q->where('role', 'encoder');
+                $q->whereIn('role', ['admin', 'encoder']);
             });
         }
 

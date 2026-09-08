@@ -3,29 +3,39 @@
 namespace App\Http\Controllers;
 
 use App\Models\Student;
-use App\Models\StudentAssessment;
+use App\Services\SchoolYearManager;
 use Carbon\Carbon;
 
 class ReportsController extends Controller
 {
     public function admin()
     {
-        // Get all SBFP students (is_permitted = true)
-        $sbfpStudents = Student::where('is_permitted', true)
-            ->with(['section', 'assessments' => function($query) {
-                $query->orderBy('assessment_date', 'desc');
-            }])
-            ->get();
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+
+        $students = Student::with(['enrollments' => function($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements' => function($sub) {
+                $sub->orderBy('created_at', 'desc');
+            }]);
+        }])->whereHas('enrollments', function($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->whereHas('sbfpParticipant', function($sub) {
+                $sub->where('parent_consent', 'approved');
+            });
+        })->get();
         
-        // Organize assessments by quarter for each student
-        $sbfpStudents->each(function($student) {
-            $student->quarterlyProgress = $this->groupAssessmentsByQuarter($student->assessments);
+        $sbfpStudents = $students->map(function($student) use ($activeSyId) {
+            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
+            $participant = $enrollment?->sbfpParticipant;
+            $measurements = $participant ? $participant->nutritionMeasurements : collect();
+            $student->grade_level = $enrollment?->grade_level;
+            $student->section = $enrollment?->section;
+            $student->quarterlyProgress = $this->groupMeasurementsByQuarter($measurements);
+            return $student;
         });
         
         return view('dashboards.reports.admin', compact('sbfpStudents'));
     }
     
-    private function groupAssessmentsByQuarter($assessments)
+    private function groupMeasurementsByQuarter($measurements)
     {
         $quarters = [
             '1st Quarter' => [],
@@ -34,17 +44,16 @@ class ReportsController extends Controller
             '4th Quarter' => []
         ];
         
-        foreach ($assessments as $assessment) {
-            $month = $assessment->assessment_date->month;
-            
+        foreach ($measurements as $m) {
+            $month = $m->created_at->month;
             if ($month >= 1 && $month <= 3) {
-                $quarters['1st Quarter'][] = $assessment;
+                $quarters['1st Quarter'][] = $m;
             } elseif ($month >= 4 && $month <= 6) {
-                $quarters['2nd Quarter'][] = $assessment;
+                $quarters['2nd Quarter'][] = $m;
             } elseif ($month >= 7 && $month <= 9) {
-                $quarters['3rd Quarter'][] = $assessment;
+                $quarters['3rd Quarter'][] = $m;
             } else {
-                $quarters['4th Quarter'][] = $assessment;
+                $quarters['4th Quarter'][] = $m;
             }
         }
         

@@ -27,7 +27,7 @@
                         <select name="grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All Grades</option>
                             @foreach($gradeLevels as $grade)
-                                <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade }}</option>
+                                <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -86,6 +86,8 @@
                             <th class="px-4 py-3 border">No.</th>
                             <th class="px-4 py-3 border">LRN / ID</th>
                             <th class="px-4 py-3 border">Learner's Name (Last, First, Ext, Middle)</th>
+                            <th class="px-4 py-3 border">Grade</th>
+                            <th class="px-4 py-3 border">Section</th>
                             <th class="px-4 py-3 border">Birthdate</th>
                             <th class="px-4 py-3 border">Sex</th>
                             <th class="px-4 py-3 border">Weight (kg)</th>
@@ -94,7 +96,6 @@
                             <th class="px-4 py-3 border">BMI Category</th>
                             <th class="px-4 py-3 border">Height for Age</th>
                             <th class="px-4 py-3 border">Remarks</th>
-                            <th class="px-4 py-3 border">Grade & Section</th>
                             <th class="px-4 py-3 border">Guardian's Email</th>
                             <th class="px-4 py-3 border">Guardian's Phone Number</th>
                         </tr>
@@ -106,6 +107,8 @@
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->grade_level == 0 ? 'Kinder' : 'Grade ' . $student->grade_level }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->section }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }}</td>
                             <td class="px-4 py-3 border">{{ $student->gender }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->weight ?? '-' }}</td>
@@ -125,13 +128,12 @@
                             </td>
                             <td class="px-4 py-3 border">{{ $latestRecord->height_for_age ?? 'Normal' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->remarks ?? '-' }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->grade_level }} - {{ $student->section }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria.</td>
+                            <td colspan="15" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria.</td>
                         </tr>
                         @endforelse
                     </tbody>

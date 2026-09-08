@@ -14,6 +14,15 @@ use Illuminate\Support\Facades\Route;
 
 /*
 |--------------------------------------------------------------------------
+| Public Routes
+|--------------------------------------------------------------------------
+*/
+Route::get('/', function () {
+    return view('welcome');
+})->name('home');
+
+/*
+|--------------------------------------------------------------------------
 | Guest Routes
 |--------------------------------------------------------------------------
 */
@@ -42,12 +51,6 @@ Route::middleware('guest')->group(function () {
 |--------------------------------------------------------------------------
 */
 Route::middleware('auth')->group(function () {
-
-    // Home Page
-    Route::get('/', function () {
-        return view('welcome');
-    })->name('home');
-
     // Redirect /dashboard to the appropriate role-based dashboard
     Route::get('/dashboard', function () {
         return redirect()->route(Auth::user()->dashboardRoute());

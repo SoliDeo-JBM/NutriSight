@@ -108,9 +108,9 @@
                             $latestRecord = $student->nutritionalRecords()->latest()->first();
                             $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
                             $termData = [
-                                'Term 1' => $student->assessments()->whereMonth('assessment_date', 1)->latest()->first(),
-                                'Term 2' => $student->assessments()->whereMonth('assessment_date', 2)->latest()->first(),
-                                'Term 3' => $student->assessments()->whereMonth('assessment_date', 3)->latest()->first(),
+                                'Term 1' => $student->termProgress['Term 1'][0] ?? null,
+                                'Term 2' => $student->termProgress['Term 2'][0] ?? null,
+                                'Term 3' => $student->termProgress['Term 3'][0] ?? null,
                             ];
                         @endphp
                         <tr class="hover:bg-gray-50">

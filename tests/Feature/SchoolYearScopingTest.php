@@ -2,7 +2,7 @@
 
 namespace Tests\Feature;
 
-use App\Models\Program;
+use App\Models\SchoolYear;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -39,7 +39,7 @@ class SchoolYearScopingTest extends TestCase
             ]);
 
         $response->assertRedirect('/super-admin/school-years');
-        $this->assertDatabaseHas('programs', ['school_year' => '2026-2027']);
+        $this->assertDatabaseHas('school_years', ['year' => '2026-2027']);
     }
 
     public function test_super_admin_can_activate_school_year(): void
@@ -48,15 +48,15 @@ class SchoolYearScopingTest extends TestCase
             'role' => User::ROLE_SUPER_ADMIN,
         ]);
 
-        $sy1 = Program::create([
-            'school_year' => '2025-2026',
+        $sy1 = SchoolYear::create([
+            'year' => '2025-2026',
             'start_date' => '2025-06-01',
             'end_date' => '2026-03-31',
             'is_active' => true,
         ]);
 
-        $sy2 = Program::create([
-            'school_year' => '2026-2027',
+        $sy2 = SchoolYear::create([
+            'year' => '2026-2027',
             'start_date' => '2026-06-01',
             'end_date' => '2027-03-31',
             'is_active' => false,
@@ -81,8 +81,8 @@ class SchoolYearScopingTest extends TestCase
             'role' => User::ROLE_ENCODER,
         ]);
 
-        $sy = Program::create([
-            'school_year' => '2026-2027',
+        $sy = SchoolYear::create([
+            'year' => '2026-2027',
             'start_date' => '2026-06-01',
             'end_date' => '2027-03-31',
             'is_active' => false,
