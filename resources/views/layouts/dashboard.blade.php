@@ -73,7 +73,6 @@
                 </button>
                 <div x-show="open" x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
                     <a href="{{ route('encoder.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('encoder.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Advisory Student List</a>
-                    <a href="{{ route('encoder.students.create') }}" class="flex items-center gap-3 {{ request()->routeIs('encoder.students.create') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Add Advisory Student</a>
                     <a href="{{ route('encoder.students.sbfp') }}" class="flex items-center gap-3 {{ request()->routeIs('encoder.students.sbfp') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Advisory SBFP List</a>
                 </div>
             </div>

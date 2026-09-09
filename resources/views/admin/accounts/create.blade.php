@@ -35,7 +35,7 @@
                         </label>
                         <input type="text" name="deped_id" value="{{ old('deped_id') }}" required 
                                class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('deped_id') border-red-500 @enderror"
-                               placeholder="e.g., DEP-2024-001234">
+                               placeholder="e.g., 123456">
                         @error('deped_id')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror

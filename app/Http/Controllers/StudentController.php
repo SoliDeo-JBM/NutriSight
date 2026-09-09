@@ -10,11 +10,13 @@ use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class StudentController extends Controller
 {
-    protected $nutriService;
+    protected NutriCalculationService $nutriService;
 
     public function __construct(NutriCalculationService $nutriService)
     {
@@ -23,7 +25,8 @@ class StudentController extends Controller
 
     public function index(Request $request)
     {
-        $user = auth()->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with([
@@ -104,7 +107,8 @@ class StudentController extends Controller
 
     public function sbfpIndex(Request $request)
     {
-        $user = auth()->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
@@ -154,7 +158,7 @@ class StudentController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
         $sexes = ['Male', 'Female'];
-        $bmiCategories = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese'];
+        $bmiCategories = ['Severely Wasted', 'Wasted'];
         $approvalStatuses = [
             'approved' => 'Approved',
             'disapproved' => 'Disapproved'
@@ -173,8 +177,28 @@ class StudentController extends Controller
 
     public function create()
     {
-        $user = auth()->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
         return view('students.create', compact('user'));
+    }
+
+    public function edit(Student $student)
+    {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        $enrollment = $student->enrollments()
+            ->where('school_year_id', SchoolYearManager::activeSchoolYearId())
+            ->with('sbfpParticipant.nutritionMeasurements')
+            ->first();
+
+        if (!$enrollment || ($user->isEncoder() && ($enrollment->grade_level != $user->advisory_grade_level || strtolower(trim($enrollment->section)) !== strtolower(trim($user->advisory_section))))) {
+            abort(404);
+        }
+
+        $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements
+            ->firstWhere('measurement_period', 'Term 1');
+
+        return view('students.create', compact('user', 'student', 'enrollment', 'measurement'));
     }
 
     public function store(Request $request)
@@ -209,6 +233,7 @@ class StudentController extends Controller
             'sex' => $validated['sex'],
             'birth_date' => $validated['birth_date'],
             'guardian_name' => $validated['guardian_name'],
+            'guardian_contact' => $validated['guardian_contact'],
             'guardian_email' => $validated['guardian_email'] ?? null,
             'address' => $validated['address'],
         ]);
@@ -240,6 +265,79 @@ class StudentController extends Controller
         AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
 
         return redirect()->route('encoder.students.index')->with('success', 'Student added successfully.');
+    }
+
+    public function update(Request $request, Student $student)
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $enrollment = $student->enrollments()
+            ->where('school_year_id', $activeSyId)
+            ->with('sbfpParticipant')
+            ->first();
+
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        if (!$enrollment || ($user->isEncoder() && ($enrollment->grade_level != $user->advisory_grade_level || strtolower(trim($enrollment->section)) !== strtolower(trim($user->advisory_section))))) {
+            abort(404);
+        }
+
+        $validated = $request->validate([
+            'lrn' => 'required|unique:students,lrn,' . $student->id,
+            'last_name' => 'required',
+            'first_name' => 'required',
+            'name_extension' => 'nullable',
+            'middle_name' => 'nullable',
+            'birth_date' => 'required|date',
+            'sex' => 'required',
+            'grade_level' => 'required|integer',
+            'section' => 'required|string',
+            'weight' => 'required|numeric',
+            'height' => 'required|numeric',
+            'guardian_name' => 'required',
+            'guardian_contact' => 'required',
+            'guardian_email' => 'nullable|email',
+            'address' => 'required',
+        ]);
+
+        $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
+
+        DB::transaction(function () use ($student, $enrollment, $validated, $metrics) {
+            $student->update([
+                'lrn' => $validated['lrn'],
+                'last_name' => $validated['last_name'],
+                'first_name' => $validated['first_name'],
+                'name_extension' => $validated['name_extension'] ?? null,
+                'middle_name' => $validated['middle_name'] ?? null,
+                'sex' => $validated['sex'],
+                'birth_date' => $validated['birth_date'],
+                'guardian_name' => $validated['guardian_name'],
+                'guardian_contact' => $validated['guardian_contact'],
+                'guardian_email' => $validated['guardian_email'] ?? null,
+                'address' => $validated['address'],
+            ]);
+
+            $enrollment->update([
+                'grade_level' => (int) $validated['grade_level'],
+                'section' => ucfirst(strtolower($validated['section'])),
+            ]);
+
+            $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
+                ->where('measurement_period', 'Term 1')
+                ->first();
+
+            if ($measurement) {
+                $measurement->update([
+                    'weight' => $validated['weight'],
+                    'height' => $validated['height'],
+                    'bmi' => $metrics['bmi'],
+                    'bmi_category' => $metrics['category'],
+                ]);
+            }
+        });
+
+        AuditLogger::log('Updated', 'Students', 'Updated student ' . $student->first_name . ' ' . $student->last_name);
+
+        return redirect()->route('encoder.students.index')->with('success', 'Student updated successfully.');
     }
 
     public function storeAssessment(Request $request, Student $student)
@@ -337,7 +435,8 @@ class StudentController extends Controller
 
     public function printBatch()
     {
-        $user = auth()->user();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])

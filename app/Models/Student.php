@@ -23,6 +23,7 @@ class Student extends Model
         'sex',
         'birth_date',
         'guardian_name',
+        'guardian_contact',
         'guardian_email',
         'address',
     ];
