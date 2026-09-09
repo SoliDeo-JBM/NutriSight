@@ -30,7 +30,7 @@ class FeedingDayNotice extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'School-Based Feeding Program (SBFP) Notice for ' . $this->student->first_name,
+            subject: 'SBFP attendance notice for ' . $this->student->first_name . ' ' . $this->student->last_name,
         );
     }
 

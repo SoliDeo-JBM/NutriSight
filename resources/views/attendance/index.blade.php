@@ -105,7 +105,7 @@
                             <div class="text-xs text-gray-500">{{ $student->student_number }}</div>
                         </div>
 
-                        <form action="{{ route('encoder.attendance.update') }}" method="POST" class="grid grid-cols-3 gap-1.5 w-full">
+                        <form action="{{ route('encoder.attendance.update') }}" method="POST" class="grid grid-cols-2 gap-1.5 w-full">
                             @csrf
                             <input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}">
                             <input type="hidden" name="date" value="{{ $date }}">
@@ -117,10 +117,6 @@
                             <button type="submit" name="status" value="absent" 
                                 class="py-1 text-xs rounded font-medium text-center {{ $status === 'absent' ? 'bg-red-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
                                 Absent
-                            </button>
-                            <button type="submit" name="status" value="tardy" 
-                                class="py-1 text-xs rounded font-medium text-center {{ $status === 'tardy' ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300' }}">
-                                Tardy
                             </button>
                         </form>
                     </div>

@@ -86,6 +86,9 @@
             @endif
 
             @if(Auth::user()->role === 'admin')
+            <a href="{{ route('admin.meal-plans.index') }}" class="nav-link {{ request()->routeIs('admin.meal-plans.*') ? 'active' : '' }}" onclick="toggleSidebar()">
+                <i class="fas fa-utensils"></i> Meal Plan
+            </a>
             <!-- Student Management Dropdown -->
             <div x-data="{ open: {{ request()->routeIs('admin.students.*') ? 'true' : 'false' }} }" class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
@@ -178,6 +181,15 @@
 
     <x-attendance-scanner-modal />
 
+    <div id="mealRequiredModal" class="fixed inset-0 z-[60] flex items-center justify-center bg-black bg-opacity-50 {{ session('error') ? '' : 'hidden' }}" role="alertdialog" aria-modal="true" aria-labelledby="mealRequiredTitle">
+        <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center mx-4">
+            <div class="text-amber-500 text-4xl mb-4"><i class="fas fa-utensils"></i></div>
+            <h3 id="mealRequiredTitle" class="text-lg font-bold text-gray-900 mb-2">Meal Required</h3>
+            <p class="text-sm text-gray-600 mb-6">{{ session('error', 'Add meal first before taking attendance.') }}</p>
+            <button type="button" onclick="closeMealRequiredModal()" class="px-5 py-2 bg-blue-600 text-white rounded text-sm font-semibold hover:bg-blue-700">OK</button>
+        </div>
+    </div>
+
     <!-- Logout Confirmation Modal -->
     <div id="logoutModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 hidden">
         <div class="bg-white rounded-lg p-6 max-w-sm w-full shadow-xl text-center mx-4">
@@ -214,6 +226,16 @@
         function closeLogoutModal() {
             document.getElementById('logoutModal').classList.add('hidden');
         }
+
+        function openMealRequiredModal() {
+            document.getElementById('mealRequiredModal').classList.remove('hidden');
+        }
+
+        function closeMealRequiredModal() {
+            document.getElementById('mealRequiredModal').classList.add('hidden');
+        }
+
+        window.addEventListener('meal-required', openMealRequiredModal);
     </script>
 </body>
 </html>

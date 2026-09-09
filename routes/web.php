@@ -97,6 +97,10 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
+        Route::get('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'index'])->name('meal-plans.index');
+        Route::post('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'store'])->name('meal-plans.store');
+        Route::put('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'update'])->name('meal-plans.update');
+        Route::delete('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'destroy'])->name('meal-plans.destroy');
         Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
         Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
         Route::patch('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'update'])->name('school-years.update');

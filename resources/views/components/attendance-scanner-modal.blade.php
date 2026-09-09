@@ -38,6 +38,9 @@
                     this.studentName = data.student_name || 'Invalid QR / Barcode';
                     this.studentDetails = (data.grade_level && data.section) ? (data.grade_level + ' - ' + data.section) : 'No student record matched LRN: ' + lrnToScan;
                     this.statusMessage = data.error || 'Student not found in active school year.';
+                    if (data.error && data.error.toLowerCase().includes('add meal first')) {
+                        window.dispatchEvent(new CustomEvent('meal-required'));
+                    }
                     if (response.status === 409) {
                         this.statusClass = 'text-amber-700 font-bold';
                         this.statusBg = 'bg-amber-50 border-amber-200';

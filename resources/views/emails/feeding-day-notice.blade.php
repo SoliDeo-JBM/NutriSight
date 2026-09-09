@@ -10,10 +10,10 @@
         
         <p>Dear Parent / Guardian of <strong>{{ $student->first_name }} {{ $student->last_name }}</strong>,</p>
 
-        <p>This is to inform you that your child is scheduled to participate in the <strong>School-Based Feeding Program (SBFP)</strong> on <strong>{{ $date }}</strong>.</p>
+        <p><strong>{{ $student->first_name }} {{ $student->last_name }}</strong> is present on school based feeding program today and eaten <strong>{{ $meal }}</strong>.</p>
 
         <div style="background: #f8fafc; border-left: 4px solid #22c55e; padding: 12px 16px; margin: 16px 0;">
-            <p style="margin: 0 0 8px 0;"><strong>Meal to be Served:</strong> {{ $meal }}</p>
+            <p style="margin: 0 0 8px 0;"><strong>Attendance date:</strong> {{ $date }}</p>
             @if($notes)
                 <p style="margin: 0;"><strong>Teacher's Notes:</strong> {{ $notes }}</p>
             @endif
