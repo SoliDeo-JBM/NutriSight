@@ -95,7 +95,8 @@
             <div class="flex-1 overflow-y-auto space-y-3 pr-1">
                 @forelse($sbfpStudents as $student)
                     @php
-                        $log = $attendanceLogs[$student->id] ?? null;
+                        $participantId = $student->enrollments->first()?->sbfpParticipant?->id;
+                        $log = $participantId ? ($attendanceLogs[$participantId] ?? null) : null;
                         $status = $log ? $log->status : 'absent';
                     @endphp
                     <div class="flex flex-col p-3 border rounded-lg bg-gray-50 gap-2">
@@ -106,7 +107,7 @@
 
                         <form action="{{ route('encoder.attendance.update') }}" method="POST" class="grid grid-cols-3 gap-1.5 w-full">
                             @csrf
-                            <input type="hidden" name="student_id" value="{{ $student->id }}">
+                            <input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}">
                             <input type="hidden" name="date" value="{{ $date }}">
                             
                             <button type="submit" name="status" value="present" 
