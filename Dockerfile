@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install PHP extensions required by Laravel and Supabase
-RUN docker-php-ext-install pdo pdo_pgsql mbstring pcntl bcmath gd zip
+RUN docker-php-ext-install pdo pdo_pgsql pdo_mysql mbstring pcntl bcmath gd zip
 
 # Get latest Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
