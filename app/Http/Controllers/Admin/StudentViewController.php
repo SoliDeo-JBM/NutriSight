@@ -13,7 +13,10 @@ class StudentViewController extends Controller
     public function index(Request $request)
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+        $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)
+                ->with('sbfpParticipant.nutritionMeasurements');
+            }])
             ->whereHas('enrollments', function($q) use ($activeSyId) {
                 $q->where('school_year_id', $activeSyId);
             });
@@ -90,7 +93,10 @@ class StudentViewController extends Controller
     public function sbfpIndex(Request $request)
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+        $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)
+                ->with('sbfpParticipant.nutritionMeasurements');
+            }])
             ->whereHas('enrollments', function($q) use ($activeSyId) {
                 $q->where('school_year_id', $activeSyId);
             })
@@ -134,22 +140,11 @@ class StudentViewController extends Controller
             $query->where('sex', $request->input('sex'));
         }
 
-        if ($request->filled('approval_status')) {
-            $approvalStatus = $request->input('approval_status');
-            $query->whereHas('enrollments.sbfpParticipant', function($q) use ($approvalStatus) {
-                $q->where('parent_consent', $approvalStatus);
-            });
-        }
-
         $students = $query->paginate(15)->withQueryString();
 
         $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
-        $approvalStatuses = [
-            'approved' => 'Approved',
-            'disapproved' => 'Disapproved'
-        ];
         $sortOptions = [
             'latest' => 'Latest to Oldest',
             'oldest' => 'Oldest to Latest',
@@ -159,6 +154,6 @@ class StudentViewController extends Controller
             'lrn_desc' => 'LRN / ID (Descending)',
         ];
 
-        return view('admin.students.sbfp', compact('students', 'gradeLevels', 'sections', 'sexes', 'approvalStatuses', 'sortOptions'));
+        return view('admin.students.sbfp', compact('students', 'gradeLevels', 'sections', 'sexes', 'sortOptions'));
     }
 }

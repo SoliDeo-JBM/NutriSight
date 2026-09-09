@@ -23,7 +23,7 @@
                 </div>
 
                 <!-- Filters Row -->
-                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-4 gap-4">
                     <!-- Grade Level Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Grade Level</label>
@@ -53,17 +53,6 @@
                             <option value="">All</option>
                             @foreach($sexes as $sex)
                                 <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Approval Status Filter -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Parent Approval</label>
-                        <select name="approval_status" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <option value="">All Statuses</option>
-                            @foreach($approvalStatuses as $key => $label)
-                                <option value="{{ $key }}" {{ request('approval_status') == $key ? 'selected' : '' }}>{{ $label }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -117,7 +106,8 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         @forelse($students ?? [] as $index => $student)
-                        @php 
+                        @php
+                            $enrollment = $student->enrollments->first();
                             $latestRecord = $student->nutritionalRecords()->latest()->first();
                             $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
                             $termData = [
@@ -130,9 +120,9 @@
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->grade_level == 0 ? 'Kinder' : 'Grade ' . $student->grade_level }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->section }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }} ({{ $student->gender }})</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->section ?? '-' }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }} ({{ $student->sex ?? '-' }})</td>
                             
                             <!-- Term Data Columns -->
                             @foreach(['Term 1', 'Term 2', 'Term 3'] as $term)

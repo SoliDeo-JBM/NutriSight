@@ -102,15 +102,18 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         @forelse($students ?? [] as $index => $student)
-                        @php $latestRecord = $student->nutritionalRecords()->latest()->first(); @endphp
+                        @php
+                            $enrollment = $student->enrollments->first();
+                            $latestRecord = $student->nutritionalRecords()->latest()->first();
+                        @endphp
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->grade_level == 0 ? 'Kinder' : 'Grade ' . $student->grade_level }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->section }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->section ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }}</td>
-                            <td class="px-4 py-3 border">{{ $student->gender }}</td>
+                            <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->weight ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->height ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->bmi ?? '-' }}</td>
