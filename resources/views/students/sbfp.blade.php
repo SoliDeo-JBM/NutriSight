@@ -84,15 +84,16 @@
                     <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
                         <tr>
                             <th class="px-4 py-3 border">No.</th>
-                            <th class="px-4 py-3 border">LRN / ID</th>
+                            <th class="px-4 py-3 border">LRN</th>
                             <th class="px-4 py-3 border">Learner's Name</th>
                             <th class="px-4 py-3 border">Birthdate / Age / Sex</th>
+                            <th class="px-4 py-3 border">Grade & Section</th>
                             <th class="px-4 py-3 border text-center" colspan="3">Term Progress</th>
                             <th class="px-4 py-3 border">Parent's Approval</th>
                             <th class="px-4 py-3 border text-center">Student QR Code</th>
                         </tr>
                         <tr>
-                            <th colspan="4" class="px-4 py-2 border"></th>
+                            <th colspan="5" class="px-4 py-2 border"></th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Term 1</th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Term 2</th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Term 3</th>
@@ -101,7 +102,8 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         @forelse($students ?? [] as $index => $student)
-                        @php 
+                        @php
+                            $enrollment = $student->enrollments->first();
                             $latestRecord = $student->nutritionalRecords()->latest()->first();
                             $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
                             $termData = [
@@ -114,7 +116,8 @@
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }} ({{ $student->gender }})</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }} ({{ $student->sex ?? '-' }})</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }} - {{ $enrollment?->section ?? '-' }}</td>
                             
                             <!-- Term Data Columns -->
                             @foreach(['Term 1', 'Term 2', 'Term 3'] as $termIndex => $term)
@@ -196,7 +199,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
+                            <td colspan="10" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
                         </tr>
                         @endforelse
                     </tbody>

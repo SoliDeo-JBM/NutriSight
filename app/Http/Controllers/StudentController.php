@@ -111,7 +111,10 @@ class StudentController extends Controller
         $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
-        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+        $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)
+                ->with('sbfpParticipant.nutritionMeasurements');
+            }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {

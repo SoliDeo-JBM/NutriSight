@@ -73,7 +73,7 @@
                     <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
                         <tr>
                             <th class="px-4 py-3 border">No.</th>
-                            <th class="px-4 py-3 border">LRN / ID</th>
+                            <th class="px-4 py-3 border">LRN</th>
                             <th class="px-4 py-3 border">Learner's Name (Last, First, Ext, Middle)</th>
                             <th class="px-4 py-3 border">Birthdate</th>
                             <th class="px-4 py-3 border">Sex</th>
@@ -91,13 +91,16 @@
                     </thead>
                     <tbody class="divide-y divide-gray-200">
                         @forelse($students ?? [] as $index => $student)
-                        @php $latestRecord = $student->nutritionalRecords()->latest()->first(); @endphp
+                        @php
+                            $enrollment = $student->enrollments->first();
+                            $latestRecord = $student->nutritionalRecords()->latest()->first();
+                        @endphp
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }}</td>
-                            <td class="px-4 py-3 border">{{ $student->gender }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->weight ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->height ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->bmi ?? '-' }}</td>
@@ -115,7 +118,7 @@
                             </td>
                             <td class="px-4 py-3 border">{{ $latestRecord->height_for_age ?? 'Normal' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->remarks ?? '-' }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->grade_level }} - {{ $student->section }}</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }} - {{ $enrollment?->section ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">
