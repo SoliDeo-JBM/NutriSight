@@ -9,6 +9,9 @@
                 <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
             </div>
             <div class="flex flex-wrap gap-2">
+            <button type="button" @click="openEditPeriodModal()" class="bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
+                <i class="fas fa-pen"></i> Edit Period
+            </button>
             <button type="button" @click="openPeriodModal()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 whitespace-nowrap inline-flex items-center gap-2">
                 <i class="fas fa-plus"></i> Add Period
             </button>
@@ -214,16 +217,15 @@
         <div x-show="showModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
             <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 class="text-lg font-bold mb-1">Add Period</h3>
-                <p class="text-sm text-gray-500 mb-4">Enter measurements for the selected period. Blank rows will be skipped.</p>
+                <p class="text-sm text-gray-500 mb-4">Enter complete measurements for every advisory student in the selected period.</p>
                 
-                <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST">
+                <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" @submit.prevent="requestConfirmation($event, 'add')">
                     @csrf
                     
                     <div class="mb-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
                         <select name="measurement_period" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Select Period</option>
-                            <option value="baseline">Baseline</option>
                             <option value="midline">Midline</option>
                             <option value="endline">Endline</option>
                         </select>
@@ -238,8 +240,8 @@
                                 @foreach($students ?? [] as $student)
                                     <tr>
                                         <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
-                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" step="0.1" min="0" class="w-full border border-gray-300 rounded px-2 py-1"></td>
-                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" step="0.1" min="0" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" step="0.1" min="0.1" required class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" step="0.1" min="0.1" required class="w-full border border-gray-300 rounded px-2 py-1"></td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -251,6 +253,68 @@
                         <button type="button" @click="closeModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
                     </div>
                 </form>
+            </div>
+        </div>
+
+        <!-- Edit Period Modal -->
+        <div x-show="showEditModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
+                <h3 class="text-lg font-bold mb-1">Edit Period</h3>
+                <p class="text-sm text-gray-500 mb-4">Edit measurements for multiple students in an existing period.</p>
+
+                <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" @submit.prevent="requestConfirmation($event, 'edit')">
+                    @csrf
+                    @method('PATCH')
+                    <div class="mb-4">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
+                        <select name="measurement_period" x-model="editPeriod" @change="refreshEditValues()" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                            <option value="">Select Period</option>
+                            <option value="baseline">Baseline</option>
+                            <option value="midline">Midline</option>
+                            <option value="endline">Endline</option>
+                        </select>
+                    </div>
+
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-sm border-collapse">
+                            <thead class="bg-gray-100 text-gray-700">
+                                <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Weight (kg)</th><th class="px-3 py-2 border">Height (cm)</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach($students ?? [] as $student)
+                                    @php
+                                        $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
+                                            $record = $student->periodProgress[ucfirst($period)][0] ?? null;
+                                            return [$period => $record ? ['weight' => $record->weight, 'height' => $record->height] : null];
+                                        });
+                                    @endphp
+                                    <tr data-edit-row data-values='@json($measurements)'>
+                                        <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
+                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" data-edit-weight step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" data-edit-height step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 font-semibold">Update</button>
+                        <button type="button" @click="closeEditModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Period Confirmation Modal -->
+        <div x-show="showConfirmation" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" style="display: none;">
+            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
+                <h3 class="text-lg font-bold mb-2">Confirm Period Changes</h3>
+                <p class="text-sm text-gray-600 mb-6" x-text="confirmationMessage"></p>
+                <div class="flex gap-2">
+                    <button type="button" @click="confirmSubmission()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Confirm</button>
+                    <button type="button" @click="showConfirmation = false" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                </div>
             </div>
         </div>
 
@@ -288,14 +352,52 @@
         function sbfpManager() {
             return {
                 showModal: false,
+                showEditModal: false,
+                showConfirmation: false,
                 showEmailModal: false,
                 currentStudentId: null,
                 currentGuardianEmail: '',
+                editPeriod: '',
+                pendingForm: null,
+                confirmationMessage: '',
                 openPeriodModal() {
                     this.showModal = true;
                 },
                 closeModal() {
                     this.showModal = false;
+                },
+                openEditPeriodModal() {
+                    this.showEditModal = true;
+                },
+                refreshEditValues() {
+                    document.querySelectorAll('[data-edit-row]').forEach((row) => {
+                        const values = JSON.parse(row.dataset.values || '{}');
+                        const measurement = values[this.editPeriod] || {};
+                        row.querySelector('[data-edit-weight]').value = measurement.weight || '';
+                        row.querySelector('[data-edit-height]').value = measurement.height || '';
+                    });
+                },
+                requestConfirmation(event, action) {
+                    const form = event.target;
+                    const period = form.querySelector('[name="measurement_period"]');
+                    const weightInputs = form.querySelectorAll('[name$="[weight]"]');
+                    const count = Array.from(weightInputs).filter((input) => input.value !== '').length;
+                    const verb = action === 'edit' ? 'editing' : 'adding';
+                    const periodName = period.options[period.selectedIndex]?.text || 'the selected period';
+                    this.pendingForm = form;
+                    this.confirmationMessage = `${verb} ${count} student weight and height record${count === 1 ? '' : 's'} in ${periodName}. Please confirm.`;
+                    this.showConfirmation = true;
+                },
+                confirmSubmission() {
+                    this.showConfirmation = false;
+                    if (this.pendingForm) {
+                        this.pendingForm.submit();
+                    }
+                },
+                closeEditModal() {
+                    this.showEditModal = false;
+                    this.editPeriod = '';
+                    document.querySelectorAll('[data-edit-row] input[type="number"]').forEach((input) => input.value = '');
                 },
                 openEmailModal(studentId, studentName, guardianEmail) {
                     this.currentStudentId = studentId;

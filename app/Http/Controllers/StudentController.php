@@ -12,6 +12,7 @@ use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
 class StudentController extends Controller
@@ -362,7 +363,7 @@ class StudentController extends Controller
     public function storeAssessment(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'measurement_period' => 'required|in:baseline,midline,endline,mid,end',
+            'measurement_period' => 'required|in:midline,endline,mid,end',
             'weight' => 'required|numeric|min:0',
             'height' => 'required|numeric|min:0',
         ]);
@@ -385,9 +386,6 @@ class StudentController extends Controller
         $existing = NutritionMeasurement::where('sbfp_participant_id', $participant->id)
             ->where(function ($q) use ($measurementPeriod) {
                 $q->whereIn('measurement_period', [$measurementPeriod, ucfirst($measurementPeriod)]);
-                if ($measurementPeriod === 'baseline') {
-                    $q->orWhere('measurement_period', 'Term 1');
-                }
             })
             ->first();
 
@@ -403,8 +401,8 @@ class StudentController extends Controller
             NutritionMeasurement::create([
                 'sbfp_participant_id' => $participant->id,
                 'measurement_period' => $measurementPeriod,
-                'weight' => $validated['weight_kg'],
-                'height' => $validated['height_cm'],
+                'weight' => $validated['weight'],
+                'height' => $validated['height'],
                 'bmi' => $metrics['bmi'],
                 'bmi_category' => $metrics['category'],
                 'hfa' => 'Normal',
@@ -419,11 +417,11 @@ class StudentController extends Controller
     public function storeBulkAssessments(Request $request)
     {
         $validated = $request->validate([
-            'measurement_period' => 'required|in:baseline,midline,endline',
+            'measurement_period' => 'required|in:midline,endline',
             'measurements' => 'required|array',
             'measurements.*.student_id' => 'required|integer',
-            'measurements.*.weight' => 'nullable|numeric|min:0',
-            'measurements.*.height' => 'nullable|numeric|min:0',
+            'measurements.*.weight' => 'required|numeric|min:0.1',
+            'measurements.*.height' => 'required|numeric|min:0.1',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -432,10 +430,6 @@ class StudentController extends Controller
 
         DB::transaction(function () use ($validated, $activeSyId, $user, &$saved) {
             foreach ($validated['measurements'] as $entry) {
-                if ($entry['weight'] === null || $entry['height'] === null) {
-                    continue;
-                }
-
                 $student = Student::find($entry['student_id']);
                 $enrollment = $student?->enrollments()
                     ->where('school_year_id', $activeSyId)
@@ -450,9 +444,15 @@ class StudentController extends Controller
                 }
 
                 $metrics = $this->nutriService->calculateBMI($entry['weight'], $entry['height']);
-                $measurement = $enrollment->sbfpParticipant->nutritionMeasurements()
+                $alreadyExists = $enrollment->sbfpParticipant->nutritionMeasurements()
                     ->whereIn('measurement_period', [$validated['measurement_period'], ucfirst($validated['measurement_period'])])
-                    ->first();
+                    ->exists();
+
+                if ($alreadyExists) {
+                    throw ValidationException::withMessages([
+                        'measurement_period' => ucfirst($validated['measurement_period']) . ' already exists for ' . $student->first_name . ' ' . $student->last_name . '. Use Edit Period instead.',
+                    ]);
+                }
 
                 $attributes = [
                     'weight' => $entry['weight'],
@@ -462,20 +462,136 @@ class StudentController extends Controller
                     'hfa' => 'Normal',
                 ];
 
-                if ($measurement) {
-                    $measurement->update($attributes);
-                } else {
-                    $enrollment->sbfpParticipant->nutritionMeasurements()->create($attributes + [
-                        'measurement_period' => $validated['measurement_period'],
-                        'remarks' => ucfirst($validated['measurement_period']) . ' progress assessment',
-                    ]);
-                }
+                $enrollment->sbfpParticipant->nutritionMeasurements()->create($attributes + [
+                    'measurement_period' => $validated['measurement_period'],
+                    'remarks' => ucfirst($validated['measurement_period']) . ' progress assessment',
+                ]);
 
                 $saved++;
             }
         });
 
         return back()->with('success', $saved . ' period measurement(s) saved successfully.');
+    }
+
+    public function updateBulkAssessments(Request $request)
+    {
+        $validated = $request->validate([
+            'measurement_period' => 'required|in:baseline,midline,endline',
+            'measurements' => 'required|array',
+            'measurements.*.student_id' => 'required|integer',
+            'measurements.*.weight' => 'nullable|numeric|min:0.1',
+            'measurements.*.height' => 'nullable|numeric|min:0.1',
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $user = Auth::user();
+        $updated = 0;
+
+        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated) {
+            foreach ($validated['measurements'] as $entry) {
+                if (($entry['weight'] ?? null) === null && ($entry['height'] ?? null) === null) {
+                    continue;
+                }
+
+                if (($entry['weight'] ?? null) === null || ($entry['height'] ?? null) === null) {
+                    throw ValidationException::withMessages([
+                        'measurements' => 'Each edited student must have both weight and height.',
+                    ]);
+                }
+
+                $student = Student::find($entry['student_id']);
+                $enrollment = $student?->enrollments()
+                    ->where('school_year_id', $activeSyId)
+                    ->with('sbfpParticipant')
+                    ->first();
+
+                if (!$enrollment || !$enrollment->sbfpParticipant || ($user->isEncoder() && (
+                    (string) $enrollment->grade_level !== (string) $user->advisory_grade_level ||
+                    strtolower(trim($enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
+                ))) {
+                    throw ValidationException::withMessages([
+                        'measurements' => 'One or more students are outside your advisory list.',
+                    ]);
+                }
+
+                $measurement = $enrollment->sbfpParticipant->nutritionMeasurements()
+                    ->whereIn('measurement_period', [
+                        $validated['measurement_period'],
+                        ucfirst($validated['measurement_period']),
+                        $validated['measurement_period'] === 'baseline' ? 'Term 1' : '',
+                    ])
+                    ->first();
+
+                if (!$measurement) {
+                    throw ValidationException::withMessages([
+                        'measurement_period' => ucfirst($validated['measurement_period']) . ' does not exist for ' . $student->first_name . ' ' . $student->last_name . '. Use Add Period first.',
+                    ]);
+                }
+
+                $metrics = $this->nutriService->calculateBMI($entry['weight'], $entry['height']);
+                $measurement->update([
+                    'measurement_period' => $validated['measurement_period'],
+                    'weight' => $entry['weight'],
+                    'height' => $entry['height'],
+                    'bmi' => $metrics['bmi'],
+                    'bmi_category' => $metrics['category'],
+                    'hfa' => 'Normal',
+                ]);
+                $updated++;
+            }
+
+            if ($updated === 0) {
+                throw ValidationException::withMessages([
+                    'measurements' => 'Enter at least one complete student measurement to edit.',
+                ]);
+            }
+        });
+
+        return back()->with('success', $updated . ' period measurement(s) updated successfully.');
+    }
+
+    public function updatePeriod(Request $request, Student $student)
+    {
+        $validated = $request->validate([
+            'measurement_period' => 'required|in:baseline,midline,endline',
+            'weight' => 'required|numeric|min:0.1',
+            'height' => 'required|numeric|min:0.1',
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $user = Auth::user();
+        $enrollment = $student->enrollments()
+            ->where('school_year_id', $activeSyId)
+            ->with('sbfpParticipant')
+            ->first();
+
+        if (!$enrollment || !$enrollment->sbfpParticipant || ($user->isEncoder() && (
+            (string) $enrollment->grade_level !== (string) $user->advisory_grade_level ||
+            strtolower(trim($enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
+        ))) {
+            abort(404);
+        }
+
+        $measurement = $enrollment->sbfpParticipant->nutritionMeasurements()
+            ->whereIn('measurement_period', [$validated['measurement_period'], ucfirst($validated['measurement_period']), $validated['measurement_period'] === 'baseline' ? 'Term 1' : ''])
+            ->first();
+
+        if (!$measurement) {
+            return back()->withErrors(['measurement_period' => 'That period does not exist for this student yet. Use Add Period first.']);
+        }
+
+        $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
+        $measurement->update([
+            'measurement_period' => $validated['measurement_period'],
+            'weight' => $validated['weight'],
+            'height' => $validated['height'],
+            'bmi' => $metrics['bmi'],
+            'bmi_category' => $metrics['category'],
+            'hfa' => 'Normal',
+        ]);
+
+        return back()->with('success', ucfirst($validated['measurement_period']) . ' measurement updated successfully.');
     }
 
     public function updateApproval(Request $request, Student $student)

@@ -92,7 +92,10 @@
                         @forelse($students ?? [] as $index => $student)
                         @php
                             $enrollment = $student->enrollments->first();
-                            $latestRecord = $student->nutritionalRecords()->latest()->first();
+                            $baselineRecord = $student->nutritionalRecords()
+                                ->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                                ->latest()
+                                ->first();
                         @endphp
                         <tr class="hover:bg-gray-50">
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
@@ -100,23 +103,23 @@
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
-                            <td class="px-4 py-3 border">{{ $latestRecord->weight ?? '-' }}</td>
-                            <td class="px-4 py-3 border">{{ $latestRecord->height ?? '-' }}</td>
-                            <td class="px-4 py-3 border">{{ $latestRecord->bmi ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $baselineRecord->weight ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $baselineRecord->height ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $baselineRecord->bmi ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">
-                                @if($latestRecord)
+                                @if($baselineRecord)
                                     <span class="px-2 py-0.5 rounded text-xs font-bold 
-                                        @if($latestRecord->bmi_category == 'Normal') bg-green-100 text-green-800 
-                                        @elseif(in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted'])) bg-red-100 text-red-800 
+                                        @if($baselineRecord->bmi_category == 'Normal') bg-green-100 text-green-800
+                                        @elseif(in_array($baselineRecord->bmi_category, ['Wasted', 'Severely Wasted'])) bg-red-100 text-red-800
                                         @else bg-amber-100 text-amber-800 @endif">
-                                        {{ $latestRecord->bmi_category }}
+                                        {{ $baselineRecord->bmi_category }}
                                     </span>
                                 @else
                                     <span class="text-gray-400 italic">N/A</span>
                                 @endif
                             </td>
-                            <td class="px-4 py-3 border">{{ $latestRecord->height_for_age ?? 'Normal' }}</td>
-                            <td class="px-4 py-3 border">{{ $latestRecord->remarks ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $baselineRecord->height_for_age ?? 'Normal' }}</td>
+                            <td class="px-4 py-3 border">{{ $baselineRecord->remarks ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">
