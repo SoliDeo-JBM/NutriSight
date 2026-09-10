@@ -1,0 +1,35 @@
+name: Supabase Automated Backup
+
+on:
+  schedule:
+    - cron: '0 * * * *' # Runs at minute 0 of every hour
+  workflow_dispatch: # Allows you to click a button to run it manually
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Generate timestamp
+      id: date
+      run: echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
+
+    - name: Install PostgreSQL 17 Client
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y postgresql-common
+        sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
+        sudo apt-get install -y postgresql-client-17
+
+    - name: Run Database Backup
+      env:
+        DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      run: |
+        pg_dump "$DB_URL" > nutrisight_backup_${{ env.timestamp }}.sql
+
+    - name: Upload Backup File as Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: database-backup-${{ env.timestamp }}
+        path: nutrisight_backup_${{ env.timestamp }}.sql
+        retention-days: 7 # Deletes the file after 7 days to save GitHub storage space
