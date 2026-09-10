@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict ohEspbpcy2dreL6CbP5rHD9QyTA45iNGlvq8hsmy8pbTlgMEprSGTdBxe6p1i60
+\restrict rlSBJUvrj7unBZNqtdIiTwnXEowFdZuUpLpIAEGbtcnNQNqtqFclJgZLqHUaeK4
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
@@ -3673,6 +3673,43 @@ ALTER SEQUENCE public.jobs_id_seq OWNED BY public.jobs.id;
 
 
 --
+-- Name: meal_plans; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.meal_plans (
+    id bigint NOT NULL,
+    meal_date date NOT NULL,
+    meal_name character varying(255) NOT NULL,
+    recorded_by_user_id bigint NOT NULL,
+    created_at timestamp(0) without time zone,
+    updated_at timestamp(0) without time zone
+);
+
+
+ALTER TABLE public.meal_plans OWNER TO postgres;
+
+--
+-- Name: meal_plans_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.meal_plans_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.meal_plans_id_seq OWNER TO postgres;
+
+--
+-- Name: meal_plans_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.meal_plans_id_seq OWNED BY public.meal_plans.id;
+
+
+--
 -- Name: migrations; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -3720,7 +3757,6 @@ CREATE TABLE public.nutrition_measurements (
     bmi_category character varying(255) NOT NULL,
     hfa character varying(255) NOT NULL,
     measurement_period character varying(255) NOT NULL,
-    remarks character varying(255),
     created_at timestamp(0) without time zone,
     updated_at timestamp(0) without time zone
 );
@@ -3856,7 +3892,7 @@ ALTER SEQUENCE public.report_periods_id_seq OWNED BY public.report_periods.id;
 CREATE TABLE public.sbfp_participants (
     id bigint NOT NULL,
     enrollment_id bigint NOT NULL,
-    parent_consent character varying(255) NOT NULL,
+    parent_consent character varying(255),
     disapproval_reason text,
     created_at timestamp(0) without time zone,
     updated_at timestamp(0) without time zone
@@ -4032,10 +4068,11 @@ CREATE TABLE public.students (
     sex character varying(255) NOT NULL,
     birth_date date NOT NULL,
     guardian_name character varying(255) NOT NULL,
-    guardian_email character varying(255) NOT NULL,
+    guardian_email character varying(255),
     address character varying(255) NOT NULL,
     created_at timestamp(0) without time zone,
-    updated_at timestamp(0) without time zone
+    updated_at timestamp(0) without time zone,
+    guardian_contact character varying(255)
 );
 
 
@@ -4395,6 +4432,13 @@ ALTER TABLE ONLY public.jobs ALTER COLUMN id SET DEFAULT nextval('public.jobs_id
 
 
 --
+-- Name: meal_plans id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.meal_plans ALTER COLUMN id SET DEFAULT nextval('public.meal_plans_id_seq'::regclass);
+
+
+--
 -- Name: migrations id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
@@ -4746,6 +4790,141 @@ COPY public.attendance_report_sections (id, attendance_report_month_id, grade_le
 --
 
 COPY public.audit_logs (id, user_id, action, module, description, ip_address, created_at, updated_at) FROM stdin;
+74	28	created	School Years	Created academic school year 2026-2027	127.0.0.1	2026-09-10 13:46:38	2026-09-10 13:46:38
+75	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-10 13:46:43	2026-09-10 13:46:43
+76	27	Created	Accounts	Created new encoder account for Encoder User 1	127.0.0.1	2026-09-10 13:50:02	2026-09-10 13:50:02
+77	27	Created	Accounts	Created new encoder account for Encoder User 2	127.0.0.1	2026-09-10 13:51:08	2026-09-10 13:51:08
+78	27	Created	Accounts	Created new encoder account for Encoder User 3	127.0.0.1	2026-09-10 13:52:15	2026-09-10 13:52:15
+79	32	Created	Students	Added student Juan Santos	127.0.0.1	2026-09-10 14:01:03	2026-09-10 14:01:03
+80	33	Created	Students	Added student Laxamana Alyamce	127.0.0.1	2026-09-10 14:01:22	2026-09-10 14:01:22
+81	32	Created	Students	Added student Maria Dela Cruz	127.0.0.1	2026-09-10 14:02:40	2026-09-10 14:02:40
+82	26	Created	Students	Added student Christian Paul Aquino	127.0.0.1	2026-09-10 14:02:53	2026-09-10 14:02:53
+83	33	Created	Students	Added student Cruz Juan	127.0.0.1	2026-09-10 14:03:11	2026-09-10 14:03:11
+84	31	Created	Students	Added student Mateo Reyes	127.0.0.1	2026-09-10 14:04:04	2026-09-10 14:04:04
+85	32	Created	Students	Added student Carlo Reyes	127.0.0.1	2026-09-10 14:04:15	2026-09-10 14:04:15
+86	33	Created	Students	Added student Clara Santos	127.0.0.1	2026-09-10 14:05:38	2026-09-10 14:05:38
+87	32	Created	Students	Added student Sofia Garcia	127.0.0.1	2026-09-10 14:05:55	2026-09-10 14:05:55
+88	26	Created	Students	Added student Samantha Nicole Dizon	127.0.0.1	2026-09-10 14:06:43	2026-09-10 14:06:43
+89	33	Created	Students	Added student Anthony Reyes	127.0.0.1	2026-09-10 14:07:11	2026-09-10 14:07:11
+90	31	Created	Students	Added student Chloe Santos	127.0.0.1	2026-09-10 14:07:08	2026-09-10 14:07:08
+91	32	Created	Students	Added student Ethan Mendoza	127.0.0.1	2026-09-10 14:08:04	2026-09-10 14:08:04
+92	26	Created	Students	Added student Lucas Miguel Ramos	127.0.0.1	2026-09-10 14:08:59	2026-09-10 14:08:59
+93	33	Created	Students	Added student Princess bautista	127.0.0.1	2026-09-10 14:09:16	2026-09-10 14:09:16
+94	32	Created	Students	Added student Andrea Flores	127.0.0.1	2026-09-10 14:09:18	2026-09-10 14:09:18
+95	31	Created	Students	Added student Juan Mendoza	127.0.0.1	2026-09-10 14:09:40	2026-09-10 14:09:40
+96	33	Created	Students	Added student Princess bautista	127.0.0.1	2026-09-10 14:09:57	2026-09-10 14:09:57
+97	32	Created	Students	Added student Miguel Navarro	127.0.0.1	2026-09-10 14:10:12	2026-09-10 14:10:12
+98	26	Created	Students	Added student Beatrice Santos	127.0.0.1	2026-09-10 14:10:28	2026-09-10 14:10:28
+99	33	Created	Students	Added student Bianca Mendoza	127.0.0.1	2026-09-10 14:11:40	2026-09-10 14:11:40
+100	26	Created	Students	Added student Gabriel James Garcia	127.0.0.1	2026-09-10 14:11:54	2026-09-10 14:11:54
+101	31	Created	Students	Added student Sophia Cruz	127.0.0.1	2026-09-10 14:12:11	2026-09-10 14:12:11
+102	32	Created	Students	Added student Lara Castillo	127.0.0.1	2026-09-10 14:12:22	2026-09-10 14:12:22
+103	33	Created	Students	Added student Joshua Villanueva	127.0.0.1	2026-09-10 14:13:10	2026-09-10 14:13:10
+104	32	Created	Students	Added student Daniel Bautista	127.0.0.1	2026-09-10 14:13:21	2026-09-10 14:13:21
+105	26	Created	Students	Added student Sofia Mendoza	127.0.0.1	2026-09-10 14:13:55	2026-09-10 14:13:55
+106	31	Created	Students	Added student Gabriel Tolentino	127.0.0.1	2026-09-10 14:14:11	2026-09-10 14:14:11
+107	33	Created	Students	Added student Angela Ramos	127.0.0.1	2026-09-10 14:14:22	2026-09-10 14:14:22
+108	32	Created	Students	Added student Chloe Aquino	127.0.0.1	2026-09-10 14:14:27	2026-09-10 14:14:27
+109	26	Created	Students	Added student Liam Ethan Villanueva	127.0.0.1	2026-09-10 14:15:28	2026-09-10 14:15:28
+110	33	Created	Students	Added student Christian Garcia	127.0.0.1	2026-09-10 14:15:48	2026-09-10 14:15:48
+111	26	Updated	Students	Updated student Samantha Nicole Dizon	127.0.0.1	2026-09-10 14:16:10	2026-09-10 14:16:10
+112	33	Updated	Students	Updated student Cruz Juan	127.0.0.1	2026-09-10 14:16:31	2026-09-10 14:16:31
+113	26	Updated	Students	Updated student Christian Paul Aquino	127.0.0.1	2026-09-10 14:16:44	2026-09-10 14:16:44
+114	31	Created	Students	Added student Isabella Villanueva	127.0.0.1	2026-09-10 14:17:01	2026-09-10 14:17:01
+115	26	Created	Students	Added student Mia Sophia Torres	127.0.0.1	2026-09-10 14:18:45	2026-09-10 14:18:45
+116	31	Created	Students	Added student Luis Ocampo	127.0.0.1	2026-09-10 14:19:17	2026-09-10 14:19:17
+117	26	Created	Students	Added student Ethan Noah Castro	127.0.0.1	2026-09-10 14:20:13	2026-09-10 14:20:13
+118	31	Created	Students	Added student Mia David	127.0.0.1	2026-09-10 14:21:22	2026-09-10 14:21:22
+119	26	Created	Students	Added student Zoey Hannah Bautista	127.0.0.1	2026-09-10 14:21:37	2026-09-10 14:21:37
+120	31	Created	Students	Added student Ethan Aguilar	127.0.0.1	2026-09-10 14:23:44	2026-09-10 14:23:44
+121	33	Updated	Students	Updated student Laxamana Alyamce	127.0.0.1	2026-09-10 14:25:34	2026-09-10 14:25:34
+122	31	Created	Students	Added student Zoe Navarro	127.0.0.1	2026-09-10 14:25:57	2026-09-10 14:25:57
+123	32	Updated	Students	Updated student Juan Santos	127.0.0.1	2026-09-10 14:26:41	2026-09-10 14:26:41
+124	31	Updated	Students	Updated student Isabella Villanueva	127.0.0.1	2026-09-10 14:26:47	2026-09-10 14:26:47
+125	33	Updated	Students	Updated student Bianca Mendoza	127.0.0.1	2026-09-10 14:27:11	2026-09-10 14:27:11
+126	26	Updated	Students	Updated student Ethan Noah Castro	127.0.0.1	2026-09-10 14:31:47	2026-09-10 14:31:47
+127	27	Created	Meal Plan	Added meal for 2026-09-01: Bacon & Eggs	127.0.0.1	2026-09-10 14:36:52	2026-09-10 14:36:52
+128	27	Created	Meal Plan	Added meal for 2026-09-10: Bacon & Eggs	127.0.0.1	2026-09-10 14:37:14	2026-09-10 14:37:14
+129	26	Updated	Students	Updated student Liam Ethan Villanueva	127.0.0.1	2026-09-10 14:48:44	2026-09-10 14:48:44
+130	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 14:51:19	2026-09-10 14:51:19
+131	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 14:52:19	2026-09-10 14:52:19
+132	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 14:54:56	2026-09-10 14:54:56
+133	26	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 14:55:56	2026-09-10 14:55:56
+134	27	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 15:53:34	2026-09-10 15:53:34
+135	27	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 15:54:29	2026-09-10 15:54:29
+136	27	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 15:55:09	2026-09-10 15:55:09
+137	27	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 15:56:22	2026-09-10 15:56:22
+138	32	Updated	Students	Updated student Maria Dela Cruz	127.0.0.1	2026-09-10 16:04:49	2026-09-10 16:04:49
+139	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:05:10	2026-09-10 16:05:10
+140	27	Updated	Meal Plan	Updated meal plan ID 5	127.0.0.1	2026-09-10 16:13:09	2026-09-10 16:13:09
+141	27	Created	Meal Plan	Added meal for 2026-09-01: rice	127.0.0.1	2026-09-10 16:13:15	2026-09-10 16:13:15
+142	27	Updated	Meal Plan	Updated meal plan ID 6	127.0.0.1	2026-09-10 16:13:35	2026-09-10 16:13:35
+143	27	Created	Meal Plan	Added meal for 2026-09-10: rice	127.0.0.1	2026-09-10 16:13:42	2026-09-10 16:13:42
+144	27	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 16:14:05	2026-09-10 16:14:05
+145	27	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 16:14:16	2026-09-10 16:14:16
+146	27	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 16:14:19	2026-09-10 16:14:19
+147	27	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 16:14:43	2026-09-10 16:14:43
+148	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:19:23	2026-09-10 16:19:23
+149	32	Updated	Students	Updated student Sofia Garcia	127.0.0.1	2026-09-10 16:26:08	2026-09-10 16:26:08
+150	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:26:26	2026-09-10 16:26:26
+151	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:42:55	2026-09-10 16:42:55
+152	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:43:03	2026-09-10 16:43:03
+153	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:43:07	2026-09-10 16:43:07
+154	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:43:23	2026-09-10 16:43:23
+155	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:43:28	2026-09-10 16:43:28
+156	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:43:37	2026-09-10 16:43:37
+157	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:44:38	2026-09-10 16:44:38
+158	32	Updated	Attendance	Updated attendance status for participant ID 19 on 2026-09-10	127.0.0.1	2026-09-10 16:45:51	2026-09-10 16:45:51
+159	32	Updated	Attendance	Updated attendance status for participant ID 11 on 2026-09-10	127.0.0.1	2026-09-10 16:46:39	2026-09-10 16:46:39
+160	32	Updated	Attendance	Updated attendance status for participant ID 11 on 2026-09-10	127.0.0.1	2026-09-10 16:46:46	2026-09-10 16:46:46
+161	32	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 16:48:24	2026-09-10 16:48:24
+162	32	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 16:48:29	2026-09-10 16:48:29
+163	32	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 16:50:04	2026-09-10 16:50:04
+164	32	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 16:50:09	2026-09-10 16:50:09
+165	32	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 16:50:13	2026-09-10 16:50:13
+166	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 17:51:27	2026-09-10 17:51:27
+167	26	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 17:51:42	2026-09-10 17:51:42
+168	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 17:51:58	2026-09-10 17:51:58
+169	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 17:59:37	2026-09-10 17:59:37
+170	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 17:59:57	2026-09-10 17:59:57
+171	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 18:00:08	2026-09-10 18:00:08
+172	26	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 18:00:19	2026-09-10 18:00:19
+173	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:09:48	2026-09-10 18:09:48
+174	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:16:37	2026-09-10 18:16:37
+175	32	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 18:18:48	2026-09-10 18:18:48
+176	32	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:18:54	2026-09-10 18:18:54
+177	32	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 18:18:59	2026-09-10 18:18:59
+178	32	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 18:19:21	2026-09-10 18:19:21
+179	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:24:46	2026-09-10 18:24:46
+180	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:25:56	2026-09-10 18:25:56
+181	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 18:26:55	2026-09-10 18:26:55
+182	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 18:26:59	2026-09-10 18:26:59
+183	27	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 18:31:01	2026-09-10 18:31:01
+184	26	Updated	Attendance	Updated attendance status for participant ID 41 on 2026-09-10	127.0.0.1	2026-09-10 19:55:33	2026-09-10 19:55:33
+185	26	Created	Students	Added student Rafael Gomez	127.0.0.1	2026-09-10 20:53:01	2026-09-10 20:53:01
+186	26	Created	Students	Added student Bianca Louise Morales	127.0.0.1	2026-09-10 20:54:52	2026-09-10 20:54:52
+187	26	Created	Students	Added student Nathan Rivera	127.0.0.1	2026-09-10 21:21:00	2026-09-10 21:21:00
+188	26	Created	Students	Added student Andrea Pascual	127.0.0.1	2026-09-10 21:22:41	2026-09-10 21:22:41
+189	26	Updated	Attendance	Updated attendance status for participant ID 41 on 2026-09-10	127.0.0.1	2026-09-10 22:16:09	2026-09-10 22:16:09
+190	26	Updated	Attendance	Updated attendance status for participant ID 41 on 2026-09-10	127.0.0.1	2026-09-10 22:17:06	2026-09-10 22:17:06
+191	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to approved	127.0.0.1	2026-09-10 22:20:08	2026-09-10 22:20:08
+192	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to disapproved	127.0.0.1	2026-09-10 22:21:10	2026-09-10 22:21:10
+193	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to disapproved	127.0.0.1	2026-09-10 22:22:47	2026-09-10 22:22:47
+194	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to approved	127.0.0.1	2026-09-10 22:23:52	2026-09-10 22:23:52
+195	26	Updated	Students	Updated student Beatrice Santos	127.0.0.1	2026-09-10 22:28:35	2026-09-10 22:28:35
+196	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to disapproved	127.0.0.1	2026-09-10 22:32:03	2026-09-10 22:32:03
+197	33	Updated	SBFP Approval	Updated parent consent for student Joshua Villanueva to disapproved	127.0.0.1	2026-09-10 22:35:25	2026-09-10 22:35:25
+198	26	Updated	Students	Updated student Andrea Pascual	127.0.0.1	2026-09-11 00:25:16	2026-09-11 00:25:16
+199	26	Created	Students	Added student Alu Card	127.0.0.1	2026-09-11 00:52:29	2026-09-11 00:52:29
+200	26	Updated	Students	Updated student Andrea Pascual	127.0.0.1	2026-09-11 00:57:50	2026-09-11 00:57:50
+201	26	Created	Students	Added student Steve Jobs	127.0.0.1	2026-09-11 01:10:03	2026-09-11 01:10:03
+202	26	Updated	Students	Updated student Lucas Miguel Ramos	127.0.0.1	2026-09-11 01:21:54	2026-09-11 01:21:54
+203	26	Updated	Students	Updated student Liam Ethan Villanueva	127.0.0.1	2026-09-11 01:24:06	2026-09-11 01:24:06
+204	26	Updated	Students	Updated student Liam Ethan Villanueva	127.0.0.1	2026-09-11 01:26:18	2026-09-11 01:26:18
+205	26	Updated	Students	Updated student Alu Card	127.0.0.1	2026-09-11 01:26:44	2026-09-11 01:26:44
+206	27	Created	Meal Plan	Added meal for 2026-09-11: Chicken Adobo	127.0.0.1	2026-09-11 01:31:02	2026-09-11 01:31:02
+207	27	Created	Meal Plan	Added meal for 2026-09-11: Milo	127.0.0.1	2026-09-11 01:31:09	2026-09-11 01:31:09
+208	27	Created	Attendance	Scanned QR attendance for student Alu Card	127.0.0.1	2026-09-11 01:32:11	2026-09-11 01:32:11
 \.
 
 
@@ -4770,6 +4949,52 @@ COPY public.cache_locks (key, owner, expiration) FROM stdin;
 --
 
 COPY public.enrollments (id, student_id, school_year_id, grade_level, section, status, created_at, updated_at) FROM stdin;
+11	11	5	3	A	enrolled	2026-09-10 14:01:03	2026-09-10 14:01:03
+12	12	5	4	A	enrolled	2026-09-10 14:01:22	2026-09-10 14:01:22
+13	13	5	3	A	enrolled	2026-09-10 14:02:40	2026-09-10 14:02:40
+14	14	5	1	A	enrolled	2026-09-10 14:02:53	2026-09-10 14:02:53
+15	15	5	4	A	enrolled	2026-09-10 14:03:11	2026-09-10 14:03:11
+16	16	5	2	A	enrolled	2026-09-10 14:04:03	2026-09-10 14:04:03
+17	17	5	3	A	enrolled	2026-09-10 14:04:15	2026-09-10 14:04:15
+18	18	5	4	A	enrolled	2026-09-10 14:05:38	2026-09-10 14:05:38
+19	19	5	3	A	enrolled	2026-09-10 14:05:55	2026-09-10 14:05:55
+20	20	5	1	A	enrolled	2026-09-10 14:06:43	2026-09-10 14:06:43
+21	21	5	4	A	enrolled	2026-09-10 14:07:11	2026-09-10 14:07:11
+22	22	5	2	A	enrolled	2026-09-10 14:07:08	2026-09-10 14:07:08
+23	23	5	3	A	enrolled	2026-09-10 14:08:04	2026-09-10 14:08:04
+24	24	5	1	A	enrolled	2026-09-10 14:08:59	2026-09-10 14:08:59
+25	25	5	4	A	enrolled	2026-09-10 14:09:15	2026-09-10 14:09:15
+26	26	5	3	A	enrolled	2026-09-10 14:09:17	2026-09-10 14:09:17
+27	27	5	2	A	enrolled	2026-09-10 14:09:40	2026-09-10 14:09:40
+28	28	5	4	A	enrolled	2026-09-10 14:09:56	2026-09-10 14:09:56
+29	29	5	3	A	enrolled	2026-09-10 14:10:11	2026-09-10 14:10:11
+30	30	5	1	A	enrolled	2026-09-10 14:10:27	2026-09-10 14:10:27
+31	31	5	4	A	enrolled	2026-09-10 14:11:40	2026-09-10 14:11:40
+32	32	5	1	A	enrolled	2026-09-10 14:11:53	2026-09-10 14:11:53
+33	33	5	2	A	enrolled	2026-09-10 14:12:11	2026-09-10 14:12:11
+34	34	5	3	A	enrolled	2026-09-10 14:12:22	2026-09-10 14:12:22
+35	35	5	4	A	enrolled	2026-09-10 14:13:10	2026-09-10 14:13:10
+36	36	5	3	A	enrolled	2026-09-10 14:13:21	2026-09-10 14:13:21
+37	37	5	1	A	enrolled	2026-09-10 14:13:55	2026-09-10 14:13:55
+38	38	5	2	A	enrolled	2026-09-10 14:14:11	2026-09-10 14:14:11
+39	39	5	4	A	enrolled	2026-09-10 14:14:22	2026-09-10 14:14:22
+40	40	5	3	A	enrolled	2026-09-10 14:14:26	2026-09-10 14:14:26
+41	41	5	1	A	enrolled	2026-09-10 14:15:27	2026-09-10 14:15:27
+42	42	5	4	A	enrolled	2026-09-10 14:15:48	2026-09-10 14:15:48
+43	43	5	2	A	enrolled	2026-09-10 14:17:00	2026-09-10 14:17:00
+44	44	5	1	A	enrolled	2026-09-10 14:18:45	2026-09-10 14:18:45
+45	45	5	2	A	enrolled	2026-09-10 14:19:17	2026-09-10 14:19:17
+46	46	5	1	A	enrolled	2026-09-10 14:20:12	2026-09-10 14:20:12
+47	47	5	2	A	enrolled	2026-09-10 14:21:22	2026-09-10 14:21:22
+48	48	5	1	A	enrolled	2026-09-10 14:21:37	2026-09-10 14:21:37
+49	49	5	2	A	enrolled	2026-09-10 14:23:44	2026-09-10 14:23:44
+50	50	5	2	A	enrolled	2026-09-10 14:25:56	2026-09-10 14:25:56
+51	51	5	1	A	enrolled	2026-09-10 20:53:01	2026-09-10 20:53:01
+52	52	5	1	A	enrolled	2026-09-10 20:54:52	2026-09-10 20:54:52
+53	53	5	1	A	enrolled	2026-09-10 21:21:00	2026-09-10 21:21:00
+54	54	5	1	A	enrolled	2026-09-10 21:22:40	2026-09-10 21:22:40
+55	55	5	1	A	enrolled	2026-09-11 00:52:29	2026-09-11 00:52:29
+56	56	5	1	A	enrolled	2026-09-11 01:10:03	2026-09-11 01:10:03
 \.
 
 
@@ -4798,31 +5023,25 @@ COPY public.jobs (id, queue, payload, attempts, reserved_at, available_at, creat
 
 
 --
+-- Data for Name: meal_plans; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.meal_plans (id, meal_date, meal_name, recorded_by_user_id, created_at, updated_at) FROM stdin;
+5	2026-09-01	siomai	27	2026-09-10 14:36:52	2026-09-10 16:13:09
+7	2026-09-01	rice	27	2026-09-10 16:13:15	2026-09-10 16:13:15
+6	2026-09-10	siomai	27	2026-09-10 14:37:14	2026-09-10 16:13:35
+8	2026-09-10	rice	27	2026-09-10 16:13:42	2026-09-10 16:13:42
+9	2026-09-11	Chicken Adobo	27	2026-09-11 01:31:02	2026-09-11 01:31:02
+10	2026-09-11	Milo	27	2026-09-11 01:31:09	2026-09-11 01:31:09
+\.
+
+
+--
 -- Data for Name: migrations; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
 COPY public.migrations (id, migration, batch) FROM stdin;
-1	0001_01_01_000000_create_users_table	1
-2	0001_01_01_000001_create_cache_table	1
-3	0001_01_01_000002_create_jobs_table	1
-4	2026_09_05_110358_create_school_years_table	1
-5	2026_09_05_110502_create_students_table	1
-6	2026_09_05_110709_create_enrollments_table	1
-7	2026_09_05_110722_create_sbfp_participants_table	1
-8	2026_09_05_110731_create_nutrition_measurements_table	1
-9	2026_09_05_110739_create_student_attendance_records_table	1
-10	2026_09_05_110746_create_student_feeding_records_table	1
-11	2026_09_05_120000_create_audit_logs_table	1
-12	2026_09_07_120000_create_report_periods_table	1
-13	2026_09_07_120001_create_report_period_rows_table	1
-14	2026_09_07_130000_make_school_year_end_date_nullable	1
-15	2026_09_07_140000_add_measurement_period_to_report_periods	1
-16	2026_09_07_140001_update_report_period_uniqueness	1
-17	2026_09_07_150000_add_height_count_to_report_period_rows	1
-18	2026_09_07_160000_enforce_unique_report_terms_and_months	1
-19	2026_09_07_170000_create_attendance_report_months_table	1
-20	2026_09_07_180000_create_attendance_report_sections_table	1
-21	2026_09_08_000000_add_attendance_lookup_indexes	1
+24	2026_09_10_000000_update_sbfp_approval_and_measurements	1
 \.
 
 
@@ -4830,7 +5049,67 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 -- Data for Name: nutrition_measurements; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.nutrition_measurements (id, sbfp_participant_id, height, weight, bmi, bmi_category, hfa, measurement_period, remarks, created_at, updated_at) FROM stdin;
+COPY public.nutrition_measurements (id, sbfp_participant_id, height, weight, bmi, bmi_category, hfa, measurement_period, created_at, updated_at) FROM stdin;
+18	14	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:02:53	2026-09-10 14:16:44
+21	17	128	25	15.26	Severely Wasted	Normal	baseline	2026-09-10 14:04:15	2026-09-10 14:04:15
+61	52	165	46	16.90	Wasted	Normal	baseline	2026-09-10 20:54:52	2026-09-10 22:41:32
+64	30	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:24	2026-09-10 21:27:24
+15	11	125	20	12.80	Severely Wasted	Normal	baseline	2026-09-10 14:01:03	2026-09-10 14:26:41
+65	41	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
+16	12	165	85	31.22	Obese	Normal	baseline	2026-09-10 14:01:22	2026-09-10 14:01:22
+38	34	135	42	23.05	Normal	Normal	baseline	2026-09-10 14:12:22	2026-09-10 14:12:22
+17	13	126	22	13.86	Severely Wasted	Normal	baseline	2026-09-10 14:02:40	2026-09-10 14:02:40
+51	47	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:21:22	2026-09-10 14:21:22
+62	53	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 21:21:00	2026-09-10 21:21:00
+66	52	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
+67	37	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
+68	53	165	59	21.67	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
+69	32	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
+70	24	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:26	2026-09-10 21:27:26
+63	54	165	58	21.30	Normal	Normal	baseline	2026-09-10 21:22:41	2026-09-11 00:57:50
+28	24	115.8	58.9	43.92	Obese	Normal	baseline	2026-09-10 14:08:59	2026-09-11 01:21:54
+71	52	165	46	16.90	Wasted	Normal	midline	2026-09-10 21:53:37	2026-09-10 21:55:21
+72	53	165	46	16.90	Wasted	Normal	midline	2026-09-10 21:53:37	2026-09-10 21:55:21
+19	15	165	85	31.22	Obese	Normal	baseline	2026-09-10 14:03:11	2026-09-10 14:03:11
+20	16	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:04:04	2026-09-10 14:04:04
+22	18	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:05:38	2026-09-10 14:05:38
+23	19	130	27	15.98	Severely Wasted	Normal	baseline	2026-09-10 14:05:55	2026-09-10 14:05:55
+24	20	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:06:43	2026-09-10 14:16:10
+25	21	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:07:11	2026-09-10 14:07:11
+26	22	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:07:08	2026-09-10 14:07:08
+27	23	130	30	17.75	Wasted	Normal	baseline	2026-09-10 14:08:04	2026-09-10 14:08:04
+29	25	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:09:16	2026-09-10 14:09:16
+30	26	132	34	19.51	Normal	Normal	baseline	2026-09-10 14:09:18	2026-09-10 14:09:18
+31	27	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:09:40	2026-09-10 14:09:40
+32	28	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:09:57	2026-09-10 14:09:57
+33	29	134	37	20.61	Normal	Normal	baseline	2026-09-10 14:10:12	2026-09-10 14:10:12
+34	30	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:10:27	2026-09-10 22:41:31
+35	31	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:11:40	2026-09-10 14:11:40
+36	32	117.2	16.1	11.72	Severely Wasted	Normal	baseline	2026-09-10 14:11:53	2026-09-10 14:11:53
+37	33	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:12:11	2026-09-10 14:12:11
+39	35	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:13:10	2026-09-10 14:13:10
+40	36	138	48	25.20	Overweight	Normal	baseline	2026-09-10 14:13:21	2026-09-10 14:13:21
+41	37	115.0	19.5	14.74	Severely Wasted	Normal	baseline	2026-09-10 14:13:55	2026-09-10 14:13:55
+42	38	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:14:11	2026-09-10 14:14:11
+43	39	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:14:22	2026-09-10 14:14:22
+44	40	140	55	28.06	Overweight	Normal	baseline	2026-09-10 14:14:27	2026-09-10 14:14:27
+46	42	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:15:48	2026-09-10 14:15:48
+47	43	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:17:01	2026-09-10 14:17:01
+48	44	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:18:45	2026-09-10 14:18:45
+49	45	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:19:17	2026-09-10 14:19:17
+50	46	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:20:13	2026-09-10 14:31:47
+52	48	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:21:37	2026-09-10 14:21:37
+53	49	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:23:44	2026-09-10 14:23:44
+54	50	165	85	31.22	Obese	Normal	baseline	2026-09-10 14:25:56	2026-09-10 14:25:56
+55	41	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:47	2026-09-10 21:55:21
+57	30	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:20
+59	37	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:21
+60	51	165	58	21.30	Normal	Normal	baseline	2026-09-10 20:53:01	2026-09-10 20:53:01
+45	41	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:15:27	2026-09-11 01:26:18
+56	24	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:22
+58	32	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:21
+74	56	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-11 01:10:03	2026-09-11 01:10:03
+73	55	165	46	16.90	Wasted	Normal	baseline	2026-09-11 00:52:29	2026-09-11 01:26:44
 \.
 
 
@@ -4839,6 +5118,7 @@ COPY public.nutrition_measurements (id, sbfp_participant_id, height, weight, bmi
 --
 
 COPY public.password_reset_tokens (email, token, created_at) FROM stdin;
+moltenterabyte@gmail.com	$2y$12$JGmlCFXAqPGh7wYYEfc6he1niLHcvnhyqLDwlnsdCeLL.hBkUkWMS	2026-09-10 17:36:39
 \.
 
 
@@ -4863,6 +5143,52 @@ COPY public.report_periods (id, school_year_id, name, month, created_at, updated
 --
 
 COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_reason, created_at, updated_at) FROM stdin;
+41	41	approved	\N	2026-09-10 14:15:27	2026-09-11 00:21:05
+37	37	approved	\N	2026-09-10 14:13:55	2026-09-11 00:21:05
+53	53	approved	\N	2026-09-10 21:21:00	2026-09-11 00:21:05
+11	11		\N	2026-09-10 14:01:03	2026-09-10 14:01:03
+12	12		\N	2026-09-10 14:01:22	2026-09-10 14:01:22
+13	13		\N	2026-09-10 14:02:40	2026-09-10 14:02:40
+14	14		\N	2026-09-10 14:02:53	2026-09-10 14:02:53
+15	15		\N	2026-09-10 14:03:11	2026-09-10 14:03:11
+16	16		\N	2026-09-10 14:04:04	2026-09-10 14:04:04
+17	17		\N	2026-09-10 14:04:15	2026-09-10 14:04:15
+18	18		\N	2026-09-10 14:05:38	2026-09-10 14:05:38
+19	19		\N	2026-09-10 14:05:55	2026-09-10 14:05:55
+20	20		\N	2026-09-10 14:06:43	2026-09-10 14:06:43
+21	21		\N	2026-09-10 14:07:11	2026-09-10 14:07:11
+22	22		\N	2026-09-10 14:07:08	2026-09-10 14:07:08
+23	23		\N	2026-09-10 14:08:04	2026-09-10 14:08:04
+25	25		\N	2026-09-10 14:09:15	2026-09-10 14:09:15
+26	26		\N	2026-09-10 14:09:18	2026-09-10 14:09:18
+27	27		\N	2026-09-10 14:09:40	2026-09-10 14:09:40
+28	28		\N	2026-09-10 14:09:57	2026-09-10 14:09:57
+29	29		\N	2026-09-10 14:10:11	2026-09-10 14:10:11
+30	30		medical_condition	2026-09-10 14:10:27	2026-09-10 22:32:03
+33	33		\N	2026-09-10 14:12:11	2026-09-10 14:12:11
+34	34		\N	2026-09-10 14:12:22	2026-09-10 14:12:22
+36	36		\N	2026-09-10 14:13:21	2026-09-10 14:13:21
+38	38		\N	2026-09-10 14:14:11	2026-09-10 14:14:11
+39	39		\N	2026-09-10 14:14:22	2026-09-10 14:14:22
+40	40		\N	2026-09-10 14:14:26	2026-09-10 14:14:26
+43	43		\N	2026-09-10 14:17:00	2026-09-10 14:17:00
+44	44		\N	2026-09-10 14:18:45	2026-09-10 14:18:45
+45	45		\N	2026-09-10 14:19:17	2026-09-10 14:19:17
+46	46		\N	2026-09-10 14:20:12	2026-09-10 14:20:12
+47	47		\N	2026-09-10 14:21:22	2026-09-10 14:21:22
+48	48		\N	2026-09-10 14:21:37	2026-09-10 14:21:37
+49	49		\N	2026-09-10 14:23:44	2026-09-10 14:23:44
+50	50		\N	2026-09-10 14:25:56	2026-09-10 14:25:56
+51	51		\N	2026-09-10 20:53:01	2026-09-10 20:53:01
+52	52	approved	\N	2026-09-10 20:54:52	2026-09-11 00:23:09
+32	32	approved	\N	2026-09-10 14:11:53	2026-09-11 00:23:09
+35	35	approved	\N	2026-09-10 14:13:10	2026-09-11 00:25:49
+42	42	approved	\N	2026-09-10 14:15:48	2026-09-11 00:25:49
+31	31	approved	\N	2026-09-10 14:11:40	2026-09-11 00:25:49
+54	54	approved	\N	2026-09-10 21:22:40	2026-09-11 00:27:13
+55	55	approved	\N	2026-09-11 00:52:29	2026-09-11 00:55:36
+24	24	\N	\N	2026-09-10 14:08:59	2026-09-11 00:55:36
+56	56	approved	\N	2026-09-11 01:10:03	2026-09-11 01:27:30
 \.
 
 
@@ -4871,6 +5197,7 @@ COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_re
 --
 
 COPY public.school_years (id, year, is_active, start_date, end_date, created_at, updated_at) FROM stdin;
+5	2026-2027	t	2026-06-01	2027-03-26	2026-09-10 13:46:38	2026-09-10 13:46:43
 \.
 
 
@@ -4879,15 +5206,50 @@ COPY public.school_years (id, year, is_active, start_date, end_date, created_at,
 --
 
 COPY public.sessions (id, user_id, ip_address, user_agent, payload, last_activity) FROM stdin;
-Grqd4ps8m2bF8iRwUwmg0jXHDhIllLYNs2tZOMa0	27	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJmSmwyUFlpY3BmWEMwdTJSbVpuemF1alVtUmhjNjROeTFQSjlHNE5RIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbG9jYWxob3N0OjgwMDBcL2FkbWluXC9yZXBvcnRzXC9zYmZwXC9hc3Nlc3NtZW50Iiwicm91dGUiOiJhZG1pbi5yZXBvcnRzLnNiZnAuYXNzZXNzbWVudCJ9LCJsb2dpbl93ZWJfNTliYTM2YWRkYzJiMmY5NDAxNTgwZjAxNGM3ZjU4ZWE0ZTMwOTg5ZCI6Mjd9	1788891235
-Zuu98AL04p7JZ0bsn1RBd1yCmKlWA3Hcj0yHizbP	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJqNWJMM3BqVXhsbU95RDBzMU9wdXN0UWx6U091VEZRSG9XYmgwR2QyIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1788891236
-a0spVPl1zsB4wZnbNIOjKGY4sOr0p9rGmPmIHaaq	\N	127.0.0.1	Symfony	eyJfdG9rZW4iOiIxYkF5NFkzNUtRUTcwRGdUZ3FaMmFBSVlnb1FnYVFXOVhadFN6SWtJIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL2xvY2FsaG9zdFwvbG9naW4iLCJyb3V0ZSI6ImxvZ2luIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1788888487
-r2gT5cPR7vYjnLiBP7eC6sl0NjmUmwdB70ee6vHV	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJZOGNvMWpiVTBybGc0TjBBYjRvaGVNU2RzeWp1ZDVqWXI2WGRhQkdkIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cLzEyNy4wLjAuMTo4MDAwXC9sb2dpbiIsInJvdXRlIjoibG9naW4ifSwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1788888789
-1e3zkJ4yW6M5PR6ir91jxOT1IsPhUbBgv1ifzKW6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI5ZDJjRVo2N2RzZWV0NVkyOXRTVjhkV3J4MzVyT1M0bjU5TmZyVUY5IiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1788889060
-TV1VMvrxhlw5JGtMMDn1YJyeLpVzA4430RfLO0s5	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJCTkFMNHU3ZGVXTmVaOFAwS2R1SnZiS1RZQ0NpU2tFeXBoYmNTVkM5IiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1788889786
-fo8DbGW88dPWvOxVd5RqQCFLGyiYlS200KYIavYm	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIwTVRnZGZHY2tYTGFDS1ZKVnptYnZhNTJNckM3ZnF4UnpqMmQzUlgyIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1788890512
-niHEGVGo1SAeVQDUFUYnOtXVpB5UQbWAv65KOURL	27	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJ0d1ZONmNhZjVRckQzdkY1WHR2ekxOTHdKdEpzQnJVSzhiWjBNclhRIiwibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiOjI3LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX0sIl9wcmV2aW91cyI6eyJ1cmwiOiJodHRwOlwvXC8xMjcuMC4wLjE6ODAwMCIsInJvdXRlIjoiaG9tZSJ9fQ==	1788890982
-fzm7WtUrJg8vbpHyzeX367SS33Pkl8D53BiBlMj4	26	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJodmJKYkhlUmZJT05GWFptUUdhZWRxY3NlZWVFcGVDRndUbmxrWG9BIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cLzEyNy4wLjAuMTo4MDAwXC9lbmNvZGVyXC9zdHVkZW50cyIsInJvdXRlIjoiZW5jb2Rlci5zdHVkZW50cy5pbmRleCJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX0sImxvZ2luX3dlYl81OWJhMzZhZGRjMmIyZjk0MDE1ODBmMDE0YzdmNThlYTRlMzA5ODlkIjoyNn0=	1788891356
+Y8BPyizjZI9k0TzOQyNzPtdpaulVhcOdZsSpq5qx	\N	127.0.0.1	Mozilla/5.0 (compatible; domains-distillery/1.0; +https://crawler.validus.ai)	eyJfdG9rZW4iOiJxTGRzaWw1cjJSWEdsUFF1OWhYbG1HWjVxcmVId1hqV25Uemc1OHN1IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063459
+RB15S1e3AySj81WrkIpFnekKeN0h48q1DZyGV7mV	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJpQmFBVW8wd1k3WHhLdTR5OE5ycThxS0t4Wm4xbVJNeEhFVnM4SFVaIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789058764
+4VtORC3NiK0QhAXAinuzaeTs90YREFf0ZLykV8Mo	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0	eyJfdG9rZW4iOiJ0ejRTWGNLWlNZaU03aXNoeUpoMkxuWUx2NGNUYWZTZEYxRzNOcWFkIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789060573
+g0VcRvqWahZPaqlMgPO9SRphZvegFHC3T2Rx52Dw	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJ5VjlPbVZtVWpTcndEbWZ6aUJxMG1LbEpRelgyUGxEaXZBbzI1QVB4IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063659
+FGGsNjuW8WlKungI5Dq6hoZIrgt9cM0bYxEkGhC6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJWWW80WHVwREg2d3JpaTFyOXo1TnBtdlhuVDlraG81OHE2bWZja2pPIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789059490
+XePknWneQUPUs8PRgaFQms2gEzL779SS3hkEFuMC	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJvQVFNSjNneThvRXVyQ3NnUjdSYVFMVDdFNng3NUVqTUtwY1dsbzZaIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063660
+2zVAVaRRp9ako2zT9qvs0E5g2rCiAao4FsvgXB1E	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJDcVZabDkyVkU5VlVscVMxUmFzTGcyc1pUZGNQZXVWREJMN1pTT1pVIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063662
+5naZZpPnYLBwL0mslHv6VC5dT3oPTHAja7WWiPBj	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJvdmZZSDdkS3ZQVlZTbEtBc0tONEExVkRvSDIzTDRFQU4zS3hJdzJ6IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063662
+4vQYYNbHT694qIBMSy05n9f90LxmhcEgsZJsbIYl	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJORlMzU2JzSVVnU1U0bUtrenIwakRpbngxZVRoVHFER293ekFZUlE1IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063663
+Ljp8WCoDrFRyRlwoSWjauXfw80fM9hy2TdpQ9771	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/537.36	eyJfdG9rZW4iOiJHRWIwVVYyTlllanhRa2dSZG84eXVxNkpRaE9lRnA3NnJSNVFvRzVpIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063702
+pjksuoL75CXxONCkU3xBonUQSn9kdf4jh1ZO8nJd	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJtaExZaXg5QlNoaDkwTUQ2YllRZHBQMUhIQWFPdGJsWnJSRkp0Skt1IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063703
+x3sKPPKzjThVydPle7qotuBzwyaK6B075G1U5rD8	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJXQXhiNlZ5cE02b2xaMFpiQlBTRVgyNVc0aUF2SW5mdnhGTUZkU2pjIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063704
+EWZH4VjVcuXmfrmLnmTatX60Fo8qQ2Ktg74Wcbx8	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiIySXg2alJPNGQzNDNZRmI2Z202YXVadHppWVNqdWFhSkhGanRrNG02IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063707
+9MPurLxqzC5GrwuFo9XLPGjuW7dU86fp1h4Gm7uk	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJEenZXQlowb2RIRWJvN1lZUTJueEVJSGs3czgwVWp2UDFZNk5GSlBWIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063708
+PSsh5l8SYul29QqpBSk6yPUAFd1XiD5xd3gtQefc	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJpZ2RRYThJaUJNMXZnR1pPY2Q4WFdvWmxzUGZlZElnbWx0UTF1c3lUIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063708
+JnUC8GzxD2uJvds93GTvxUQJa5oVfNdiszAumVI5	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJvY1N6RlhZS1VkOGJMNTFQcUpLV0RpWVlMZlB6QU9BMUVQZWFxZ0hmIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789057314
+9EYd0GxP3eZ8jhnuuT7w8ZlfK6ZCvkLkoVvgbBZe	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJiY2hyOTdQYXFOVXEzb21YN1FiWmZEZlM0cUNURGg2bERaUEx3MVFYIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058120
+8yeXyJcbqvQFBQDMrgvcsvpRdAdv7PXFQsnwWtZA	\N	127.0.0.1	Mozilla/5.0 (compatible; Dataprovider.com)	eyJfdG9rZW4iOiJVY3RWdVFQa1BZYU5BM1FDbFJJVVdKNUo3aTV1SkZzb1l5NmJFaWJOIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058671
+aO1YNQl7Yv2DI6K7vHgd7lnpKOLKVncKlHJpSznT	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36	eyJfdG9rZW4iOiJDNkRmTVF3dWtKbU1mT0E1bVN0WW81aEg1Q0JMQVY0Tmo4dE9SUXd6IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058676
+i4ifGo2Mfku0cRXxj8eymdXDnVAp5mMx8sl0JhLU	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJSZ2U4M1A2N2FNSGpINW9TWE8wSDVnVFNvVTRHM0FNYW9KeVNCa2Q4IiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789063843
+LQNanuodpkBFIX2i7af9gisdavAfnUgG7pywOfKd	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3QUZMSlNMQzIzNGZURXVHSXBoQmwwOXIwMDRHT2tWdWlBOHVlUjNSIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789056590
+H9TPwvLnHVoECusG6NWJNNcilRVUttpgPoq2OvwE	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0	eyJfdG9rZW4iOiJHSlFuWW1vMW1zUnlDb2tLTnBKSVRDZmlYWlR4aGt0bTYyRHdBSEFJIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789059698
+zzDvq34x5EysO9ZZx5HijhkqmuKS2pbMhagrY6QX	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJMVmZhT1M5SGI3NWJUSFdGSTdTN3R1ODZmT3hNd01HazN5c3dKTWtHIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789060941
+ReduukiBL39RGhYucFe7dT2AYEYIckW49ZyABbA4	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIwWkMzQVViWUdKc3FzRGhoVUdZRTdiOXZZZ2s3MXprazJPa0hVRkhmIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789058039
+EiUAosUuR7zLSRX6SlPtbgDO1wS2AFaQPlEadQWT	31	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/155.0	eyJfdG9rZW4iOiJ4SkVQZnNjSjdldEVGYWpPeDRjbEJoZFZaejhEdlFHMTZoZ052UmpwIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvMTI3LjAuMC4xOjgwMDBcL2VuY29kZXJcL3N0dWRlbnRzXC9zYmZwIiwicm91dGUiOiJlbmNvZGVyLnN0dWRlbnRzLnNiZnAifSwibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiOjMxLCJhY3RpdmVfc2Nob29sX3llYXJfaWQiOjV9	1789058525
+caMaG3mdDBzNXG5NJayk4vfRoxL240GIVq8t66Tl	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI4dmhZMHBIVVFKVkxhYVNGTEpFQ3dlSTRpY295ME9TUFdvVlo0cTl2IiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789064567
+3VC2vbuu8l0fdMxzmA30MW5FyaEBq8WSYRhamv6n	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJNRVJNVTdqdlI3WE91NDFleXVQeGNzblRqa2FKa3IzMkxFNHc2T2ZWIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789061666
+l6YDi9NUa0wjksGcO1KoHE718GcnbbKDKbFYbEJg	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJuN29iMFRDVFpzdTFPZmVjWmVZUUpQUU1iWHZ1Z0t3TlFUeHdQUm0yIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789064599
+RP6E4EoAszYwrMfx4s6Kqy86vNVCyLzGOLQ4foyF	\N	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJaeWp4YzNsemRjYjJjTlFEQ3pPRWVqYzdKdTlxTHNkQ09ONmd6VGhkIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789061878
+8parvY3FWNn25AFiGjeIeRu8cb2NiCT4OOvEixoa	\N	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJ2UVhoUnZPNUZpUkRJaEVMMHFkcXY5SjdPMVhUVmEza0JVeXR5SUt4IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789061884
+qvxfzOvjwXoqw1YuUmHjadOYn1TPkfq4Hk7xdWY3	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI5ZkozYWRwZXVSRU5jSlVxS2J1V291bGNUZmc5akMwbndNUVNQQjBLIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789062391
+3zPcrf3MXwsfMwJK9ApZq8ToKN78sFx8V8KYkWn6	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJONkhVeVJYUVY1RXdNS3I4R1BZNmJiVlY1cUROclJOUXVmYkE1Q0gwIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789059739
+NUkjp6GvZMFw8OvmKw5KuPV2CE0aJnPzgsNLQr8f	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36	eyJfdG9rZW4iOiJGZ25LMWk1ZlJwMTh1YWdNQ3FmUURXVmMzVHhQTVFqQUZ6RG80SVBrIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789059967
+S1PSiuEHa3LGpkwq8INAojHhUhOWQ2fSgXOx3HhY	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36	eyJfdG9rZW4iOiI5cWxsUEI1TEN1WUZjR3dGcHBpeWsxRUdaa25scDN6d1FJRDU5eHJYIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789065093
+kNcUb1aC6JqUKCjGOy1vg5BSOiss5s6RNQQGHn43	33	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJvN3lGTllidlBkQ3lUaktMdGtUQm5VTjJFZUxLSGpPdE1Jd050allQIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvMTI3LjAuMC4xOjgwMDBcL2VuY29kZXJcL3N0dWRlbnRzXC9zYmZwIiwicm91dGUiOiJlbmNvZGVyLnN0dWRlbnRzLnNiZnAifSwibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiOjMzLCJhY3RpdmVfc2Nob29sX3llYXJfaWQiOjV9	1789057683
+fBIzpucaRxcChrMAPeBptiCR0CT92ciQywcIdrQ8	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJIaFE0aFZDcWVMWUVqcVVDMnlEYnJGS3ZsaXNvUGtXOVJ5b2g3ZzlTIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789063117
+fyXkhlvQYekEdEeJGvB9Ruk7h1SDr62tP2JMRaOb	27	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJRYkFQZjl0MllNT3daUHc1RGZQUThST1BDSFh3dGFSeTU2Tmw4Ym5mIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbG9jYWxob3N0OjgwMDBcL2FkbWluXC9kYXNoYm9hcmQiLCJyb3V0ZSI6ImFkbWluLmRhc2hib2FyZCJ9LCJsb2dpbl93ZWJfNTliYTM2YWRkYzJiMmY5NDAxNTgwZjAxNGM3ZjU4ZWE0ZTMwOTg5ZCI6MjcsImFjdGl2ZV9zY2hvb2xfeWVhcl9pZCI6NX0=	1789065349
+YyqSRiZeDfriTrXQuDFVTm2WKxEdM8ojtuDzZjsw	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0	eyJfdG9rZW4iOiI0RFhESWhaa0txOElRcjRVMkhqRmtsUFdUb25mRzlGaGNzbXRZYWdwIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaFwvbG9naW4iLCJyb3V0ZSI6ImxvZ2luIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1789063159
+V8yVGHWhBM90rF4LvuIubpyN6bpI4jZjeI01L2RW	\N	127.0.0.1	Mozilla/5.0 (compatible; Dataprovider.com)	eyJfdG9rZW4iOiJxSTJWZ1dDNmpaTjJLMlJGaGhFdGRqZWRRck5HbmNUQlhLMVFRZmhYIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058685
+D6x2YwFg5eNAdb65gqOGk9z5bi7Nnn6cZfU3gmRf	\N	127.0.0.1	Mozilla/5.0 (compatible; Dataprovider.com)	eyJfdG9rZW4iOiJ2N0w4eThOTGtZZUlFTHNaaVJmbm05R3FNSU1vTDBQOUdDZ3NvMm4wIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058688
+U46G8bZWPCgEXKEmzHX5YIDkLr95gxzlYvan85M6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJwaWFWbHNlZnk1MkpwRWs5aHZUVzVqUU91TzhUVmJBanlIWGJjaHhBIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789060216
+iK10Mol7bJQHx1fcnhslocNmZiwKFWaGYIvd8Ih9	\N	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/131.0.6778.85 Safari/537.36	eyJfdG9rZW4iOiJwdEo5d0ZycTVLUFVnUjF0eFlLWlJPWm5BQ3RuYkZRZ0NDYmZqbnc5IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789060285
+f6mdT3Ua27dGEuUxZAsIdlS7GxV72aexcmj8FgW3	\N	127.0.0.1	Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36	eyJfdG9rZW4iOiJYZ1dkd3UxdTBTbkhEa2xRUllrdEQyZWVETXFUeDE1c0drczZtQ3ZZIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789062114
+XX9SSvMQL7yihHG9vgGhzly7lE40IdPb7T2FWtWQ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJLYllPYVpsb3JScm9mcm5CV3RMbndQd3E5cTFWUVBUUW9keWoxbWxSIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789065291
 \.
 
 
@@ -4896,6 +5258,9 @@ fzm7WtUrJg8vbpHyzeX367SS33Pkl8D53BiBlMj4	26	127.0.0.1	Mozilla/5.0 (Windows NT 10
 --
 
 COPY public.student_attendance_records (id, sbfp_participant_id, recorded_by_user_id, attendance_date, status, created_at, updated_at) FROM stdin;
+47	43	27	2026-09-10	present	2026-09-10 18:30:58	2026-09-10 18:30:58
+48	41	26	2026-09-10	present	2026-09-10 19:55:31	2026-09-10 22:17:03
+49	55	27	2026-09-11	present	2026-09-11 01:32:09	2026-09-11 01:32:09
 \.
 
 
@@ -4911,17 +5276,53 @@ COPY public.student_feeding_records (id, sbfp_participant_id, recorded_by_user_i
 -- Data for Name: students; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.students (id, lrn, first_name, last_name, name_extension, middle_name, sex, birth_date, guardian_name, guardian_email, address, created_at, updated_at) FROM stdin;
-1	1	nickiel	angeles	\N	\N	Male	2020-06-09	niks	nicks@gmail.com	Angeles	2026-09-09 01:54:43	2026-09-09 01:54:43
-2	2	jessie	aquino	\N	\N	Male	2020-06-17	jess	jess@gmail.com	angeles	2026-09-09 01:58:21	2026-09-09 01:58:21
-3	3	princes	bautista	\N	\N	Male	2020-02-04	cess	cess@gmail.com	angeles	2026-09-09 02:06:59	2026-09-09 02:06:59
-4	4	ryan	belardo	\N	\N	Male	2020-01-21	ry	ry@gmail.com	angeles	2026-09-09 02:08:45	2026-09-09 02:08:45
-5	5	richard	bengco	\N	\N	Male	2020-01-29	cholo@gmail.com	cho@gmail.com	angeles	2026-09-09 02:09:47	2026-09-09 02:09:47
-6	6	terrele	cabillon	\N	\N	Male	2020-01-31	ter@gmail.com	ter@gmail.com	angeles	2026-09-09 02:10:58	2026-09-09 02:10:58
-7	7	andrew	castillo	\N	\N	Male	2020-01-30	drew@gmail.com	drew@gmail.com	angeles	2026-09-09 02:12:29	2026-09-09 02:12:29
-8	8	alvin	castro	\N	\N	Male	2020-01-22	vin@gmail.com	vin@gmail.com	angeles	2026-09-09 02:13:16	2026-09-09 02:13:16
-9	9	charles	david	\N	\N	Male	2020-01-23	charles@gmail.com	charles@gmail.com	angeles	2026-09-09 02:14:22	2026-09-09 02:14:22
-10	10	john	david	\N	\N	Male	2020-01-24	john@gmail.com	john@gmail.com	angeles	2026-09-09 02:14:58	2026-09-09 02:14:58
+COPY public.students (id, lrn, first_name, last_name, name_extension, middle_name, sex, birth_date, guardian_name, guardian_email, address, created_at, updated_at, guardian_contact) FROM stdin;
+39	101234567808	Angela	Ramos	\N	\N	Male	2026-09-10	Ramos	tony.ramos@gmail.com	505 Sta. Ines, Magalang, Pampanga	2026-09-10 14:14:22	2026-09-10 14:14:22	09561234568
+40	900100000010	Chloe	Aquino	\N	\N	Female	2026-09-30	Michelle Aquino	michelle.aquino@example.com	28 Luna St., Brgy. Balibago, Angeles City	2026-09-10 14:14:26	2026-09-10 14:14:26	09171234510
+14	136542100019	Christian Paul	Aquino	Jr.	\N	Male	2020-01-01	Maria Aquino	m.aquino@example.com	Blk 3 Lot 4, Dau, Mabalacat City, Pampanga	2026-09-10 14:02:53	2026-09-10 14:02:53	09171234561
+16	106214150001	Mateo	Reyes	\N	Pineda	Male	2016-04-12	Maria P. Reyes	m.reyes_updates@gmail.com	Blk 4 Lot 12, Dau, Mabalacat City, Pampanga	2026-09-10 14:04:03	2026-09-10 14:04:03	09171234567
+17	900100000003	Carlo	Reyes	\N	\N	Male	2026-09-12	Ramon Reyes	ramon.reyes@example.com	8 Bonifacio Ave., Brgy. Cutcut, Angeles City	2026-09-10 14:04:15	2026-09-10 14:04:15	09171234503
+18	101234567802	Clara	Santos	\N	\N	Male	2026-09-24	Roberto	roberto.santos@gmail.com	456 Sto. Rosario, Magalang, Pampanga	2026-09-10 14:05:38	2026-09-10 14:05:38	09181234562
+20	136542100024	Samantha Nicole	Dizon	\N	\N	Female	2020-02-01	Roberto Dizon	roberto.dizon@example.com	125 MacArthur Highway, Dau, Mabalacat City, Pampanga	2026-09-10 14:06:43	2026-09-10 14:06:43	09182345672
+21	101234567803	Anthony	Reyes	\N	\N	Male	2026-09-10	Elena	elena.reyes@yahoo.com	789 Sta. Cruz, Magalang, Pampanga	2026-09-10 14:07:10	2026-09-10 14:07:10	09201234563
+22	106214150002	Chloe	Santos	\N	Garcia	Female	2019-09-25	Roberto G. Santos	guardiannichloe@gmail.com	45 Sampaguita St., Marisol Village, Angeles City	2026-09-10 14:07:08	2026-09-10 14:07:08	09189876543
+23	900100000005	Ethan	Mendoza	\N	\N	Male	2026-09-21	Mark Mendoza	mark.mendoza@example.com	17 Santos St., Brgy. Pulung Cacutud, Angeles City	2026-09-10 14:08:04	2026-09-10 14:08:04	09171234505
+24	136542100031	Lucas Miguel	Ramos	\N	\N	Male	2020-03-01	Elena Ramos	\N	Purok 2, Mabiga, Mabalacat City, Pampanga	2026-09-10 14:08:59	2026-09-10 14:08:59	09193456783
+25	101234567804	Princess	bautista	Aquino	\N	Male	2026-09-10	Aquino	luz.aquino@gmail.com	101 San Nicolas, Magalang, Pampanga	2026-09-10 14:09:15	2026-09-10 14:09:15	09221234564
+26	900100000006	Andrea	Flores	\N	\N	Female	2026-09-22	Rosa Flores	rosa.flores@example.com	42 Del Pilar St., Brgy. Balibago, Angeles City	2026-09-10 14:09:17	2026-09-10 14:09:17	09171234506
+27	106214150003	Juan	Mendoza	Jr.	Bautista	Male	2015-11-08	Juan B. Mendoza Sr.	jmendoza.senior@yahoo.com	112 MacArthur Highway, Dau, Mabalacat City, Pampanga	2026-09-10 14:09:40	2026-09-10 14:09:40	09195551234
+28	101234567805	Princess	bautista	Aquino	\N	Male	2026-09-10	Aquino	luz.aquino@gmail.com	101 San Nicolas, Magalang, Pampanga	2026-09-10 14:09:56	2026-09-10 14:09:56	09221234564
+29	900100000007	Miguel	Navarro	\N	\N	Male	2026-09-23	Antonio Navarro	antonio.navarro@example.com	19 Bonifacio St., Brgy. Angeles, Angeles City	2026-09-10 14:10:11	2026-09-10 14:10:11	09171234507
+30	136542100045	Beatrice	Santos	\N	\N	Female	2020-04-01	Marco Santos	marco.santos@example.com	45 Sampaguita St., Camachiles, Mabalacat City, Pampanga	2026-09-10 14:10:27	2026-09-10 14:10:27	09204567894
+32	136542100052	Gabriel James	Garcia	\N	\N	Male	2020-05-01	Ana Garcia	\N	Phase 1, Dapdap, Mabalacat City, Pampanga	2026-09-10 14:11:53	2026-09-10 14:11:53	09215678905
+33	106214150004	Sophia	Cruz	\N	\N	Female	2017-02-14	Elena Cruz	elena.cruz_88@gmail.com	Blk 2 Lot 8, Camella Homes, Angeles City	2026-09-10 14:12:11	2026-09-10 14:12:11	09203337777
+34	900100000008	Lara	Castillo	\N	\N	Female	2026-09-24	Grace Castillo	grace.castillo@example.com	7 Mabini Ave., Brgy. Malabanias, Angeles City	2026-09-10 14:12:22	2026-09-10 14:12:22	09171234508
+35	101234567807	Joshua	Villanueva	\N	\N	Male	2026-09-10	Grace	grace.v@gmail.com	404 San Francisco, Magalang, Pampangac	2026-09-10 14:13:10	2026-09-10 14:13:10	09451234567
+36	900100000009	Daniel	Bautista	\N	\N	Male	2026-09-25	Pedro Bautista	pedro.bautista@example.com	55 Rizal St., Brgy. Anunas, Angeles City	2026-09-10 14:13:21	2026-09-10 14:13:21	09171234509
+37	136542100068	Sofia	Mendoza	\N	\N	Female	2020-06-01	Carlos Mendoza	c.mendoza@example.com	88 Rizal St., Poblacion, Mabalacat City, Pampanga	2026-09-10 14:13:55	2026-09-10 14:13:55	09226789016
+38	106214150005	Gabriel	Tolentino	\N	Flores	Male	2019-07-30	Anna F. Tolentino	nanaynigabriel@gmail.com	88 Lakandula St., Dau, Mabalacat City, Pampanga	2026-09-10 14:14:11	2026-09-10 14:14:11	09154448899
+42	101234567809	Christian	Garcia	\N	\N	Male	2026-09-10	Sonia	sonia.garcia@gmail.com	: 606 San Ildefonso, Magalang, Pampanga	2026-09-10 14:15:48	2026-09-10 14:15:48	09671234569
+15	101234567891	Cruz	Juan	\N	\N	Male	2026-09-10	juan	juan@gmail.com	707 Bucanan, Magalang, Pampanga	2026-09-10 14:03:11	2026-09-10 14:16:31	09981234570
+44	136542100089	Mia Sophia	Torres	\N	\N	Female	2020-08-01	Jorge Torres	jorge.torres@example.com	Blk 8 Lot 2, Duquit, Mabalacat City, Pampanga	2026-09-10 14:18:45	2026-09-10 14:18:45	09248901238
+45	106214150007	Luis	Ocampo	III	Rivera	Male	2026-09-10	Luis R. Ocampo Jr.	locampo.jr@gmail.com	Blk 7 Lot 22, Fiesta Communities, Mabalacat City, Pampanga	2026-09-10 14:19:17	2026-09-10 14:19:17	09981112222
+47	106214150008	Mia	David	\N	Dizon	Female	2026-09-10	Teresa D. David	nanaynimia@gmail.com	56 Magsaysay St., Dau, Mabalacat City, Pampanga	2026-09-10 14:21:22	2026-09-10 14:21:22	09456669999
+48	136542100101	Zoey Hannah	Bautista	\N	\N	Female	2020-10-01	Ramon Bautista	ramon.bautista@example.com	34 Magsaysay Ave, Dau, Mabalacat City, Pampanga	2026-09-10 14:21:36	2026-09-10 14:21:36	09260123450
+49	106214150009	Ethan	Aguilar	\N	Mercado	Male	2026-09-10	Richard M. Aguilar	raguilar1985@yahoo.com	201 Plaridel St., Angeles City	2026-09-10 14:23:44	2026-09-10 14:23:44	09327771111
+12	11	Laxamana	Alyamce	jr	\N	Male	2022-02-02	Alyance	santos.richarddavid@gmail.com	angeles	2026-09-10 14:01:22	2026-09-10 14:25:34	00000000000001
+50	106214150010	Zoe	Navarro	\N	Torres	Female	2026-09-10	Patricia T. Navarro	patty.navarro@gmail.com	Blk 1 Lot 5, Xevera, Mabalacat City, Pampanga	2026-09-10 14:25:56	2026-09-10 14:25:56	09278885555
+11	900100000001	Juan	Santos	\N	\N	Male	2026-09-10	Roberto Santos	pilipod789@bowlfuel.com	12 Mabini St., Brgy. San Jose, Angeles City	2026-09-10 14:01:02	2026-09-10 14:26:41	09171234501
+43	106214150006	Isabella	Villanueva	\N	Castro	Female	2014-02-24	Carlos C. Villanueva	zora20.pro@gmail.com	14 Narra Ave., Marisol Village, Angeles City	2026-09-10 14:17:00	2026-09-10 14:26:47	09172223344
+31	101234567806	Bianca	Mendoza	\N	\N	Male	2026-09-10	Mendoza	santos.richarddavid@gmail.com	303 San Pedro I, Magalang, Pampanga	2026-09-10 14:11:40	2026-09-10 14:27:11	09351234566
+46	136542100095	Ethan Noah	Castro	\N	\N	Male	2020-09-01	Carmen Castro	moltenterabyte@gmail.com	Purok 5, Sapang Balen, Mabalacat City, Pampanga	2026-09-10 14:20:12	2026-09-10 14:31:47	09259012349
+13	900100000002	Maria	Dela Cruz	\N	\N	Female	2026-09-11	Elena Dela Cruz	nicdaojanrey07@gmail.com	24 Rizal St., Brgy. Balibago, Angeles City	2026-09-10 14:02:40	2026-09-10 16:04:49	09171234502
+19	900100000004	Sofia	Garcia	\N	\N	Female	2026-09-20	Teresa Garcia	nicdaojanrey07@gmail.com	31 Luna St., Brgy. Pandan, Angeles City	2026-09-10 14:05:55	2026-09-10 16:26:08	09171234504
+51	136542100084	Rafael	Gomez	\N	\N	Male	2020-11-01	Marites Gomez	m.gomez@example.com	Blk 2 Lot 10, Dau, Mabalacat City, Pampanga	2026-09-10 20:53:01	2026-09-10 20:53:01	09271234561
+52	136542100092	Bianca Louise	Morales	\N	\N	Female	2020-12-01	Ernesto Morales	ernesto.morales@example.com	56 Lakandula St., Dau, Mabalacat City, Pampanga	2026-09-10 20:54:52	2026-09-10 20:54:52	09282345672
+53	136542100115	Nathan	Rivera	\N	\N	Male	2021-01-01	Tessie Rivera	t.rivera@example.com	Phase 3, Mabiga, Mabalacat City, Pampanga	2026-09-10 21:21:00	2026-09-10 21:21:00	09293456783
+54	136542100128	Andrea	Pascual	\N	\N	Female	2021-02-01	Danilo Pascual	danilo.pascual@example.com	78 MacAthur Highway, Dau, Mabalacat City, Pampanga	2026-09-10 21:22:40	2026-09-10 21:22:40	09304567894
+56	106088100093	Steve	Jobs	\N	\N	Male	2020-02-03	jobs alex	\N	usa	2026-09-11 01:10:03	2026-09-11 01:10:03	09913201459
+41	136542100073	Liam Ethan	Villanueva	\N	\N	Male	2020-07-01	Rosa Villanueva	\N	2 Bonifacio St., Dau, Mabalacat City, Pampanga	2026-09-10 14:15:27	2026-09-11 01:26:17	09237890127
+55	106088100092	Alu	Card	\N	\N	Male	2020-01-02	Dracula	moltenterabyte@gmail.com	Castlevania	2026-09-11 00:52:29	2026-09-11 01:26:44	09913201457
 \.
 
 
@@ -4930,9 +5331,12 @@ COPY public.students (id, lrn, first_name, last_name, name_extension, middle_nam
 --
 
 COPY public.users (id, name, email, email_verified_at, password, sex, role, birthdate, "position", advisory_grade_level, advisory_section, deped_id, is_active, deleted_at, remember_token, created_at, updated_at) FROM stdin;
-26	Encoder User	encoder@nutrisight.test	\N	$2y$12$hP.ja.qwJH7xal562SR8l.4woetB63FtUK4NW78N4rnsEupugddsu	Female	encoder	1995-01-01	Teacher I	1	A	100001	t	\N	\N	2026-09-09 01:39:43	2026-09-09 01:39:43
-27	Admin User	admin@nutrisight.test	\N	$2y$12$UCGWpQiULn077f93acUF7eepDqupBI01afeGpN6vQyDfSvpGIKuy2	Male	admin	1990-01-01	Master Teacher I	\N	\N	100002	t	\N	\N	2026-09-09 01:39:43	2026-09-09 01:39:43
-28	Super Admin User	superadmin@nutrisight.test	\N	$2y$12$PWQn/Wzx5upa9E.QJH4Za.bNdTWw6UZs0fuxhWDK7TaCpRLAl4IAe	Male	super_admin	1985-01-01	Master Teacher II	1	C	100003	t	\N	\N	2026-09-09 01:39:44	2026-09-09 01:39:44
+31	Encoder User 1	encoder1@nutrisight.test	\N	$2y$12$yzY6QCYIQhK48/gwHiv/qOewAsL.OXnfnCRG4YEkOQYPctn/d0jvi	Male	encoder	2000-01-01	Teacher I	2	A	100004	t	\N	\N	2026-09-10 13:50:02	2026-09-10 13:50:02
+32	Encoder User 2	encoder2@nutrisight.test	\N	$2y$12$0DsbesTQS.QMYmylmQVtreTHoY82OTiiDQeT5CB7fXni9lVB5OPyu	Male	encoder	2000-02-01	Teacher II	3	A	100005	t	\N	\N	2026-09-10 13:51:08	2026-09-10 13:51:08
+27	Admin User	admin@nutrisight.test	\N	$2y$12$19uTY9FJg8y8fVUpmGwWted5raqTaSUOykDGCH0UDQvrAnBGA/aTa	Male	admin	1990-01-01	Master Teacher I			100002	t	\N	\N	2026-09-09 22:17:27	2026-09-09 22:17:27
+28	Super Admin User	superadmin@nutrisight.test	\N	$2y$12$.6Wie9iA5YVa.UOsMtBXTumQ.qLtJZo7K0wrx7PeU86pBf7JXmLny	Male	super_admin	1985-01-01	Master Teacher II			100003	t	\N	\N	2026-09-09 22:17:27	2026-09-09 22:17:27
+33	Encoder User 3	encoder3@nutrisight.test	\N	$2y$12$bN908bEtRhoUEH.ss9pQ.eNG.dUvWOaJqxb3RzCBTgOldFwasrTte	Male	encoder	2000-03-01	Teacher III	4	A	100006	t	\N	YM54LCozIr6xZhYlexELpBCrEG55SxxAB0mFR2t0YTVospEOXQSbdqRH6Mo3	2026-09-10 13:52:15	2026-09-10 13:52:15
+26	Encoder User	encoder@nutrisight.test	\N	$2y$12$hVafs1iVkdk6Pjv.67yl..fM123/jteMu3F4.6tfp2sYvAvL9U0Nm	Female	encoder	1995-01-01	Teacher I	1	A	100001	t	\N	kKrCrTmDaLXlgp8t7kMeBnYXUSQjo7jWkNil3D8JOnoO8QFaUMeCXxuteMJj	2026-09-09 22:17:26	2026-09-10 17:32:27
 \.
 
 
@@ -5185,7 +5589,7 @@ SELECT pg_catalog.setval('auth.refresh_tokens_id_seq', 1, false);
 -- Name: attendance_report_months_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.attendance_report_months_id_seq', 1, false);
+SELECT pg_catalog.setval('public.attendance_report_months_id_seq', 1, true);
 
 
 --
@@ -5199,14 +5603,14 @@ SELECT pg_catalog.setval('public.attendance_report_sections_id_seq', 1, false);
 -- Name: audit_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.audit_logs_id_seq', 1, false);
+SELECT pg_catalog.setval('public.audit_logs_id_seq', 208, true);
 
 
 --
 -- Name: enrollments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.enrollments_id_seq', 10, true);
+SELECT pg_catalog.setval('public.enrollments_id_seq', 56, true);
 
 
 --
@@ -5220,21 +5624,28 @@ SELECT pg_catalog.setval('public.failed_jobs_id_seq', 1, false);
 -- Name: jobs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.jobs_id_seq', 1, false);
+SELECT pg_catalog.setval('public.jobs_id_seq', 10, true);
+
+
+--
+-- Name: meal_plans_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.meal_plans_id_seq', 10, true);
 
 
 --
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 21, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 24, true);
 
 
 --
 -- Name: nutrition_measurements_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.nutrition_measurements_id_seq', 1, false);
+SELECT pg_catalog.setval('public.nutrition_measurements_id_seq', 74, true);
 
 
 --
@@ -5255,21 +5666,21 @@ SELECT pg_catalog.setval('public.report_periods_id_seq', 1, false);
 -- Name: sbfp_participants_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.sbfp_participants_id_seq', 1, false);
+SELECT pg_catalog.setval('public.sbfp_participants_id_seq', 56, true);
 
 
 --
 -- Name: school_years_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.school_years_id_seq', 3, true);
+SELECT pg_catalog.setval('public.school_years_id_seq', 5, true);
 
 
 --
 -- Name: student_attendance_records_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.student_attendance_records_id_seq', 1, false);
+SELECT pg_catalog.setval('public.student_attendance_records_id_seq', 49, true);
 
 
 --
@@ -5283,14 +5694,14 @@ SELECT pg_catalog.setval('public.student_feeding_records_id_seq', 1, false);
 -- Name: students_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.students_id_seq', 10, true);
+SELECT pg_catalog.setval('public.students_id_seq', 56, true);
 
 
 --
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 28, true);
+SELECT pg_catalog.setval('public.users_id_seq', 33, true);
 
 
 --
@@ -5658,6 +6069,14 @@ ALTER TABLE ONLY public.job_batches
 
 ALTER TABLE ONLY public.jobs
     ADD CONSTRAINT jobs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: meal_plans meal_plans_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.meal_plans
+    ADD CONSTRAINT meal_plans_pkey PRIMARY KEY (id);
 
 
 --
@@ -6372,6 +6791,13 @@ CREATE INDEX jobs_queue_index ON public.jobs USING btree (queue);
 
 
 --
+-- Name: meal_plans_meal_date_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX meal_plans_meal_date_index ON public.meal_plans USING btree (meal_date);
+
+
+--
 -- Name: sessions_last_activity_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -6707,6 +7133,14 @@ ALTER TABLE ONLY public.enrollments
 
 ALTER TABLE ONLY public.enrollments
     ADD CONSTRAINT enrollments_student_id_foreign FOREIGN KEY (student_id) REFERENCES public.students(id) ON DELETE CASCADE;
+
+
+--
+-- Name: meal_plans meal_plans_recorded_by_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.meal_plans
+    ADD CONSTRAINT meal_plans_recorded_by_user_id_foreign FOREIGN KEY (recorded_by_user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
@@ -8107,6 +8541,24 @@ GRANT ALL ON SEQUENCE public.jobs_id_seq TO service_role;
 
 
 --
+-- Name: TABLE meal_plans; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.meal_plans TO anon;
+GRANT ALL ON TABLE public.meal_plans TO authenticated;
+GRANT ALL ON TABLE public.meal_plans TO service_role;
+
+
+--
+-- Name: SEQUENCE meal_plans_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.meal_plans_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.meal_plans_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.meal_plans_id_seq TO service_role;
+
+
+--
 -- Name: TABLE migrations; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -8709,5 +9161,5 @@ ALTER EVENT TRIGGER pgrst_drop_watch OWNER TO supabase_admin;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict ohEspbpcy2dreL6CbP5rHD9QyTA45iNGlvq8hsmy8pbTlgMEprSGTdBxe6p1i60
+\unrestrict rlSBJUvrj7unBZNqtdIiTwnXEowFdZuUpLpIAEGbtcnNQNqtqFclJgZLqHUaeK4
 

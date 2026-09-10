@@ -18,27 +18,32 @@ class DashboardController extends Controller
 
     public function admin(Request $request)
     {
-        $selectedTerm = $request->get('term', 'all');
+        $selectedPeriod = $request->get('period', 'all');
+        $periods = ['Baseline', 'Midline', 'Endline'];
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         // Get all SBFP participants for active school year
-        $students = Student::with(['enrollments' => function($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements' => function($sub) {
+        $students = Student::with(['enrollments' => function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements' => function ($sub) {
                 $sub->orderBy('created_at', 'desc');
             }]);
-        }])->whereHas('enrollments', function($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)->whereHas('sbfpParticipant', function($sub) {
-                $sub->where('parent_consent', 'approved');
+        }])->whereHas('enrollments', function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->whereHas('sbfpParticipant', function ($sub) {
+                $sub->where('parent_consent', 'approved')
+                    ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                        $measurementQuery->where('measurement_period', 'baseline')
+                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                    });
             });
         })->get();
 
-        $sbfpStudents = $students->map(function($student) use ($activeSyId) {
+        $sbfpStudents = $students->map(function ($student) use ($activeSyId) {
             $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
             $participant = $enrollment?->sbfpParticipant;
             $measurements = $participant ? $participant->nutritionMeasurements : collect();
             $student->grade_level = $enrollment?->grade_level;
             $student->section = $enrollment?->section;
-            $student->termProgress = $this->groupMeasurementsByTerm($measurements);
+            $student->dashboardPeriods = $this->groupMeasurementsByPeriod($measurements);
             $student->assessments = $measurements;
             return $student;
         });
@@ -52,70 +57,44 @@ class DashboardController extends Controller
         ];
 
         foreach ($sbfpStudents as $student) {
-            if ($selectedTerm === 'all') {
-                $latest = $student->assessments->first();
-                if ($latest && isset($bmiDistribution[$latest->bmi_category])) {
-                    $bmiDistribution[$latest->bmi_category]++;
-                } elseif ($latest) {
-                    $bmiDistribution[$latest->bmi_category] = 1;
-                }
-            } else {
-                $termMeasurements = $student->termProgress[$selectedTerm] ?? [];
-                if (!empty($termMeasurements)) {
-                    $measurement = $termMeasurements[0];
-                    if (isset($bmiDistribution[$measurement->bmi_category])) {
-                        $bmiDistribution[$measurement->bmi_category]++;
-                    } else {
-                        $bmiDistribution[$measurement->bmi_category] = 1;
-                    }
-                }
+            $measurement = $this->measurementForPeriod($student->dashboardPeriods, $selectedPeriod);
+            if ($measurement && isset($bmiDistribution[$measurement->bmi_category])) {
+                $bmiDistribution[$measurement->bmi_category]++;
             }
         }
 
-        $termAverages = ['Term 1' => 0, 'Term 2' => 0, 'Term 3' => 0];
-        $termCounts = ['Term 1' => 0, 'Term 2' => 0, 'Term 3' => 0];
+        $periodAverages = array_fill_keys($periods, 0);
+        $periodCounts = array_fill_keys($periods, 0);
 
         foreach ($sbfpStudents as $student) {
-            foreach (['Term 1', 'Term 2', 'Term 3'] as $term) {
-                if (!empty($student->termProgress[$term])) {
-                    $sumTermBmi = collect($student->termProgress[$term])->sum('bmi');
-                    $countTermBmi = count($student->termProgress[$term]);
-                    $termAverages[$term] += $sumTermBmi;
-                    $termCounts[$term] += $countTermBmi;
+            foreach ($periods as $period) {
+                $measurement = $this->measurementForPeriod($student->dashboardPeriods, $period);
+                if ($measurement) {
+                    $periodAverages[$period] += $measurement->bmi;
+                    $periodCounts[$period]++;
                 }
             }
         }
 
-        $termBmiChartLabels = ['Term 1', 'Term 2', 'Term 3'];
-        $termBmiChartData = [];
-        foreach (['Term 1', 'Term 2', 'Term 3'] as $term) {
-            $termBmiChartData[] = $termCounts[$term] > 0 ? round($termAverages[$term] / $termCounts[$term], 2) : 0;
+        $periodBmiChartLabels = $periods;
+        $periodBmiChartData = [];
+        foreach ($periods as $period) {
+            $periodBmiChartData[] = $periodCounts[$period] > 0
+                ? round($periodAverages[$period] / $periodCounts[$period], 2)
+                : 0;
         }
 
-        $malnourishedTerm1Count = 0;
         $recoveredCount = 0;
 
         foreach ($sbfpStudents as $student) {
-            $t1Measurements = $student->termProgress['Term 1'] ?? [];
-            if (!empty($t1Measurements)) {
-                $t1Status = $t1Measurements[0]->bmi_category;
-                if (in_array($t1Status, ['Wasted', 'Severely Wasted'])) {
-                    $malnourishedTerm1Count++;
-                    $latestStatus = null;
-                    foreach (['Term 3', 'Term 2', 'Term 1'] as $t) {
-                        if (!empty($student->termProgress[$t])) {
-                            $latestStatus = $student->termProgress[$t][0]->bmi_category;
-                            break;
-                        }
-                    }
-                    if ($latestStatus === 'Normal') {
-                        $recoveredCount++;
-                    }
-                }
+            $measurement = $this->measurementForPeriod($student->dashboardPeriods, $selectedPeriod);
+            if ($measurement?->bmi_category === 'Normal') {
+                $recoveredCount++;
             }
         }
 
-        $recoveryRate = $malnourishedTerm1Count > 0 ? round(($recoveredCount / $malnourishedTerm1Count) * 100, 1) : 0;
+        $totalSbfpStudents = $sbfpStudents->count();
+        $recoveryRate = $totalSbfpStudents > 0 ? round(($recoveredCount / $totalSbfpStudents) * 100, 1) : 0;
 
         // Aggregate attendance in one query instead of loading every log per grade.
         $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
@@ -143,22 +122,22 @@ class DashboardController extends Controller
                 : 0;
         })->all();
 
-        return view('dashboards.admin', compact('sbfpStudents', 'bmiDistribution', 'termBmiChartLabels', 'termBmiChartData', 'malnourishedTerm1Count', 'recoveredCount', 'recoveryRate', 'selectedTerm', 'sectionAttendanceLabels', 'sectionAttendanceRates'));
+        return view('dashboards.admin', compact('sbfpStudents', 'totalSbfpStudents', 'bmiDistribution', 'periodBmiChartLabels', 'periodBmiChartData', 'recoveredCount', 'recoveryRate', 'selectedPeriod', 'sectionAttendanceLabels', 'sectionAttendanceRates'));
     }
 
     public function encoder()
     {
         $user = auth()->user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        
-        $studentQuery = Student::whereHas('enrollments', function($q) use ($activeSyId, $user) {
+
+        $studentQuery = Student::whereHas('enrollments', function ($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
             if ($user && $user->isEncoder()) {
                 if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                     $q->whereRaw('1 = 0');
                 } else {
                     $q->where('grade_level', $user->advisory_grade_level)
-                      ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                 }
             }
         });
@@ -169,12 +148,12 @@ class DashboardController extends Controller
                 ->whereHas('sbfpParticipant', function ($participantQuery) {
                     $participantQuery->where('parent_consent', 'approved')
                         ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                        $measurementQuery->where('measurement_period', 'baseline')
-                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                    });
+                            $measurementQuery->where('measurement_period', 'baseline')
+                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                        });
                 });
         })->count();
-        
+
         $attendanceDates = [];
         for ($i = 6; $i >= 0; $i--) {
             $attendanceDates[] = Carbon::today()->subDays($i)->toDateString();
@@ -199,25 +178,44 @@ class DashboardController extends Controller
             ->pluck('total_count', 'student_attendance_records.attendance_date');
 
         $attendanceCounts = collect($attendanceDates)
-            ->map(fn ($date) => (int) ($attendanceCountsByDate[$date] ?? 0))
+            ->map(fn($date) => (int) ($attendanceCountsByDate[$date] ?? 0))
             ->all();
 
         return view('dashboards.encoder', compact('totalStudents', 'totalSbfp', 'attendanceDates', 'attendanceCounts'));
     }
 
-    private function groupMeasurementsByTerm($measurements)
+    private function groupMeasurementsByPeriod($measurements)
     {
-        $terms = ['Term 1' => [], 'Term 2' => [], 'Term 3' => []];
+        $periods = ['Baseline' => [], 'Midline' => [], 'Endline' => []];
         foreach ($measurements as $m) {
-            $month = $m->created_at->month;
-            if ($month == 1) {
-                $terms['Term 1'][] = $m;
-            } elseif ($month == 2) {
-                $terms['Term 2'][] = $m;
-            } else {
-                $terms['Term 3'][] = $m;
+            $period = match (strtolower($m->measurement_period ?? '')) {
+                'baseline' => 'Baseline',
+                'midline', 'mid' => 'Midline',
+                'endline', 'end' => 'Endline',
+                default => null,
+            };
+            if ($period) {
+                $periods[$period][] = $m;
             }
         }
-        return $terms;
+        return $periods;
+    }
+
+    private function measurementForPeriod(array $periodProgress, string $selectedPeriod)
+    {
+        $periodOrder = match ($selectedPeriod) {
+            'Baseline' => ['Baseline'],
+            'Midline' => ['Midline', 'Baseline'],
+            'Endline' => ['Endline', 'Midline', 'Baseline'],
+            default => ['Endline', 'Midline', 'Baseline'],
+        };
+
+        foreach ($periodOrder as $period) {
+            if (!empty($periodProgress[$period])) {
+                return $periodProgress[$period][0];
+            }
+        }
+
+        return null;
     }
 }
