@@ -2,7 +2,7 @@
 
 use Illuminate\Support\Str;
 
-$mysqlAttrSslCa = defined('Pdo\Mysql::ATTR_SSL_CA') ? Pdo\Mysql::ATTR_SSL_CA : null;
+$mysqlAttrSslCa = defined('PDO::MYSQL_ATTR_SSL_CA') ? PDO::MYSQL_ATTR_SSL_CA : null;
 
 return [
 
