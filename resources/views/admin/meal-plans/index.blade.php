@@ -14,11 +14,6 @@
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
             <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-                <div class="flex items-center gap-2">
-                    <a href="{{ route('admin.meal-plans.index', ['date' => $prevMonth]) }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-semibold text-gray-700"><i class="fas fa-chevron-left mr-1"></i> Prev</a>
-                    <a href="{{ route('admin.meal-plans.index', ['date' => now()->toDateString()]) }}" class="px-3 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded text-sm font-semibold">Today</a>
-                    <a href="{{ route('admin.meal-plans.index', ['date' => $nextMonth]) }}" class="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded text-sm font-semibold text-gray-700">Next <i class="fas fa-chevron-right ml-1"></i></a>
-                </div>
                 <form method="GET" action="{{ route('admin.meal-plans.index') }}" class="flex items-center gap-2">
                     <select name="month" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
                         @for($month = 1; $month <= 12; $month++)

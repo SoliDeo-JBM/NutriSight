@@ -74,7 +74,7 @@
                         </label>
                         <select name="sex" required 
                                 class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('sex') border-red-500 @enderror">
-                            <option value="">Select Sex</option>
+                            <option value="" disabled {{ old('sex') ? '' : 'selected' }}>Select Sex</option>
                             <option value="Male" {{ old('sex') == 'Male' ? 'selected' : '' }}>Male</option>
                             <option value="Female" {{ old('sex') == 'Female' ? 'selected' : '' }}>Female</option>
                         </select>
@@ -242,7 +242,7 @@
                     </label>
                     <select name="position" required 
                             class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('position') border-red-500 @enderror">
-                        <option value="">Select Position</option>
+                        <option value="" disabled {{ old('position') ? '' : 'selected' }}>Select Position</option>
                         @foreach($positions as $position)
                             <option value="{{ $position }}" {{ old('position') == $position ? 'selected' : '' }}>{{ $position }}</option>
                         @endforeach
@@ -261,9 +261,9 @@
                         </label>
                         <select name="advisory_grade_level" required 
                                 class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('advisory_grade_level') border-red-500 @enderror">
-                            <option value="">Select Grade Level</option>
+                            <option value="" disabled {{ old('advisory_grade_level') !== null ? '' : 'selected' }}>Select Grade Level</option>
                             @foreach($gradeLevels as $grade)
-                                <option value="{{ $grade }}" {{ old('advisory_grade_level') == $grade ? 'selected' : '' }}>{{ $grade }}</option>
+                                <option value="{{ $grade }}" {{ old('advisory_grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : $grade }}</option>
                             @endforeach
                         </select>
                         @error('advisory_grade_level')

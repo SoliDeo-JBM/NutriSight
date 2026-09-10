@@ -45,9 +45,9 @@
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Grade Level <span class="text-red-500">*</span></label>
                         <select name="grade_level" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
-                            <option value="">-- Select Grade Level --</option>
+                            <option value="" disabled selected>-- Select Grade Level --</option>
                             @foreach($gradeLevels as $grade)
-                                <option value="{{ $grade }}" {{ old('grade_level') == $grade ? 'selected' : '' }}>{{ $grade }}</option>
+                                <option value="{{ $grade }}" {{ old('grade_level') == $grade ? 'selected' : '' }}>{{ $grade === 0 ? 'Kinder' : $grade }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -132,7 +132,7 @@
                     <label class="block text-sm font-semibold text-gray-700 mb-1">Grade Level <span class="text-red-500">*</span></label>
                     <select name="grade_level" id="editGradeLevel" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500">
                         @foreach($gradeLevels as $grade)
-                            <option value="{{ $grade }}">{{ $grade }}</option>
+                            <option value="{{ $grade }}">{{ $grade === 0 ? 'Kinder' : $grade }}</option>
                         @endforeach
                     </select>
                 </div>

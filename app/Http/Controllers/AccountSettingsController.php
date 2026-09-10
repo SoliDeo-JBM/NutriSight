@@ -25,8 +25,6 @@ class AccountSettingsController extends Controller
             'sex' => ['nullable', 'in:Male,Female'],
             'birthdate' => ['nullable', 'date'],
             'position' => ['nullable', 'string', 'max:255'],
-            'advisory_grade_level' => ['nullable', 'string', 'max:255'],
-            'advisory_section' => ['nullable', 'string', 'max:255'],
         ]);
 
         $user->update($validated);

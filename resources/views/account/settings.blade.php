@@ -87,19 +87,16 @@
                     @if($user->role === 'encoder')
                     <!-- Advisory Grade Level -->
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Advisory Grade Level</label>
-                        <select name="advisory_grade_level" x-model="form.advisory_grade_level" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
-                            <option value="">Select Grade Level</option>
-                            @foreach(['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'] as $grade)
-                                <option value="{{ $grade }}">{{ $grade }}</option>
-                            @endforeach
-                        </select>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Advisory Grade Level (Read-only)</label>
+                        <input type="text" name="advisory_grade_level" x-model="form.advisory_grade_level" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
+                        <p class="text-xs text-gray-400 mt-1">Advisory grade level cannot be modified.</p>
                     </div>
 
                     <!-- Advisory Section -->
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Advisory Section</label>
-                        <input type="text" name="advisory_section" x-model="form.advisory_section" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Advisory Section (Read-only)</label>
+                        <input type="text" name="advisory_section" x-model="form.advisory_section" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
+                        <p class="text-xs text-gray-400 mt-1">Advisory section cannot be modified.</p>
                     </div>
                     @endif
                 </div>

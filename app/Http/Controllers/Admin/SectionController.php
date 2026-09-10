@@ -61,7 +61,7 @@ class SectionController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'grade_level' => 'required|integer',
+            'grade_level' => 'required|integer|between:0,6',
             'name' => 'required|string|max:255',
             'adviser_id' => 'nullable|exists:users,id',
         ]);
@@ -87,7 +87,7 @@ class SectionController extends Controller
     public function update(Request $request, $id)
     {
         $validated = $request->validate([
-            'grade_level' => 'required|integer',
+            'grade_level' => 'required|integer|between:0,6',
             'name' => 'required|string|max:255',
             'adviser_id' => 'nullable|exists:users,id',
         ]);
