@@ -44,7 +44,8 @@ class Student extends Model
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
-        return $enrollment?->sbfpParticipant?->parent_consent;
+        $consent = $enrollment?->sbfpParticipant?->parent_consent;
+        return $consent === 'pending' ? null : $consent;
     }
 
     public function getDisapprovalReasonAttribute()

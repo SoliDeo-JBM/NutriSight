@@ -23,7 +23,6 @@ class NutritionalController extends Controller
             'measurement_period' => 'required|in:baseline,midline,endline',
             'weight' => 'required|numeric',
             'height' => 'required|numeric',
-            'remarks' => 'nullable|string',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -43,7 +42,6 @@ class NutritionalController extends Controller
             'bmi' => $metrics['bmi'],
             'bmi_category' => $metrics['category'],
             'hfa' => 'Normal',
-            'remarks' => $validated['remarks'] ?? null,
         ]);
 
         return back()->with('success', 'Nutritional measurement added successfully.');

@@ -83,7 +83,6 @@
                             <th class="px-4 py-3 border">BMI</th>
                             <th class="px-4 py-3 border">BMI Category</th>
                             <th class="px-4 py-3 border">Height for Age</th>
-                            <th class="px-4 py-3 border">Remarks</th>
                             <th class="px-4 py-3 border">Guardian's Email</th>
                             <th class="px-4 py-3 border">Guardian's Phone Number</th>
                             <th class="px-4 py-3 border">Actions</th>
@@ -121,7 +120,6 @@
                                 @endif
                             </td>
                             <td class="px-4 py-3 border">{{ $baselineRecord->height_for_age ?? 'Normal' }}</td>
-                            <td class="px-4 py-3 border">{{ $baselineRecord->remarks ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">
@@ -130,7 +128,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
+                            <td colspan="13" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
                         </tr>
                         @endforelse
                     </tbody>

@@ -17,7 +17,6 @@ class NutritionMeasurement extends Model
         'bmi_category',
         'hfa',
         'measurement_period',
-        'remarks',
     ];
 
     public function sbfpParticipant()

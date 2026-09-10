@@ -164,8 +164,15 @@ class DashboardController extends Controller
         });
 
         $totalStudents = (clone $studentQuery)->count();
-        $totalSbfp = (clone $studentQuery)->whereHas('enrollments.sbfpParticipant', function($q) {
-            $q->where('parent_consent', 'approved');
+        $totalSbfp = (clone $studentQuery)->whereHas('enrollments', function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)
+                ->whereHas('sbfpParticipant', function ($participantQuery) {
+                    $participantQuery->where('parent_consent', 'approved')
+                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                        $measurementQuery->where('measurement_period', 'baseline')
+                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                    });
+                });
         })->count();
         
         $attendanceDates = [];

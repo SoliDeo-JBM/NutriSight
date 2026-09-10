@@ -1,7 +1,7 @@
 @extends('layouts.dashboard')
 
 @section('content')
-    <div x-data="sbfpManager()" x-cloak class="flex flex-col gap-6">
+    <div x-data="sbfpManager()" x-init="if (@js($hasPendingApproval ?? false)) showApprovalModal = true" x-cloak class="flex flex-col gap-6">
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -13,6 +13,9 @@
                     </button>
                     <button type="button" @click="openPeriodModal()" class="shrink-0 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 whitespace-nowrap inline-flex items-center gap-2">
                         <i class="fas fa-plus"></i> Add Period
+                    </button>
+                    <button type="button" @click="openApprovalModal()" class="shrink-0 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 whitespace-nowrap inline-flex items-center gap-2">
+                        <i class="fas fa-clipboard-check"></i> Parent's Approval
                     </button>
                     <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
                         <i class="fas fa-print"></i> Print Portrait ID QR Sheet
@@ -102,8 +105,6 @@
                         @forelse($students ?? [] as $index => $student)
                         @php
                             $enrollment = $student->enrollments->first();
-                            $latestRecord = $student->nutritionalRecords()->latest()->first();
-                            $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
                             $periodData = [
                                 'Baseline' => $student->periodProgress['Baseline'][0] ?? null,
                                 'Midline' => $student->periodProgress['Midline'][0] ?? null,
@@ -137,40 +138,23 @@
                             </td>
                             @endforeach
 
-                            <td class="px-4 py-3 border min-w-[220px]">
-                                <form action="{{ route('encoder.students.approval', $student->id) }}" method="POST" x-data="{ status: @js($student->parent_approval_status ?? ($isWasted ? 'approved' : '')), reason: @js($student->disapproval_reason) }">
-                                    @csrf
-                                    @method('PATCH')
-                                    <div class="space-y-2 text-xs">
-                                        <label class="block">
-                                            <input type="radio" name="parent_consent" value="approved" x-model="status" @change="reason = ''"> Approved
-                                        </label>
-                                        <label class="block">
-                                            <input type="radio" name="parent_consent" value="disapproved" x-model="status"> Disapproved
-                                        </label>
-
-                                        <div x-show="status === 'disapproved'" class="mt-2 pl-3 border-l-2 border-red-300 space-y-1">
-                                            <label class="block">
-                                                <input type="radio" name="disapproval_reason" value="unwilling" x-model="reason"> Unwilling to include child
-                                            </label>
-                                            <label class="block">
-                                                <input type="radio" name="disapproval_reason" value="medical_condition" x-model="reason"> Underlying medical condition
-                                            </label>
-
-                                            <div x-show="reason === 'medical_condition'" class="mt-1">
-                                                <input type="text" name="medical_condition_notes" value="{{ $student->medical_condition_notes }}" placeholder="Specify condition..." class="w-full text-xs border rounded p-1">
-                                            </div>
-                                        </div>
-
-                                        <button type="submit" class="mt-2 bg-slate-800 text-white px-3 py-1 rounded text-xs hover:bg-slate-700">Update</button>
-                                    </div>
-                                </form>
+                            <td class="px-4 py-3 border min-w-[220px] text-xs">
+                                @if($student->parent_approval_status === 'approved')
+                                    <span class="font-semibold text-green-700">Approved</span>
+                                @elseif($student->parent_approval_status === 'disapproved')
+                                    <span class="font-semibold text-red-700">Disapproved</span>
+                                    @if($student->disapproval_reason)
+                                        <span class="block text-gray-500">{{ $student->disapproval_reason }}</span>
+                                    @endif
+                                @else
+                                    <span class="font-semibold text-amber-700">Pending</span>
+                                @endif
                             </td>
 
                             <td class="px-4 py-3 border text-center whitespace-nowrap">
                                 @if($student->parent_approval_status === 'disapproved')
                                     <span class="text-red-500 text-xs font-semibold">Disapproved (No QR)</span>
-                                @elseif($student->is_permitted || $isWasted)
+                                @elseif($student->is_permitted)
                                     <div class="flex flex-col items-center justify-center">
                                         <div class="p-1 bg-white border inline-block shadow-sm rounded">
                                              {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
@@ -197,6 +181,56 @@
                 {{ $students->render() }}
             </div>
             @endif
+        </div>
+
+        <!-- Parent Approval Modal -->
+        <div x-show="showApprovalModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+                <h3 class="text-lg font-bold mb-1">Parent's Approval</h3>
+                <p class="text-sm text-gray-500 mb-4">Update approval answers for the advisory SBFP participants.</p>
+                <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" @submit.prevent="requestConfirmation($event, 'approval')">
+                    @csrf
+                    @method('PATCH')
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-sm border-collapse">
+                            <thead class="bg-gray-100 text-gray-700">
+                                <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Parent's Approval</th><th class="px-3 py-2 border">Reason if Disapproved</th></tr>
+                            </thead>
+                            <tbody>
+                                @foreach($students ?? [] as $student)
+                                    @php $approval = $student->parent_approval_status ?? 'pending'; @endphp
+                                    @php
+                                        $storedReason = $student->disapproval_reason;
+                                        $reasonChoice = in_array($storedReason, ['unwilling', 'medical_condition'], true) ? $storedReason : ($storedReason ? 'custom' : '');
+                                    @endphp
+                                    <tr data-approval-row data-current="{{ $approval }}" data-current-reason="{{ $storedReason }}">
+                                        <td class="px-3 py-2 border whitespace-nowrap"><input type="hidden" name="approvals[{{ $student->id }}][student_id]" value="{{ $student->id }}">{{ $student->last_name }}, {{ $student->first_name }}</td>
+                                        <td class="px-3 py-2 border">
+                                            <div class="flex flex-nowrap gap-4 whitespace-nowrap">
+                                                @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'disapproved' => 'Disapproved'] as $value => $label)
+                                                    <label><input type="radio" name="approvals[{{ $student->id }}][parent_consent]" value="{{ $value }}" {{ $approval === $value ? 'checked' : '' }} data-approval-status> {{ $label }}</label>
+                                                @endforeach
+                                            </div>
+                                        </td>
+                                        <td class="px-3 py-2 border">
+                                            <div class="flex flex-wrap items-center gap-3">
+                                                <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="unwilling" {{ $reasonChoice === 'unwilling' ? 'checked' : '' }}> Unwilling</label>
+                                                <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="medical_condition" {{ $reasonChoice === 'medical_condition' ? 'checked' : '' }}> Medical condition</label>
+                                                <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="custom" {{ $reasonChoice === 'custom' ? 'checked' : '' }}> Specify</label>
+                                                <input type="text" name="approvals[{{ $student->id }}][reason_details]" value="{{ $reasonChoice === 'custom' ? $student->disapproval_reason : '' }}" placeholder="Specify reason" class="border rounded px-2 py-1 text-xs">
+                                            </div>
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="flex gap-2">
+                        <button type="submit" class="flex-1 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 font-semibold">Update</button>
+                        <button type="button" @click="closeApprovalModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Back</button>
+                    </div>
+                </form>
+            </div>
         </div>
 
         <!-- Add Period Modal -->
@@ -346,6 +380,7 @@
             return {
                 showModal: false,
                 showEditModal: false,
+                showApprovalModal: false,
                 showConfirmation: false,
                 showEmailModal: false,
                 currentStudentId: null,
@@ -385,6 +420,12 @@
                 openEditPeriodModal() {
                     this.showEditModal = true;
                 },
+                openApprovalModal() {
+                    this.showApprovalModal = true;
+                },
+                closeApprovalModal() {
+                    this.showApprovalModal = false;
+                },
                 refreshEditValues() {
                     document.querySelectorAll('[data-edit-row]').forEach((row) => {
                         const values = JSON.parse(row.dataset.values || '{}');
@@ -395,13 +436,42 @@
                 },
                 requestConfirmation(event, action) {
                     const form = event.target;
-                    const period = form.querySelector('[name="measurement_period"]');
-                    const weightInputs = form.querySelectorAll('[name$="[weight]"]');
-                    const count = Array.from(weightInputs).filter((input) => input.value !== '').length;
-                    const verb = action === 'edit' ? 'editing' : 'adding';
-                    const periodName = period.options[period.selectedIndex]?.text || 'the selected period';
+                    let count = 0;
+                    let subject = 'student approval';
+                    let periodName = '';
+                    if (action === 'approval') {
+                        count = Array.from(form.querySelectorAll('[data-approval-row]')).filter((row) => {
+                            const selected = row.querySelector('[data-approval-status]:checked');
+                            const reason = row.querySelector('input[name$="[disapproval_reason]"]:checked')?.value || '';
+                            const details = row.querySelector('input[name$="[reason_details]"]')?.value || '';
+                            const currentReason = row.dataset.currentReason || '';
+                            const nextReason = selected?.value === 'disapproved'
+                                ? (reason === 'custom' ? details : reason)
+                                : '';
+                            return selected && (selected.value !== row.dataset.current || nextReason !== currentReason);
+                        }).length;
+                    } else {
+                        const period = form.querySelector('[name="measurement_period"]');
+                        periodName = period.options[period.selectedIndex]?.text || 'the selected period';
+                        subject = 'student weight and height';
+                        if (action === 'add') {
+                            count = Array.from(form.querySelectorAll('[data-add-row]')).filter((row) => {
+                                const weight = row.querySelector('[data-add-weight]');
+                                const height = row.querySelector('[data-add-height]');
+                                return weight && height && !weight.readOnly && weight.value !== '' && height.value !== '';
+                            }).length;
+                        } else {
+                            count = Array.from(form.querySelectorAll('[data-edit-row]')).filter((row) => {
+                                const values = JSON.parse(row.dataset.values || '{}')[this.editPeriod] || {};
+                                const weight = row.querySelector('[data-edit-weight]')?.value || '';
+                                const height = row.querySelector('[data-edit-height]')?.value || '';
+                                return weight !== '' && height !== '' && (String(values.weight || '') !== weight || String(values.height || '') !== height);
+                            }).length;
+                        }
+                    }
+                    const verb = action === 'edit' ? 'editing' : action === 'add' ? 'adding' : 'updating';
                     this.pendingForm = form;
-                    this.confirmationMessage = `${verb} ${count} student weight and height record${count === 1 ? '' : 's'} in ${periodName}. Please confirm.`;
+                    this.confirmationMessage = `${verb} ${count} ${subject}${count === 1 ? '' : 's'}${periodName ? ` in ${periodName}` : ''}. Please confirm.`;
                     this.showConfirmation = true;
                 },
                 confirmSubmission() {

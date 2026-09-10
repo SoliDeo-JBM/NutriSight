@@ -165,16 +165,28 @@ class StudentController extends Controller
             $query->where('sex', $request->input('sex'));
         }
 
+        $hasPendingApproval = (clone $query)
+            ->whereHas('enrollments.sbfpParticipant', fn ($q) => $q->whereNull('parent_consent'))
+            ->exists();
+
         if ($request->filled('approval_status')) {
             $approvalStatus = $request->input('approval_status');
             $query->whereHas('enrollments.sbfpParticipant', function ($q) use ($approvalStatus) {
-                $q->where('parent_consent', $approvalStatus);
+                if ($approvalStatus === 'pending') {
+                    $q->where(function ($pendingQuery) {
+                        $pendingQuery->whereNull('parent_consent')
+                            ->orWhere('parent_consent', 'pending');
+                    });
+                } else {
+                    $q->where('parent_consent', $approvalStatus);
+                }
             });
         }
 
         $students = $query->paginate(15)->withQueryString();
         $sexes = ['Male', 'Female'];
         $approvalStatuses = [
+            'pending' => 'Pending',
             'approved' => 'Approved',
             'disapproved' => 'Disapproved'
         ];
@@ -186,8 +198,7 @@ class StudentController extends Controller
             'lrn_asc' => 'LRN / ID (Ascending)',
             'lrn_desc' => 'LRN / ID (Descending)',
         ];
-
-        return view('students.sbfp', compact('students', 'sexes', 'approvalStatuses', 'sortOptions'));
+        return view('students.sbfp', compact('students', 'sexes', 'approvalStatuses', 'sortOptions', 'hasPendingApproval'));
     }
 
     public function create()
@@ -237,8 +248,6 @@ class StudentController extends Controller
         ]);
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
-        $isWasted = in_array($metrics['category'], ['Severely Wasted', 'Wasted']);
-
         $student = Student::create([
             'lrn' => $validated['lrn'],
             'last_name' => $validated['last_name'],
@@ -263,7 +272,7 @@ class StudentController extends Controller
 
         $participant = SbfpParticipant::create([
             'enrollment_id' => $enrollment->id,
-            'parent_consent' => $isWasted ? 'approved' : 'pending',
+            'parent_consent' => null,
         ]);
 
         NutritionMeasurement::create([
@@ -274,7 +283,6 @@ class StudentController extends Controller
             'bmi_category' => $metrics['category'],
             'hfa' => 'Normal',
             'measurement_period' => 'baseline',
-            'remarks' => 'Initial encoder entry',
         ]);
 
         AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
@@ -396,7 +404,6 @@ class StudentController extends Controller
                 'bmi' => $metrics['bmi'],
                 'bmi_category' => $metrics['category'],
                 'hfa' => 'Normal',
-                'remarks' => ucfirst($measurementPeriod) . ' progress assessment',
             ]);
         }
 
@@ -458,7 +465,6 @@ class StudentController extends Controller
 
                 $enrollment->sbfpParticipant->nutritionMeasurements()->create($attributes + [
                     'measurement_period' => $validated['measurement_period'],
-                    'remarks' => ucfirst($validated['measurement_period']) . ' progress assessment',
                 ]);
 
                 $saved++;
@@ -587,23 +593,94 @@ class StudentController extends Controller
     public function updateApproval(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'parent_consent' => 'required|in:approved,disapproved',
-            'disapproval_reason' => 'nullable|string',
+            'parent_consent' => 'required|in:pending,approved,disapproved',
+            'disapproval_reason' => 'nullable|in:unwilling,medical_condition,custom',
+            'reason_details' => 'nullable|string|max:500',
         ]);
+
+        if ($validated['parent_consent'] === 'disapproved' && empty($validated['disapproval_reason'])) {
+            throw ValidationException::withMessages(['disapproval_reason' => 'A reason is required when disapproving a participant.']);
+        }
+
+        if ($validated['parent_consent'] === 'disapproved' && $validated['disapproval_reason'] === 'custom' && blank($validated['reason_details'] ?? null)) {
+            throw ValidationException::withMessages(['reason_details' => 'Please specify the disapproval reason.']);
+        }
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
 
         if ($enrollment && $enrollment->sbfpParticipant) {
             $enrollment->sbfpParticipant->update([
-                'parent_consent' => $validated['parent_consent'],
-                'disapproval_reason' => $validated['parent_consent'] === 'disapproved' ? ($validated['disapproval_reason'] ?? null) : null,
+                'parent_consent' => $validated['parent_consent'] === 'pending' ? null : ($validated['parent_consent'] ?? null),
+                'disapproval_reason' => $validated['parent_consent'] === 'disapproved'
+                    ? ($validated['disapproval_reason'] === 'custom' ? $validated['reason_details'] : $validated['disapproval_reason'])
+                    : null,
             ]);
         }
 
         AuditLogger::log('Updated', 'SBFP Approval', 'Updated parent consent for student ' . $student->first_name . ' ' . $student->last_name . ' to ' . $validated['parent_consent']);
 
         return back()->with('success', 'Parent consent updated.');
+    }
+
+    public function updateBulkApproval(Request $request)
+    {
+        $validated = $request->validate([
+            'approvals' => 'required|array',
+            'approvals.*.student_id' => 'required|integer',
+            'approvals.*.parent_consent' => 'nullable|in:pending,approved,disapproved',
+            'approvals.*.disapproval_reason' => 'nullable|string|max:255',
+            'approvals.*.reason_details' => 'nullable|string|max:500',
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $user = Auth::user();
+        $updated = 0;
+
+        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated) {
+            foreach ($validated['approvals'] as $entry) {
+                $student = Student::find($entry['student_id']);
+                $enrollment = $student?->enrollments()
+                    ->where('school_year_id', $activeSyId)
+                    ->with('sbfpParticipant')
+                    ->first();
+
+                if (!$enrollment || !$enrollment->sbfpParticipant || ($user->isEncoder() && (
+                    (string) $enrollment->grade_level !== (string) $user->advisory_grade_level ||
+                    strtolower(trim($enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
+                ))) {
+                    throw ValidationException::withMessages(['approvals' => 'One or more students are outside your advisory list.']);
+                }
+
+                $status = $entry['parent_consent'] ?? null;
+                if ($status === 'disapproved' && empty($entry['disapproval_reason'])) {
+                    throw ValidationException::withMessages(['approvals' => 'A reason is required for every disapproved participant.']);
+                }
+                if ($status === 'disapproved' && $entry['disapproval_reason'] === 'custom' && blank($entry['reason_details'] ?? null)) {
+                    throw ValidationException::withMessages(['approvals' => 'Every custom disapproval reason must be specified.']);
+                }
+
+                $normalizedStatus = $status === 'pending' ? null : $status;
+                $reason = $status === 'disapproved'
+                    ? (($entry['disapproval_reason'] ?? null) === 'custom'
+                        ? ($entry['reason_details'] ?? null)
+                        : ($entry['disapproval_reason'] ?? null))
+                    : null;
+
+                $participant = $enrollment->sbfpParticipant;
+                if ($participant->parent_consent !== $normalizedStatus || $participant->disapproval_reason !== $reason) {
+                    $participant->update([
+                        'parent_consent' => $normalizedStatus,
+                        'disapproval_reason' => $reason,
+                    ]);
+                    $updated++;
+                }
+            }
+        });
+
+        return back()->with('success', $updated > 0
+            ? $updated . ' parent approval record(s) updated successfully.'
+            : 'No parent approval changes were made.');
     }
 
     public function destroy(Student $student)
@@ -649,7 +726,7 @@ class StudentController extends Controller
             }
             $latestMeasurement = $participant->nutritionMeasurements()->latest()->first();
             $isWasted = $latestMeasurement && in_array($latestMeasurement->bmi_category, ['Wasted', 'Severely Wasted']);
-            return $participant->parent_consent === 'approved' || $isWasted;
+            return $participant->parent_consent === 'approved';
         });
 
         return view('students.print-batch', compact('students'));

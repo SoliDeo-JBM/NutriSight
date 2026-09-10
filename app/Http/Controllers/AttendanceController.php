@@ -62,9 +62,7 @@ class AttendanceController extends Controller
             if ($participant->parent_consent === 'disapproved') {
                 return false;
             }
-            $latestMeasurement = $participant->nutritionMeasurements()->latest()->first();
-            $isWasted = $latestMeasurement && in_array($latestMeasurement->bmi_category, ['Wasted', 'Severely Wasted']);
-            return $participant->parent_consent === 'approved' || $isWasted;
+            return $participant->parent_consent === 'approved';
         });
         
         // Get attendance logs for the date keyed by sbfp_participant_id
@@ -114,9 +112,9 @@ class AttendanceController extends Controller
         $participant = $enrollment->sbfpParticipant;
         $studentName = $student->first_name . ' ' . $student->last_name;
 
-        if ($participant->parent_consent === 'disapproved') {
+        if ($participant->parent_consent !== 'approved') {
             return response()->json([
-                'error' => 'Student is disapproved for SBFP.',
+            'error' => 'Parent approval is required before recording attendance.',
                 'student_name' => $studentName,
                 'grade_level' => $enrollment->grade_level,
                 'section' => $enrollment->section
@@ -145,10 +143,6 @@ class AttendanceController extends Controller
                 'grade_level' => $enrollment->grade_level,
                 'section' => $enrollment->section
             ], 409);
-        }
-
-        if ($participant->parent_consent !== 'approved') {
-            $participant->update(['parent_consent' => 'approved']);
         }
 
         StudentAttendanceRecord::create([

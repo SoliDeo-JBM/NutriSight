@@ -173,6 +173,7 @@ Route::middleware('auth')->group(function () {
         Route::patch('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkAssessments'])->name('students.assessment.bulk.update');
         Route::patch('/students/{student}/assessment/period', [App\Http\Controllers\StudentController::class, 'updatePeriod'])->name('students.assessment.period.update');
         Route::patch('/students/{student}/approval', [App\Http\Controllers\StudentController::class, 'updateApproval'])->name('students.approval');
+        Route::patch('/students/approval/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkApproval'])->name('students.approval.bulk');
         Route::post('/students', [App\Http\Controllers\StudentController::class, 'store'])->name('students.store');
         Route::put('/students/{student}', [App\Http\Controllers\StudentController::class, 'update'])->name('students.update');
         Route::delete('/students/{student}', [App\Http\Controllers\StudentController::class, 'destroy'])->name('students.destroy');
