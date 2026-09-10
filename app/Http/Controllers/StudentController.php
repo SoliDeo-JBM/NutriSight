@@ -35,9 +35,13 @@ class StudentController extends Controller
             }
         ])->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
-            if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
-                $q->where('grade_level', $user->advisory_grade_level)
-                  ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+            if ($user && $user->isEncoder()) {
+                if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                    $q->whereRaw('1 = 0');
+                } else {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                      ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                }
             }
         });
 
@@ -118,15 +122,26 @@ class StudentController extends Controller
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
-                    $q->where('grade_level', $user->advisory_grade_level)
-                        ->where('section', $user->advisory_section);
+                    if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                        $q->whereRaw('1 = 0');
+                    } else {
+                        $q->where('grade_level', $user->advisory_grade_level)
+                            ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                    }
                 }
             })
-            ->whereHas('enrollments.sbfpParticipant', function ($q) {
-                $q->where('parent_consent', 'approved')
-                    ->orWhereHas('nutritionMeasurements', function ($sub) {
-                        $sub->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+            ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
+                $q->where('school_year_id', $activeSyId);
+                if ($user && $user->isEncoder()) {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+                }
+                $q->whereHas('sbfpParticipant', function ($participantQuery) {
+                    $participantQuery->whereHas('nutritionMeasurements', function ($sub) {
+                        $sub->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
                     });
+                });
             });
 
         // Search by name or LRN
@@ -199,7 +214,7 @@ class StudentController extends Controller
         }
 
         $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements
-            ->firstWhere('measurement_period', 'Term 1');
+            ->first(fn ($item) => in_array(strtolower($item->measurement_period), ['baseline', 'term 1'], true));
 
         return view('students.create', compact('user', 'student', 'enrollment', 'measurement'));
     }
@@ -261,7 +276,7 @@ class StudentController extends Controller
             'bmi' => $metrics['bmi'],
             'bmi_category' => $metrics['category'],
             'hfa' => 'Normal',
-            'measurement_period' => 'Term 1',
+            'measurement_period' => 'baseline',
             'remarks' => 'Initial encoder entry',
         ]);
 
@@ -325,7 +340,7 @@ class StudentController extends Controller
             ]);
 
             $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
-                ->where('measurement_period', 'Term 1')
+                ->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
                 ->first();
 
             if ($measurement) {
@@ -334,6 +349,7 @@ class StudentController extends Controller
                     'height' => $validated['height'],
                     'bmi' => $metrics['bmi'],
                     'bmi_category' => $metrics['category'],
+                    'measurement_period' => 'baseline',
                 ]);
             }
         });
@@ -346,9 +362,9 @@ class StudentController extends Controller
     public function storeAssessment(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'term' => 'required|in:1,2,3',
-            'weight_kg' => 'required|numeric|min:0',
-            'height_cm' => 'required|numeric|min:0',
+            'measurement_period' => 'required|in:baseline,midline,endline,mid,end',
+            'weight' => 'required|numeric|min:0',
+            'height' => 'required|numeric|min:0',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -358,24 +374,27 @@ class StudentController extends Controller
         }
 
         $participant = $enrollment->sbfpParticipant;
-        $heightM = $validated['height_cm'] / 100;
-        $metrics = $this->nutriService->calculateBMI($validated['weight_kg'], $heightM);
+        $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
 
         $periodMap = [
-            1 => 'Term 1',
-            2 => 'Term 2',
-            3 => 'Term 3',
+            'mid' => 'midline',
+            'end' => 'endline',
         ];
-        $measurementPeriod = $periodMap[$validated['term']] ?? 'Term ' . $validated['term'];
+        $measurementPeriod = $periodMap[$validated['measurement_period']] ?? $validated['measurement_period'];
 
         $existing = NutritionMeasurement::where('sbfp_participant_id', $participant->id)
-            ->where('measurement_period', $measurementPeriod)
+            ->where(function ($q) use ($measurementPeriod) {
+                $q->whereIn('measurement_period', [$measurementPeriod, ucfirst($measurementPeriod)]);
+                if ($measurementPeriod === 'baseline') {
+                    $q->orWhere('measurement_period', 'Term 1');
+                }
+            })
             ->first();
 
         if ($existing) {
             $existing->update([
-                'weight' => $validated['weight_kg'],
-                'height' => $validated['height_cm'],
+                'weight' => $validated['weight'],
+                'height' => $validated['height'],
                 'bmi' => $metrics['bmi'],
                 'bmi_category' => $metrics['category'],
                 'hfa' => 'Normal',
@@ -389,12 +408,74 @@ class StudentController extends Controller
                 'bmi' => $metrics['bmi'],
                 'bmi_category' => $metrics['category'],
                 'hfa' => 'Normal',
-                'remarks' => 'Term ' . $validated['term'] . ' progress assessment',
+                'remarks' => ucfirst($measurementPeriod) . ' progress assessment',
             ]);
         }
 
         AuditLogger::log('Updated', 'Assessments', 'Recorded term progress for student ' . $student->first_name . ' ' . $student->last_name);
         return back()->with('success', 'Term progress recorded successfully.');
+    }
+
+    public function storeBulkAssessments(Request $request)
+    {
+        $validated = $request->validate([
+            'measurement_period' => 'required|in:baseline,midline,endline',
+            'measurements' => 'required|array',
+            'measurements.*.student_id' => 'required|integer',
+            'measurements.*.weight' => 'nullable|numeric|min:0',
+            'measurements.*.height' => 'nullable|numeric|min:0',
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $user = Auth::user();
+        $saved = 0;
+
+        DB::transaction(function () use ($validated, $activeSyId, $user, &$saved) {
+            foreach ($validated['measurements'] as $entry) {
+                if ($entry['weight'] === null || $entry['height'] === null) {
+                    continue;
+                }
+
+                $student = Student::find($entry['student_id']);
+                $enrollment = $student?->enrollments()
+                    ->where('school_year_id', $activeSyId)
+                    ->with('sbfpParticipant')
+                    ->first();
+
+                if (!$enrollment || !$enrollment->sbfpParticipant || ($user->isEncoder() && (
+                    (string) $enrollment->grade_level !== (string) $user->advisory_grade_level ||
+                    strtolower(trim($enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
+                ))) {
+                    continue;
+                }
+
+                $metrics = $this->nutriService->calculateBMI($entry['weight'], $entry['height']);
+                $measurement = $enrollment->sbfpParticipant->nutritionMeasurements()
+                    ->whereIn('measurement_period', [$validated['measurement_period'], ucfirst($validated['measurement_period'])])
+                    ->first();
+
+                $attributes = [
+                    'weight' => $entry['weight'],
+                    'height' => $entry['height'],
+                    'bmi' => $metrics['bmi'],
+                    'bmi_category' => $metrics['category'],
+                    'hfa' => 'Normal',
+                ];
+
+                if ($measurement) {
+                    $measurement->update($attributes);
+                } else {
+                    $enrollment->sbfpParticipant->nutritionMeasurements()->create($attributes + [
+                        'measurement_period' => $validated['measurement_period'],
+                        'remarks' => ucfirst($validated['measurement_period']) . ' progress assessment',
+                    ]);
+                }
+
+                $saved++;
+            }
+        });
+
+        return back()->with('success', $saved . ' period measurement(s) saved successfully.');
     }
 
     public function updateApproval(Request $request, Student $student)
@@ -447,7 +528,7 @@ class StudentController extends Controller
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
                     $q->where('grade_level', $user->advisory_grade_level)
-                        ->where('section', $user->advisory_section);
+                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
                 }
             });
 

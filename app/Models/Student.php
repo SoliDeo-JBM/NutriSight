@@ -63,22 +63,35 @@ class Student extends Model
 
     public function getTermProgressAttribute()
     {
+        $periods = $this->periodProgress;
+
+        return [
+            'Term 1' => $periods['Baseline'],
+            'Term 2' => $periods['Midline'],
+            'Term 3' => $periods['Endline'],
+        ];
+    }
+
+    public function getPeriodProgressAttribute()
+    {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
         $measurements = $enrollment?->sbfpParticipant?->nutritionMeasurements ?? collect();
 
-        $terms = ['Term 1' => [], 'Term 2' => [], 'Term 3' => []];
+        $periods = ['Baseline' => [], 'Midline' => [], 'Endline' => []];
         foreach ($measurements as $m) {
             $period = strtolower($m->measurement_period ?? '');
-            if ($period === 'term 1' || $period === 'baseline' || $m->created_at?->month == 1) {
-                $terms['Term 1'][] = $m;
-            } elseif ($period === 'term 2' || $period === 'mid' || $m->created_at?->month == 2) {
-                $terms['Term 2'][] = $m;
+            if (in_array($period, ['term 1', 'baseline'], true)) {
+                $periods['Baseline'][] = $m;
+            } elseif (in_array($period, ['term 2', 'mid', 'midline'], true)) {
+                $periods['Midline'][] = $m;
+            } elseif (in_array($period, ['term 3', 'end', 'endline'], true)) {
+                $periods['Endline'][] = $m;
             } else {
-                $terms['Term 3'][] = $m;
+                continue;
             }
         }
-        return $terms;
+        return $periods;
     }
 
     public function enrollments()

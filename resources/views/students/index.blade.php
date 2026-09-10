@@ -83,7 +83,6 @@
                             <th class="px-4 py-3 border">BMI Category</th>
                             <th class="px-4 py-3 border">Height for Age</th>
                             <th class="px-4 py-3 border">Remarks</th>
-                            <th class="px-4 py-3 border">Grade & Section</th>
                             <th class="px-4 py-3 border">Guardian's Email</th>
                             <th class="px-4 py-3 border">Guardian's Phone Number</th>
                             <th class="px-4 py-3 border">Actions</th>
@@ -118,7 +117,6 @@
                             </td>
                             <td class="px-4 py-3 border">{{ $latestRecord->height_for_age ?? 'Normal' }}</td>
                             <td class="px-4 py-3 border">{{ $latestRecord->remarks ?? '-' }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }} - {{ $enrollment?->section ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">
@@ -127,7 +125,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="15" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
+                            <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
                         </tr>
                         @endforelse
                     </tbody>

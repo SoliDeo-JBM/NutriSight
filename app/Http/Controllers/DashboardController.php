@@ -153,9 +153,13 @@ class DashboardController extends Controller
         
         $studentQuery = Student::whereHas('enrollments', function($q) use ($activeSyId, $user) {
             $q->where('school_year_id', $activeSyId);
-            if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
-                $q->where('grade_level', $user->advisory_grade_level)
-                  ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+            if ($user && $user->isEncoder()) {
+                if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                    $q->whereRaw('1 = 0');
+                } else {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                      ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                }
             }
         });
 
@@ -175,9 +179,13 @@ class DashboardController extends Controller
             ->where('enrollments.school_year_id', $activeSyId)
             ->whereIn('student_attendance_records.attendance_date', $attendanceDates)
             ->where('student_attendance_records.status', 'present')
-            ->when($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section, function ($query) use ($user) {
-                $query->where('enrollments.grade_level', $user->advisory_grade_level)
-                    ->whereRaw('LOWER(TRIM(enrollments.section)) = ?', [strtolower(trim($user->advisory_section))]);
+            ->when($user && $user->isEncoder(), function ($query) use ($user) {
+                if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                    $query->whereRaw('1 = 0');
+                } else {
+                    $query->where('enrollments.grade_level', $user->advisory_grade_level)
+                        ->whereRaw('LOWER(TRIM(enrollments.section)) = ?', [strtolower(trim($user->advisory_section))]);
+                }
             })
             ->groupBy('student_attendance_records.attendance_date')
             ->selectRaw('student_attendance_records.attendance_date, COUNT(*) as total_count')

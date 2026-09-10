@@ -169,6 +169,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/{student}/edit', [App\Http\Controllers\StudentController::class, 'edit'])->name('students.edit');
         Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::post('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'storeBulkAssessments'])->name('students.assessment.bulk');
         Route::patch('/students/{student}/approval', [App\Http\Controllers\StudentController::class, 'updateApproval'])->name('students.approval');
         Route::post('/students', [App\Http\Controllers\StudentController::class, 'store'])->name('students.store');
         Route::put('/students/{student}', [App\Http\Controllers\StudentController::class, 'update'])->name('students.update');
