@@ -68,18 +68,22 @@
 
             <div class="flex-1 overflow-y-auto space-y-3 pr-1">
                 @forelse($mealPlans as $mealPlan)
-                    <div class="p-3 border rounded-lg bg-gray-50">
-                        <div class="font-semibold text-sm">{{ $mealPlan->meal_name }}</div>
-                        <div class="flex gap-2 mt-3">
-                            <form action="{{ route('admin.meal-plans.update', $mealPlan) }}" method="POST" class="flex flex-1 gap-1">
-                                @csrf @method('PUT')
+                    <div x-data="{ editing: false }" class="p-3 border rounded-lg bg-gray-50">
+                        <div class="flex items-center justify-between gap-3">
+                            <div x-show="!editing" class="font-semibold text-sm min-w-0 break-words">{{ $mealPlan->meal_name }}</div>
+                            <form action="{{ route('admin.meal-plans.update', $mealPlan) }}" method="POST" class="flex items-center gap-2 flex-1" x-show="editing">
+                            @csrf @method('PUT')
                                 <input name="meal_name" value="{{ $mealPlan->meal_name }}" required maxlength="255" class="min-w-0 flex-1 border-gray-300 rounded text-xs">
-                                <button class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-semibold">Edit</button>
+                                <button type="submit" class="px-2 py-1 rounded bg-blue-600 text-white text-xs font-semibold">Confirm</button>
+                                <button type="button" @click="editing = false" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-semibold">Cancel</button>
                             </form>
-                            <form action="{{ route('admin.meal-plans.destroy', $mealPlan) }}" method="POST" onsubmit="return confirm('Delete this meal?')">
-                                @csrf @method('DELETE')
-                                <button class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-semibold">Delete</button>
-                            </form>
+                            <div x-show="!editing" class="flex items-center gap-2 shrink-0">
+                                <button type="button" @click="editing = true" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-semibold">Edit</button>
+                                <form action="{{ route('admin.meal-plans.destroy', $mealPlan) }}" method="POST" onsubmit="return confirm('Delete this meal?')">
+                                    @csrf @method('DELETE')
+                                    <button class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-semibold">Delete</button>
+                                </form>
+                            </div>
                         </div>
                     </div>
                 @empty
