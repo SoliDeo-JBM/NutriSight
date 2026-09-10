@@ -7,17 +7,17 @@
             <div>
                 <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
                 <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
-            </div>
-            <div class="flex flex-wrap gap-2">
-            <button type="button" @click="openEditPeriodModal()" class="bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
-                <i class="fas fa-pen"></i> Edit Period
-            </button>
-            <button type="button" @click="openPeriodModal()" class="bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 whitespace-nowrap inline-flex items-center gap-2">
-                <i class="fas fa-plus"></i> Add Period
-            </button>
-            <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
-                <i class="fas fa-print"></i> Print Portrait ID QR Sheet
-            </a>
+                <div class="mt-4 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
+                    <button type="button" @click="openEditPeriodModal()" class="shrink-0 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
+                        <i class="fas fa-pen"></i> Edit Period
+                    </button>
+                    <button type="button" @click="openPeriodModal()" class="shrink-0 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 whitespace-nowrap inline-flex items-center gap-2">
+                        <i class="fas fa-plus"></i> Add Period
+                    </button>
+                    <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
+                        <i class="fas fa-print"></i> Print Portrait ID QR Sheet
+                    </a>
+                </div>
             </div>
         </div>
 
@@ -83,13 +83,15 @@
                             <th class="px-4 py-3 border">No.</th>
                             <th class="px-4 py-3 border">LRN</th>
                             <th class="px-4 py-3 border">Learner's Name</th>
-                            <th class="px-4 py-3 border">Birthdate / Age / Sex</th>
+                            <th class="px-4 py-3 border">Birthdate</th>
+                            <th class="px-4 py-3 border">Age</th>
+                            <th class="px-4 py-3 border">Sex</th>
                             <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
                             <th class="px-4 py-3 border">Parent's Approval</th>
                             <th class="px-4 py-3 border text-center">Student QR Code</th>
                         </tr>
                         <tr>
-                            <th colspan="4" class="px-4 py-2 border"></th>
+                            <th colspan="6" class="px-4 py-2 border"></th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Baseline</th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Midline</th>
                             <th class="px-4 py-2 border text-center text-xs bg-blue-50">Endline</th>
@@ -112,7 +114,9 @@
                             <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }} ({{ $student->sex ?? '-' }})</td>
+                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
                             <!-- Period Data Columns -->
                             @foreach(['Baseline', 'Midline', 'Endline'] as $period)
                             <td class="px-4 py-3 border text-center">
@@ -180,7 +184,7 @@
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="9" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
+                            <td colspan="11" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
                         </tr>
                         @endforelse
                     </tbody>
