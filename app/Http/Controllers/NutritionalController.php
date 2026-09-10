@@ -20,7 +20,7 @@ class NutritionalController extends Controller
     public function store(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'measurement_period' => 'required|in:baseline,mid,end',
+            'measurement_period' => 'required|in:baseline,midline,endline',
             'weight' => 'required|numeric',
             'height' => 'required|numeric',
             'remarks' => 'nullable|string',

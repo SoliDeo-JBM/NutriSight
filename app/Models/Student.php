@@ -81,11 +81,11 @@ class Student extends Model
         $periods = ['Baseline' => [], 'Midline' => [], 'Endline' => []];
         foreach ($measurements as $m) {
             $period = strtolower($m->measurement_period ?? '');
-            if (in_array($period, ['term 1', 'baseline'], true)) {
+            if ($period === 'baseline') {
                 $periods['Baseline'][] = $m;
-            } elseif (in_array($period, ['term 2', 'mid', 'midline'], true)) {
+            } elseif ($period === 'midline') {
                 $periods['Midline'][] = $m;
-            } elseif (in_array($period, ['term 3', 'end', 'endline'], true)) {
+            } elseif ($period === 'endline') {
                 $periods['Endline'][] = $m;
             } else {
                 continue;

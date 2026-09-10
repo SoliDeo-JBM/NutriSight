@@ -203,15 +203,16 @@
         <div x-show="showModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
             <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 class="text-lg font-bold mb-1">Add Period</h3>
-                <p class="text-sm text-gray-500 mb-4">Enter complete measurements for every advisory student in the selected period.</p>
+                <p class="text-sm text-gray-500 mb-4">Existing measurements are locked. Enter complete measurements only for students missing the selected period.</p>
                 
                 <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" @submit.prevent="requestConfirmation($event, 'add')">
                     @csrf
                     
                     <div class="mb-4">
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
-                        <select name="measurement_period" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <select name="measurement_period" x-model="addPeriod" @change="refreshAddValues()" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
                             <option value="">Select Period</option>
+                            <option value="baseline">Baseline</option>
                             <option value="midline">Midline</option>
                             <option value="endline">Endline</option>
                         </select>
@@ -224,10 +225,16 @@
                             </thead>
                             <tbody>
                                 @foreach($students ?? [] as $student)
-                                    <tr>
+                                    @php
+                                        $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
+                                            $record = $student->periodProgress[ucfirst($period)][0] ?? null;
+                                            return [$period => $record ? ['weight' => $record->weight, 'height' => $record->height] : null];
+                                        });
+                                    @endphp
+                                    <tr data-add-row data-values='@json($measurements)'>
                                         <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
-                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" step="0.1" min="0.1" required class="w-full border border-gray-300 rounded px-2 py-1"></td>
-                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" step="0.1" min="0.1" required class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" data-add-weight step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" data-add-height step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
                                     </tr>
                                 @endforeach
                             </tbody>
@@ -343,6 +350,7 @@
                 showEmailModal: false,
                 currentStudentId: null,
                 currentGuardianEmail: '',
+                addPeriod: '',
                 editPeriod: '',
                 pendingForm: null,
                 confirmationMessage: '',
@@ -351,6 +359,28 @@
                 },
                 closeModal() {
                     this.showModal = false;
+                    this.addPeriod = '';
+                    document.querySelectorAll('[data-add-row] input[type="number"]').forEach((input) => {
+                        input.value = '';
+                        input.readOnly = false;
+                        input.required = false;
+                    });
+                },
+                refreshAddValues() {
+                    document.querySelectorAll('[data-add-row]').forEach((row) => {
+                        const values = JSON.parse(row.dataset.values || '{}');
+                        const measurement = values[this.addPeriod] || null;
+                        const weight = row.querySelector('[data-add-weight]');
+                        const height = row.querySelector('[data-add-height]');
+                        const hasMeasurement = measurement !== null;
+
+                        weight.value = measurement?.weight || '';
+                        height.value = measurement?.height || '';
+                        weight.readOnly = hasMeasurement;
+                        height.readOnly = hasMeasurement;
+                        weight.required = !hasMeasurement;
+                        height.required = !hasMeasurement;
+                    });
                 },
                 openEditPeriodModal() {
                     this.showEditModal = true;

@@ -69,7 +69,7 @@ class StudentController extends Controller
             $query->whereHas('enrollments', function ($q) use ($activeSyId, $bmiCategory) {
                 $q->where('school_year_id', $activeSyId)
                     ->whereHas('sbfpParticipant.nutritionMeasurements', function ($measurementQuery) use ($bmiCategory) {
-                        $measurementQuery->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                        $measurementQuery->where('measurement_period', 'baseline')
                             ->where('bmi_category', $bmiCategory);
                     });
             });
@@ -143,7 +143,7 @@ class StudentController extends Controller
                 }
                 $q->whereHas('sbfpParticipant', function ($participantQuery) {
                     $participantQuery->whereHas('nutritionMeasurements', function ($sub) {
-                        $sub->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                        $sub->where('measurement_period', 'baseline')
                             ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
                     });
                 });
@@ -211,7 +211,7 @@ class StudentController extends Controller
         }
 
         $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements
-            ->first(fn ($item) => in_array(strtolower($item->measurement_period), ['baseline', 'term 1'], true));
+            ->first(fn ($item) => strtolower($item->measurement_period) === 'baseline');
 
         return view('students.create', compact('user', 'student', 'enrollment', 'measurement'));
     }
@@ -337,7 +337,7 @@ class StudentController extends Controller
             ]);
 
             $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
-                ->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                    ->where('measurement_period', 'baseline')
                 ->first();
 
             if ($measurement) {
@@ -359,7 +359,7 @@ class StudentController extends Controller
     public function storeAssessment(Request $request, Student $student)
     {
         $validated = $request->validate([
-            'measurement_period' => 'required|in:midline,endline,mid,end',
+            'measurement_period' => 'required|in:midline,endline',
             'weight' => 'required|numeric|min:0',
             'height' => 'required|numeric|min:0',
         ]);
@@ -373,16 +373,10 @@ class StudentController extends Controller
         $participant = $enrollment->sbfpParticipant;
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
 
-        $periodMap = [
-            'mid' => 'midline',
-            'end' => 'endline',
-        ];
-        $measurementPeriod = $periodMap[$validated['measurement_period']] ?? $validated['measurement_period'];
+        $measurementPeriod = $validated['measurement_period'];
 
         $existing = NutritionMeasurement::where('sbfp_participant_id', $participant->id)
-            ->where(function ($q) use ($measurementPeriod) {
-                $q->whereIn('measurement_period', [$measurementPeriod, ucfirst($measurementPeriod)]);
-            })
+            ->where('measurement_period', $measurementPeriod)
             ->first();
 
         if ($existing) {
@@ -413,11 +407,11 @@ class StudentController extends Controller
     public function storeBulkAssessments(Request $request)
     {
         $validated = $request->validate([
-            'measurement_period' => 'required|in:midline,endline',
+            'measurement_period' => 'required|in:baseline,midline,endline',
             'measurements' => 'required|array',
             'measurements.*.student_id' => 'required|integer',
-            'measurements.*.weight' => 'required|numeric|min:0.1',
-            'measurements.*.height' => 'required|numeric|min:0.1',
+            'measurements.*.weight' => 'nullable|numeric|min:0.1',
+            'measurements.*.height' => 'nullable|numeric|min:0.1',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -439,17 +433,21 @@ class StudentController extends Controller
                     continue;
                 }
 
-                $metrics = $this->nutriService->calculateBMI($entry['weight'], $entry['height']);
                 $alreadyExists = $enrollment->sbfpParticipant->nutritionMeasurements()
-                    ->whereIn('measurement_period', [$validated['measurement_period'], ucfirst($validated['measurement_period'])])
+                    ->where('measurement_period', $validated['measurement_period'])
                     ->exists();
 
                 if ($alreadyExists) {
+                    continue;
+                }
+
+                if (($entry['weight'] ?? null) === null || ($entry['height'] ?? null) === null) {
                     throw ValidationException::withMessages([
-                        'measurement_period' => ucfirst($validated['measurement_period']) . ' already exists for ' . $student->first_name . ' ' . $student->last_name . '. Use Edit Period instead.',
+                        'measurements' => 'Each student without an existing ' . ucfirst($validated['measurement_period']) . ' record must have both weight and height.',
                     ]);
                 }
 
+                $metrics = $this->nutriService->calculateBMI($entry['weight'], $entry['height']);
                 $attributes = [
                     'weight' => $entry['weight'],
                     'height' => $entry['height'],
@@ -512,11 +510,7 @@ class StudentController extends Controller
                 }
 
                 $measurement = $enrollment->sbfpParticipant->nutritionMeasurements()
-                    ->whereIn('measurement_period', [
-                        $validated['measurement_period'],
-                        ucfirst($validated['measurement_period']),
-                        $validated['measurement_period'] === 'baseline' ? 'Term 1' : '',
-                    ])
+                    ->where('measurement_period', $validated['measurement_period'])
                     ->first();
 
                 if (!$measurement) {
@@ -570,7 +564,7 @@ class StudentController extends Controller
         }
 
         $measurement = $enrollment->sbfpParticipant->nutritionMeasurements()
-            ->whereIn('measurement_period', [$validated['measurement_period'], ucfirst($validated['measurement_period']), $validated['measurement_period'] === 'baseline' ? 'Term 1' : ''])
+            ->where('measurement_period', $validated['measurement_period'])
             ->first();
 
         if (!$measurement) {

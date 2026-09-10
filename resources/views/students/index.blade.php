@@ -94,7 +94,7 @@
                         @php
                             $enrollment = $student->enrollments->first();
                             $baselineRecord = $student->nutritionalRecords()
-                                ->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                                ->where('measurement_period', 'baseline')
                                 ->latest()
                                 ->first();
                         @endphp
