@@ -15,11 +15,11 @@
 
         <!-- Filters & Search Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <form method="GET" action="{{ route('admin.students.sbfp') }}" class="space-y-4">
+            <form method="GET" action="{{ route('admin.students.sbfp') }}" class="space-y-4" x-data>
                 <!-- Search Bar -->
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 </div>
 
                 <!-- Filters Row -->
@@ -27,7 +27,7 @@
                     <!-- Grade Level Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Grade Level</label>
-                        <select name="grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <select name="grade_level" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All Grades</option>
                             @foreach($gradeLevels as $grade)
                                 <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
@@ -38,7 +38,7 @@
                     <!-- Section Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Section</label>
-                        <select name="section" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <select name="section" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All Sections</option>
                             @foreach($sections as $sec)
                                 <option value="{{ $sec }}" {{ request('section') == $sec ? 'selected' : '' }}>{{ $sec }}</option>
@@ -49,7 +49,7 @@
                     <!-- Sex Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
-                        <select name="sex" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <select name="sex" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All</option>
                             @foreach($sexes as $sex)
                                 <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
@@ -60,7 +60,7 @@
                     <!-- Sort By -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
-                        <select name="sort" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <select name="sort" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             @foreach($sortOptions as $key => $label)
                                 <option value="{{ $key }}" {{ request('sort', 'latest') == $key ? 'selected' : '' }}>{{ $label }}</option>
                             @endforeach
@@ -68,15 +68,12 @@
                     </div>
                 </div>
 
-                <!-- Action Buttons -->
-                <div class="flex gap-2 pt-2">
-                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
-                        <i class="fas fa-filter mr-2"></i> Apply Filters
-                    </button>
-                    <a href="{{ route('admin.students.sbfp') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
-                        <i class="fas fa-redo mr-2"></i> Clear Filters
+                <div class="flex justify-end pt-1">
+                    <a href="{{ route('admin.students.sbfp') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
+                        <i class="fas fa-rotate-left"></i> Reset filters
                     </a>
                 </div>
+
             </form>
         </div>
 
@@ -189,16 +186,4 @@
         </div>
     </div>
 
-    <script>
-        let searchTimeout;
-        const searchInput = document.querySelector('input[name="search"]');
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this.form.submit();
-                }, 300);
-            });
-        }
-    </script>
 @endsection

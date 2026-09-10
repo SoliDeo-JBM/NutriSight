@@ -22,12 +22,6 @@
                     <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 </div>
 
-                <div class="flex justify-end pt-1">
-                    <a href="{{ route('encoder.students.sbfp') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
-                        <i class="fas fa-rotate-left"></i> Reset filters
-                    </a>
-                </div>
-
                 <!-- Filters Row -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     <!-- Sex Filter -->
@@ -72,6 +66,12 @@
                             @endforeach
                         </select>
                     </div>
+                </div>
+
+                <div class="flex justify-end pt-1">
+                    <a href="{{ route('encoder.students.sbfp') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
+                        <i class="fas fa-rotate-left"></i> Reset filters
+                    </a>
                 </div>
 
             </form>
