@@ -31,7 +31,7 @@
                 </div>
 
                 <!-- Filters Row -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                     <!-- Sex Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
@@ -39,17 +39,6 @@
                             <option value="">All</option>
                             @foreach($sexes as $sex)
                                 <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- BMI Category Filter -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">BMI Category</label>
-                        <select name="bmi_category" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <option value="">All Categories</option>
-                            @foreach($bmiCategories as $cat)
-                                <option value="{{ $cat }}" {{ request('bmi_category') == $cat ? 'selected' : '' }}>{{ $cat }}</option>
                             @endforeach
                         </select>
                     </div>
@@ -183,13 +172,6 @@
                                              {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
                                         </div>
                                         <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" class="text-[11px] text-blue-600 hover:underline mt-1">Print Portrait ID</a>
-                                        @if($student->guardian_email)
-                                            <button @click="openEmailModal({{ $student->id }}, '{{ $student->first_name }} {{ $student->last_name }}', '{{ $student->guardian_email }}')" class="mt-2 bg-blue-600 text-white px-2.5 py-1 rounded text-xs hover:bg-blue-700 font-semibold inline-flex items-center gap-1">
-                                                <i class="fas fa-envelope"></i> Email Parent
-                                            </button>
-                                        @else
-                                            <span class="text-[10px] text-gray-400 block mt-1">No Guardian Email</span>
-                                        @endif
                                     </div>
                                 @else
                                     <span class="text-gray-400 text-xs italic">Requires Approval</span>

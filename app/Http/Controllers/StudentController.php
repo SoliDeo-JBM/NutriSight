@@ -66,8 +66,12 @@ class StudentController extends Controller
         // Filter by BMI category
         if ($request->filled('bmi_category')) {
             $bmiCategory = $request->input('bmi_category');
-            $query->whereHas('enrollments.sbfpParticipant.nutritionMeasurements', function ($q) use ($bmiCategory) {
-                $q->where('bmi_category', $bmiCategory);
+            $query->whereHas('enrollments', function ($q) use ($activeSyId, $bmiCategory) {
+                $q->where('school_year_id', $activeSyId)
+                    ->whereHas('sbfpParticipant.nutritionMeasurements', function ($measurementQuery) use ($bmiCategory) {
+                        $measurementQuery->whereIn('measurement_period', ['baseline', 'Baseline', 'Term 1'])
+                            ->where('bmi_category', $bmiCategory);
+                    });
             });
         }
 
@@ -161,13 +165,6 @@ class StudentController extends Controller
             $query->where('sex', $request->input('sex'));
         }
 
-        if ($request->filled('bmi_category')) {
-            $bmiCategory = $request->input('bmi_category');
-            $query->whereHas('enrollments.sbfpParticipant.nutritionMeasurements', function ($q) use ($bmiCategory) {
-                $q->where('bmi_category', $bmiCategory);
-            });
-        }
-
         if ($request->filled('approval_status')) {
             $approvalStatus = $request->input('approval_status');
             $query->whereHas('enrollments.sbfpParticipant', function ($q) use ($approvalStatus) {
@@ -177,7 +174,6 @@ class StudentController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
         $sexes = ['Male', 'Female'];
-        $bmiCategories = ['Severely Wasted', 'Wasted'];
         $approvalStatuses = [
             'approved' => 'Approved',
             'disapproved' => 'Disapproved'
@@ -191,7 +187,7 @@ class StudentController extends Controller
             'lrn_desc' => 'LRN / ID (Descending)',
         ];
 
-        return view('students.sbfp', compact('students', 'sexes', 'bmiCategories', 'approvalStatuses', 'sortOptions'));
+        return view('students.sbfp', compact('students', 'sexes', 'approvalStatuses', 'sortOptions'));
     }
 
     public function create()

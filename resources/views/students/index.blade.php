@@ -76,6 +76,7 @@
                             <th class="px-4 py-3 border">LRN</th>
                             <th class="px-4 py-3 border">Learner's Name (Last, First, Ext, Middle)</th>
                             <th class="px-4 py-3 border">Birthdate</th>
+                            <th class="px-4 py-3 border">Age</th>
                             <th class="px-4 py-3 border">Sex</th>
                             <th class="px-4 py-3 border">Weight (kg)</th>
                             <th class="px-4 py-3 border">Height (cm)</th>
@@ -102,6 +103,7 @@
                             <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
                             <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
+                            <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $baselineRecord->weight ?? '-' }}</td>
                             <td class="px-4 py-3 border">{{ $baselineRecord->height ?? '-' }}</td>
