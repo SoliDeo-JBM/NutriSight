@@ -14,12 +14,10 @@ jobs:
       id: date
       run: echo "timestamp=$(date +'%Y%m%d_%H%M%S')" >> $GITHUB_ENV
 
-    - name: Install PostgreSQL 17 Client
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y postgresql-common
-        sudo /usr/share/postgresql-common/pgdg/apt.postgresql.org.sh -y
-        sudo apt-get install -y postgresql-client-17
+    - name: Setup PostgreSQL 17
+      uses: tj-actions/install-postgresql@v3
+      with:
+        postgresql-version: 17
 
     - name: Run Database Backup
       env:
