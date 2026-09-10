@@ -10,9 +10,13 @@ use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
 
-class FeedingDayNotice extends Mailable
+class FeedingDayNotice extends Mailable implements ShouldQueue
 {
     use Queueable, SerializesModels;
+
+    public $tries = 3;
+
+    public $backoff = [10, 60, 300];
 
     public $student;
     public $meal;

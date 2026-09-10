@@ -17,7 +17,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({ student_number: decodedText })
+                body: JSON.stringify({ lrn: decodedText })
             })
             .then(response => response.json())
             .then(data => {

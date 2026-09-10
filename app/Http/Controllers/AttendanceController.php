@@ -140,7 +140,7 @@ class AttendanceController extends Controller
 
         if ($existingLog) {
             return response()->json([
-                'error' => 'Attendance already recorded for today.',
+                'error' => 'Attendance already recorded for today. No additional email was sent.',
                 'student_name' => $studentName,
                 'grade_level' => $enrollment->grade_level,
                 'section' => $enrollment->section
@@ -213,6 +213,10 @@ class AttendanceController extends Controller
     private function sendAttendanceNotice(Student $student, string $date, string $meal): void
     {
         if (!$student->guardian_email) {
+            Log::info('Automatic SBFP attendance email skipped because guardian email is missing.', [
+                'student_id' => $student->id,
+                'attendance_date' => $date,
+            ]);
             return;
         }
 
@@ -223,6 +227,11 @@ class AttendanceController extends Controller
                 Carbon::parse($date)->toDateString(),
                 null
             ));
+            Log::info('Automatic SBFP attendance email accepted by SMTP transport.', [
+                'student_id' => $student->id,
+                'attendance_date' => $date,
+                'recipient' => $student->guardian_email,
+            ]);
         } catch (Throwable $exception) {
             Log::warning('Automatic SBFP attendance email failed.', [
                 'student_id' => $student->id,
