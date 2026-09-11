@@ -78,7 +78,7 @@
         </div>
 
         @php
-            $profileImageParticipants = collect($students ?? [])->map(function ($student) {
+            $profileImageParticipants = collect(isset($students) ? $students->items() : [])->map(function ($student) {
                 $participant = $student->enrollments->first()?->sbfpParticipant;
                 return $participant ? [
                     'id' => $participant->id,
