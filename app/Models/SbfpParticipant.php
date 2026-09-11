@@ -13,6 +13,7 @@ class SbfpParticipant extends Model
         'enrollment_id',
         'parent_consent',
         'disapproval_reason',
+        'profile_image_url',
     ];
 
     // Belongs to a specific Enrollment
