@@ -1,6 +1,7 @@
 @extends('layouts.dashboard')
 
 @section('content')
+<div class="mb-5"><a href="{{ url()->previous() }}" class="inline-flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"><i class="fas fa-arrow-left"></i> Back</a></div>
     <div class="flex flex-col gap-6">
         <!-- Page Header -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
@@ -63,16 +64,16 @@
 
                     <!-- Title & Description -->
                     <h2 class="text-lg font-bold text-gray-900 group-hover:text-emerald-600 transition-colors">
-                        2. Annual Consolidated Report
+                        2. Consolidated Period Reports
                     </h2>
                     <p class="text-sm text-gray-500 mt-2 leading-relaxed">
-                        School-wide annual summary formatted for standard DepEd compliance. Consolidates beneficiary demographics and baseline-to-endline progress.
+                        Baseline, Midline, and Endline aggregates formatted for standard DepEd compliance.
                     </p>
                 </div>
 
                 <!-- Footer Action -->
                 <div class="pt-6 mt-6 border-t border-gray-100 flex items-center justify-between text-sm font-semibold text-emerald-600 group-hover:text-emerald-700">
-                    <span>View Summary</span>
+                    <span>View Period Reports</span>
                     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-4 h-4 transform group-hover:translate-x-1 transition-transform">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
                     </svg>

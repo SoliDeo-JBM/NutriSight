@@ -9,6 +9,7 @@ use App\Models\NutritionMeasurement;
 use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
+use App\Services\ReportPeriodManager;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -19,10 +20,12 @@ use Carbon\Carbon;
 class StudentController extends Controller
 {
     protected NutriCalculationService $nutriService;
+    protected ReportPeriodManager $reportPeriodManager;
 
-    public function __construct(NutriCalculationService $nutriService)
+    public function __construct(NutriCalculationService $nutriService, ReportPeriodManager $reportPeriodManager)
     {
         $this->nutriService = $nutriService;
+        $this->reportPeriodManager = $reportPeriodManager;
     }
 
     public function index(Request $request)
@@ -290,6 +293,7 @@ class StudentController extends Controller
             'hfa' => 'Normal',
             'measurement_period' => 'baseline',
         ]);
+        $this->reportPeriodManager->ensure(SchoolYearManager::activeSchoolYearId(), 'baseline');
 
         AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
 
@@ -413,6 +417,8 @@ class StudentController extends Controller
             ]);
         }
 
+        $this->reportPeriodManager->ensure($activeSyId, $measurementPeriod);
+
         AuditLogger::log('Updated', 'Assessments', 'Recorded term progress for student ' . $student->first_name . ' ' . $student->last_name);
         return back()->with('success', 'Term progress recorded successfully.');
     }
@@ -451,6 +457,7 @@ class StudentController extends Controller
                     ->exists();
 
                 if ($alreadyExists) {
+                    $this->reportPeriodManager->ensure($activeSyId, $validated['measurement_period']);
                     continue;
                 }
 
@@ -472,6 +479,7 @@ class StudentController extends Controller
                 $enrollment->sbfpParticipant->nutritionMeasurements()->create($attributes + [
                     'measurement_period' => $validated['measurement_period'],
                 ]);
+                $this->reportPeriodManager->ensure($activeSyId, $validated['measurement_period']);
 
                 $saved++;
             }
@@ -540,6 +548,7 @@ class StudentController extends Controller
                     'bmi_category' => $metrics['category'],
                     'hfa' => 'Normal',
                 ]);
+                $this->reportPeriodManager->ensure($activeSyId, $validated['measurement_period']);
                 $updated++;
             }
 

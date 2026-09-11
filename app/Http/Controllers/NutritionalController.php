@@ -6,15 +6,18 @@ use App\Models\Student;
 use App\Models\NutritionMeasurement;
 use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
+use App\Services\ReportPeriodManager;
 use Illuminate\Http\Request;
 
 class NutritionalController extends Controller
 {
     protected $nutriService;
+    protected ReportPeriodManager $reportPeriodManager;
 
-    public function __construct(NutriCalculationService $nutriService)
+    public function __construct(NutriCalculationService $nutriService, ReportPeriodManager $reportPeriodManager)
     {
         $this->nutriService = $nutriService;
+        $this->reportPeriodManager = $reportPeriodManager;
     }
 
     public function store(Request $request, Student $student)
@@ -43,6 +46,7 @@ class NutritionalController extends Controller
             'bmi_category' => $metrics['category'],
             'hfa' => 'Normal',
         ]);
+        $this->reportPeriodManager->ensure($activeSyId, $validated['measurement_period']);
 
         return back()->with('success', 'Nutritional measurement added successfully.');
     }

@@ -18,7 +18,10 @@ class DashboardController extends Controller
 
     public function admin(Request $request)
     {
-        $selectedPeriod = $request->get('period', 'all');
+        $selectedPeriod = $request->get('period', 'Baseline');
+        if (!in_array($selectedPeriod, ['Baseline', 'Midline', 'Endline'], true)) {
+            $selectedPeriod = 'Baseline';
+        }
         $periods = ['Baseline', 'Midline', 'Endline'];
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $activeSchoolYear = SchoolYearManager::activeSchoolYear();

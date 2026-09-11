@@ -148,10 +148,10 @@
                 <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" class="text-xs bg-blue-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-blue-700 transition">
                     <i class="fas fa-qrcode mr-1"></i> Scan Attendance
                 </button>
-                <form method="POST" action="{{ route('school-years.switch') }}" class="flex items-center gap-2">
+                <form method="POST" action="{{ route('school-years.switch') }}" class="school-year-picker">
                     @csrf
-                    <span class="text-xs font-semibold text-gray-600 hidden sm:inline"><i class="fas fa-calendar-alt mr-1"></i> School Year:</span>
-                    <select name="school_year_id" onchange="this.form.submit()" class="border border-gray-300 rounded px-2.5 py-1 text-xs font-medium text-gray-700 bg-white focus:outline-none focus:border-blue-500">
+                    <label for="global-school-year" class="school-year-label"><i class="fas fa-calendar-alt" aria-hidden="true"></i><span>School Year</span></label>
+                    <select id="global-school-year" name="school_year_id" onchange="this.form.submit()" class="school-year-select" aria-label="Select school year">
                         @php
                         $allSy = \App\Services\SchoolYearManager::allSchoolYears();
                         $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();

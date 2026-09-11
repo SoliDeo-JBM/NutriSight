@@ -126,11 +126,6 @@ Route::middleware('auth')->group(function () {
             Route::get('/attendance/summary/{schoolYear}', [App\Http\Controllers\ReportsController::class, 'showAttendanceSummary'])->name('attendance.summary');
             Route::get('/annual-consolidated', [App\Http\Controllers\ReportsController::class, 'sbfpYearly'])->name('annual');
             Route::post('/annual-consolidated/periods', [App\Http\Controllers\ReportsController::class, 'storeReportPeriod'])->name('annual.periods.store');
-            Route::get('/annual-consolidated/summary/{schoolYear}', [App\Http\Controllers\ReportsController::class, 'showAnnualSummary'])->name('annual.summary');
-            Route::get('/annual-consolidated/summary/{schoolYear}/excel', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummaryExcel'])->name('annual.summary.excel');
-            Route::get('/annual-consolidated/summary/{schoolYear}/docx', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummaryDocx'])->name('annual.summary.docx');
-            Route::get('/annual-consolidated/summary/{schoolYear}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummaryPdf'])->name('annual.summary.pdf');
-            Route::get('/annual-consolidated/summary/{schoolYear}/sql', [App\Http\Controllers\ReportsController::class, 'exportAnnualSummarySql'])->name('annual.summary.sql');
             Route::get('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'showReportPeriod'])->name('annual.period');
             Route::patch('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'updateReportPeriod'])->name('annual.period.update');
             Route::delete('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'destroyReportPeriod'])->name('annual.period.destroy');

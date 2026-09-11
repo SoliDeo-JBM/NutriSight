@@ -7,6 +7,7 @@ use App\Models\StudentAttendanceRecord;
 use App\Models\MealPlan;
 use App\Mail\FeedingDayNotice;
 use App\Models\SbfpParticipant;
+use App\Models\AttendanceReportMonth;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
 use Illuminate\Http\Request;
@@ -174,6 +175,7 @@ class AttendanceController extends Controller
             ->where('attendance_date', $today)
             ->first();
 
+        $this->ensureAttendanceMonth($participant->enrollment->school_year_id, $today);
         if ($existingLog) {
             return response()->json([
                 'error' => 'Attendance already recorded for today. No additional email was sent.',
@@ -233,6 +235,8 @@ class AttendanceController extends Controller
             ]
         );
 
+        $this->ensureAttendanceMonth($participant->enrollment->school_year_id, $validated['date']);
+
         if (
             $validated['status'] === 'present'
             && (!$existingRecord || $existingRecord->status !== 'present')
@@ -275,5 +279,13 @@ class AttendanceController extends Controller
                 'error' => $exception->getMessage(),
             ]);
         }
+    }
+
+    private function ensureAttendanceMonth(int $schoolYearId, string $date): void
+    {
+        AttendanceReportMonth::firstOrCreate([
+            'school_year_id' => $schoolYearId,
+            'month' => Carbon::parse($date)->month,
+        ]);
     }
 }

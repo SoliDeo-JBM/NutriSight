@@ -107,8 +107,6 @@
                     @forelse($students ?? [] as $index => $student)
                     @php
                     $enrollment = $student->enrollments->first();
-                    $latestRecord = $student->nutritionalRecords()->latest()->first();
-                    $isWasted = $latestRecord && in_array($latestRecord->bmi_category, ['Wasted', 'Severely Wasted']);
                     $periodData = [
                     'Baseline' => $student->periodProgress['Baseline'][0] ?? null,
                     'Midline' => $student->periodProgress['Midline'][0] ?? null,
@@ -126,7 +124,7 @@
                     'guardian' => $student->guardian_name ?? '-',
                     'guardian_contact' => $student->guardian_contact ?? '-',
                     'guardian_email' => $student->guardian_email ?? '-',
-                    'approval' => ucfirst($student->parent_approval_status ?? ($isWasted ? 'Approved (Auto)' : 'Pending')),
+                    'approval' => ucfirst($student->parent_approval_status ?: 'Pending'),
                     'reason' => $student->disapproval_reason ? ucfirst(str_replace('_', ' ', $student->disapproval_reason)) : '-',
                     'periods' => collect($periodData)->map(fn ($measurement) => $measurement ? [
                     'weight' => $measurement->weight,
@@ -164,9 +162,9 @@
                         <td class="px-4 py-3 border min-w-[180px]">
                             <span class="px-2 py-1 text-xs font-semibold rounded-full
                                     @if($student->parent_approval_status === 'disapproved') bg-red-100 text-red-800
-                                    @elseif($student->parent_approval_status === 'approved' || $isWasted) bg-green-100 text-green-800
+                                    @elseif($student->parent_approval_status === 'approved') bg-green-100 text-green-800
                                     @else bg-yellow-100 text-yellow-800 @endif">
-                                {{ ucfirst($student->parent_approval_status ?: ($isWasted ? 'Approved (Auto)' : 'Pending')) }}
+                                {{ ucfirst($student->parent_approval_status ?: 'Pending') }}
                             </span>
                             @if($student->disapproval_reason)
                             <div class="text-xs text-gray-500 mt-1">Reason: {{ ucfirst(str_replace('_', ' ', $student->disapproval_reason)) }}</div>
@@ -174,7 +172,7 @@
                         </td>
 
                         <td class="px-4 py-3 border text-center whitespace-nowrap">
-                            @if($student->is_permitted || $isWasted)
+                            @if($student->is_permitted)
                             <div class="flex flex-col items-center justify-center">
                                 <div class="p-1 bg-white border inline-block shadow-sm rounded">
                                     {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}

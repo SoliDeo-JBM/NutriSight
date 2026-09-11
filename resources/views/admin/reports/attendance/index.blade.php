@@ -3,6 +3,8 @@
 @section('content')
 <style>
     .attendance-hierarchy { --line: #e2e8f0; }
+    .report-back-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid #dbeafe; border-radius: .5rem; padding: .5rem .75rem; color: #2563eb; background: #eff6ff; font-size: .75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+    .report-back-link:hover { border-color: #93c5fd; background: #dbeafe; transform: translateX(-1px); }
     .attendance-hierarchy .report-card { border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(15,23,42,.05); }
     .attendance-hierarchy .report-action { transition: transform .15s ease, box-shadow .15s ease; }
     .attendance-hierarchy .report-action:hover { transform: translateY(-1px); box-shadow: 0 5px 12px rgba(15,23,42,.12); }
@@ -12,13 +14,25 @@
     .attendance-hierarchy .month-link:hover .row-actions, .attendance-hierarchy .month-link:focus-within .row-actions { opacity: 1; pointer-events: auto; }
     .attendance-hierarchy .year-content.is-collapsed { display: none; }
     .attendance-hierarchy .year-header { cursor: pointer; user-select: none; }
+    .attendance-hierarchy .year-header { position: relative; overflow: hidden; border-bottom-color: #dbeafe; background: linear-gradient(135deg, #ffffff 0%, #eff6ff 100%); }
+    .attendance-hierarchy .year-header::before { content: ''; position: absolute; inset: 0 auto 0 0; width: .3rem; background: #2563eb; }
+    .attendance-hierarchy .year-header > div:first-child { position: relative; }
+    .attendance-hierarchy .year-header > div:first-child > span { display: inline-flex; height: 2.5rem; width: 2.5rem; align-items: center; justify-content: center; border-radius: .75rem; background: #dbeafe; color: #2563eb; }
+    .attendance-hierarchy .year-header > div:first-child h2 { letter-spacing: .01em; }
+    .attendance-hierarchy .year-header > div:first-child p { display: inline-flex; margin-top: .35rem; border-radius: 9999px; background: #f1f5f9; padding: .2rem .55rem; font-weight: 600; color: #64748b; }
     .attendance-hierarchy .year-chevron { transition: transform .2s ease; }
     .attendance-hierarchy .year-chevron.is-collapsed { transform: rotate(-90deg); }
     .attendance-hierarchy .sort-icon { display:inline-flex; height:2.25rem; width:2.25rem; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:.6rem; color:#64748b; background:#fff; }
     .attendance-hierarchy .sort-icon:hover,.attendance-hierarchy .sort-icon.is-active { border-color:#93c5fd; background:#eff6ff; color:#2563eb; }
+    .attendance-hierarchy a[href*="/attendance/summary/"] { display: none; }
+    .attendance-hierarchy button[onclick*="add-attendance-month-"] { display: none; }
+    .attendance-hierarchy form[id^="add-attendance-month-"] { display: none !important; }
+    .attendance-hierarchy .attendance-year-card > .year-header > .flex.flex-wrap { display: none; }
+    .attendance-hierarchy .month-link .row-actions { display: none; }
+    .attendance-hierarchy a[href*="school-years"] { display: none; }
 </style>
 <div class="attendance-hierarchy flex flex-col gap-6">
-    <div class="flex items-center justify-between gap-4"><div><h1 class="text-2xl font-bold text-slate-900">SBFP Attendance Report</h1><p class="mt-1 text-sm text-slate-500">Daily feeding attendance by school year and month.</p></div><a href="{{ route('admin.reports.sbfp.index') }}" class="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"><i class="fas fa-arrow-left mr-1"></i> Back</a></div>
+    <div class="flex items-center justify-between gap-4"><div><a href="{{ route('admin.reports.sbfp.index') }}" class="report-back-link"><i class="fas fa-arrow-left"></i><span>Back</span></a><h1 class="mt-3 text-2xl font-bold text-slate-900">SBFP Attendance Report</h1><p class="mt-1 text-sm text-slate-500">Daily feeding attendance by school year and month.</p></div></div>
     @if($errors->any())<div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><strong>Attendance action not completed</strong><ul class="mt-1 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
     <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row"><input id="attendanceSearch" type="search" placeholder="Search school year..." class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:max-w-xs"><div class="flex items-center gap-1" aria-label="Sort school years"><button id="attendanceSortAsc" type="button" class="sort-icon" title="Oldest first" aria-label="Sort oldest first"><i class="fas fa-arrow-up"></i></button><button id="attendanceSortDesc" type="button" class="sort-icon is-active" title="Newest first" aria-label="Sort newest first"><i class="fas fa-arrow-down"></i></button></div><button id="attendanceToggle" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Collapse all</button></div>
     @forelse($schoolYears as $schoolYear)

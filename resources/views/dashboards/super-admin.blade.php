@@ -3,14 +3,16 @@
 @section('content')
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
     <h1 class="text-2xl font-bold">Super Admin Dashboard - System Nutrition Overview</h1>
-    <form method="GET" action="{{ route('super-admin.dashboard') }}">
-        <label for="super-dashboard-period" class="sr-only">Select period</label>
-        <select id="super-dashboard-period" name="period" onchange="this.form.submit()" class="text-xs border-gray-300 rounded-md shadow-sm py-1 px-2">
-            <option value="all" {{ ($selectedPeriod ?? 'all') == 'all' ? 'selected' : '' }}>All Periods (Latest)</option>
-            <option value="Baseline" {{ ($selectedPeriod ?? '') == 'Baseline' ? 'selected' : '' }}>Baseline</option>
-            <option value="Midline" {{ ($selectedPeriod ?? '') == 'Midline' ? 'selected' : '' }}>Midline</option>
-            <option value="Endline" {{ ($selectedPeriod ?? '') == 'Endline' ? 'selected' : '' }}>Endline</option>
-        </select>
+    <form method="GET" action="{{ route('super-admin.dashboard') }}" class="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+        <label for="super-dashboard-period" class="text-xs font-semibold uppercase tracking-wide text-slate-500">View period</label>
+        <div class="relative">
+            <select id="super-dashboard-period" name="period" onchange="this.form.submit()" class="appearance-none rounded-lg border border-indigo-200 bg-indigo-50 py-2 pl-3 pr-9 text-sm font-semibold text-indigo-800 shadow-sm outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200">
+                <option value="Baseline" {{ ($selectedPeriod ?? 'Baseline') === 'Baseline' ? 'selected' : '' }}>Baseline</option>
+                <option value="Midline" {{ ($selectedPeriod ?? '') === 'Midline' ? 'selected' : '' }}>Midline</option>
+                <option value="Endline" {{ ($selectedPeriod ?? '') === 'Endline' ? 'selected' : '' }}>Endline</option>
+            </select>
+            <i class="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs text-indigo-500 fas fa-chevron-down"></i>
+        </div>
     </form>
 </div>
 

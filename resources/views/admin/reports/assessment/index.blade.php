@@ -2,11 +2,13 @@
 
 @section('content')
 <style>
+    .report-back-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid #dbeafe; border-radius: .5rem; padding: .5rem .75rem; color: #2563eb; background: #eff6ff; font-size: .75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
+    .report-back-link:hover { border-color: #93c5fd; background: #dbeafe; transform: translateX(-1px); }
     @media print {.sidebar,.sidebar-backdrop,.top-header,.no-print{display:none!important}.main-content{margin-left:0!important;width:100%!important}.content-body{padding:0!important}@page{size:landscape;margin:8mm}}
 </style>
 <div class="flex flex-col gap-5">
     <div class="no-print flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><a href="{{ route('admin.reports.sbfp.index') }}" class="inline-flex items-center gap-2 rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold text-violet-700"><i class="fas fa-arrow-left"></i> Back</a><h1 class="mt-3 text-xl font-bold text-gray-900">SBFP Assessment Report - SY {{ $assessment['school_year'] }}</h1><p class="text-xs text-gray-500">PROGRAM IMPACT | ATTENDANCE AND NUTRITION PROGRESS</p></div>
+        <div><a href="{{ route('admin.reports.sbfp.index') }}" class="report-back-link"><i class="fas fa-arrow-left"></i><span>Back</span></a><h1 class="mt-3 text-xl font-bold text-gray-900">SBFP Assessment Report - SY {{ $assessment['school_year'] }}</h1><p class="text-xs text-gray-500">PROGRAM IMPACT | ATTENDANCE AND NUTRITION PROGRESS</p></div>
         <div class="flex flex-wrap gap-2"><a href="{{ route('admin.reports.sbfp.assessment.excel') }}" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white"><i class="fas fa-file-excel mr-1"></i> Excel</a><a href="{{ route('admin.reports.sbfp.assessment.docx') }}" class="rounded-lg bg-indigo-600 px-3 py-2 text-xs font-semibold text-white"><i class="fas fa-file-word mr-1"></i> Word</a><a href="{{ route('admin.reports.sbfp.assessment.pdf') }}" class="rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white"><i class="fas fa-file-pdf mr-1"></i> PDF</a><a href="{{ route('admin.reports.sbfp.assessment.sql') }}" class="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white"><i class="fas fa-database mr-1"></i> SQL</a><button type="button" onclick="window.print()" class="rounded-lg bg-slate-200 px-3 py-2 text-xs font-semibold text-slate-700"><i class="fas fa-print mr-1"></i> Print</button></div>
     </div>
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">

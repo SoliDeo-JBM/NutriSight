@@ -13,6 +13,7 @@ use App\Models\SchoolYear;
 use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
 use App\Services\SchoolYearManager;
+use App\Services\ReportPeriodManager;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
@@ -23,6 +24,10 @@ use PhpOffice\PhpWord\PhpWord;
 
 class ReportsController extends Controller
 {
+    public function __construct(private readonly ReportPeriodManager $reportPeriodManager)
+    {
+    }
+
     public function admin()
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -64,6 +69,7 @@ class ReportsController extends Controller
     // Attendance Summary Report
     public function sbfpAttendance(Request $request)
     {
+        $this->reportPeriodManager->syncExistingRecords();
         $schoolYears = SchoolYear::orderByDesc('start_date')->get();
         $schoolYears->load(['attendanceReportMonths' => fn($query) => $query->orderBy('month')]);
 
@@ -236,6 +242,7 @@ class ReportsController extends Controller
     // Annual Consolidated Report hierarchy
     public function sbfpYearly()
     {
+        $this->reportPeriodManager->syncExistingRecords();
         $schoolYears = SchoolYear::with(['reportPeriods' => fn($query) => $query->orderBy('month')->orderBy('name')])
             ->orderByDesc('start_date')->get();
 
@@ -273,6 +280,7 @@ class ReportsController extends Controller
 
     public function showReportPeriod(ReportPeriod $period)
     {
+        $this->refreshReportPeriod($period);
         $period->load(['schoolYear', 'rows' => fn($query) => $query->orderBy('grade_level')->orderBy('sex')]);
         $rows = $this->formRows($period->rows->isEmpty() ? $this->blankRows() : $period->rows->toArray());
 
@@ -321,16 +329,21 @@ class ReportsController extends Controller
         return redirect()->route('admin.reports.sbfp.annual')->with('success', 'Baseline period deleted.');
     }
 
-    public function showAnnualSummary(SchoolYear $schoolYear)
-    {
-        $rows = $this->formRows($this->summaryRows($schoolYear));
-
-        return view('admin.reports.consolidated.report', compact('schoolYear', 'rows') + ['period' => null, 'isSummary' => true]);
-    }
-
     public function generateReportPeriod(ReportPeriod $period)
     {
+        $this->refreshReportPeriod($period);
+
+        return redirect()->back()->with('success', 'Report data refreshed from the selected measurement period.');
+    }
+
+    private function refreshReportPeriod(ReportPeriod $period): void
+    {
         $period->load('schoolYear');
+        $measurementPeriod = match ($period->measurement_period) {
+            'mid' => 'midline',
+            'end' => 'endline',
+            default => 'baseline',
+        };
         // Replace the snapshot so a previous term can never remain in this period.
         $period->rows()->delete();
         $rows = collect($this->blankRows())->keyBy(fn($row) => $row['grade_level'] . '-' . $row['sex']);
@@ -339,7 +352,16 @@ class ReportsController extends Controller
                 $query->where('school_year_id', $period->school_year_id)
                     ->with('sbfpParticipant.nutritionMeasurements');
             }
-        ])->whereHas('enrollments', fn($query) => $query->where('school_year_id', $period->school_year_id))->get();
+        ])->whereHas('enrollments', function ($query) use ($period) {
+            $query->where('school_year_id', $period->school_year_id)
+                ->whereHas('sbfpParticipant', function ($participantQuery) {
+                    $participantQuery->where('parent_consent', 'approved')
+                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                            $measurementQuery->where('measurement_period', 'baseline')
+                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                        });
+                });
+        })->get();
 
         foreach ($students as $student) {
             $enrollment = $student->enrollments->first();
@@ -349,7 +371,7 @@ class ReportsController extends Controller
                 continue;
             $row['enrollment']++;
             $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements
-                ->where('measurement_period', $period->measurement_period)->sortByDesc('created_at')
+                ->where('measurement_period', $measurementPeriod)->sortByDesc('created_at')
                 ->first();
             if ($measurement) {
                 $row['pupils_weighed']++;
@@ -365,33 +387,14 @@ class ReportsController extends Controller
             ReportPeriodRow::updateOrCreate(['report_period_id' => $period->id, 'grade_level' => $row['grade_level'], 'sex' => $row['sex']], $row);
         }
 
-        return redirect()->back()->with('success', 'Report data generated from the selected measurement period.');
     }
 
-    public function exportAnnualConsolidatedExcel(ReportPeriod|SchoolYear|null $target = null)
+    public function exportAnnualConsolidatedExcel(ReportPeriod $period)
     {
-        $period = $target instanceof ReportPeriod ? $target : null;
-        $schoolYear = $period?->schoolYear ?? ($target instanceof SchoolYear ? $target : SchoolYearManager::activeSchoolYear());
-        $rows = $period ? $this->formRows($this->periodRows($period)) : $this->formRows($this->summaryRows($schoolYear));
+        $schoolYear = $period->schoolYear;
+        $rows = $this->formRows($this->periodRows($period));
 
         return Excel::download(new DepEdForm1Export($rows, $schoolYear, $period), 'sbfp-form-1-' . ($period?->name ?? 'summary') . '.xlsx');
-    }
-
-    public function exportAnnualSummaryExcel(SchoolYear $schoolYear)
-    {
-        return $this->exportAnnualConsolidatedExcel($schoolYear);
-    }
-    public function exportAnnualSummaryDocx(SchoolYear $schoolYear)
-    {
-        return $this->exportAnnualConsolidatedDocx($schoolYear);
-    }
-    public function exportAnnualSummaryPdf(SchoolYear $schoolYear)
-    {
-        return $this->exportAnnualConsolidatedPdf($schoolYear);
-    }
-    public function exportAnnualSummarySql(SchoolYear $schoolYear)
-    {
-        return $this->exportAnnualConsolidatedSql($schoolYear);
     }
     public function exportAnnualPeriodExcel(ReportPeriod $period)
     {
@@ -410,15 +413,14 @@ class ReportsController extends Controller
         return $this->exportAnnualConsolidatedSql($period);
     }
 
-    public function exportAnnualConsolidatedDocx(ReportPeriod|SchoolYear|null $target = null)
+    public function exportAnnualConsolidatedDocx(ReportPeriod $period)
     {
-        $period = $target instanceof ReportPeriod ? $target : null;
-        $schoolYear = $period?->schoolYear ?? ($target instanceof SchoolYear ? $target : SchoolYearManager::activeSchoolYear());
-        $rows = $period ? $this->formRows($this->periodRows($period)) : $this->formRows($this->summaryRows($schoolYear));
+        $schoolYear = $period->schoolYear;
+        $rows = $this->formRows($this->periodRows($period));
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
         $section->addText("SCHOOL-BASED FEEDING PROGRAM - FORM 1", ['bold' => true, 'size' => 14]);
-        $section->addText("Marisol Bliss Elementary School | SY {$schoolYear?->year} | " . ($period?->name ?? 'Summary'));
+        $section->addText("Marisol Bliss Elementary School | SY {$schoolYear->year} | {$period->name}");
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 40]);
         $table->addRow();
         foreach (DepEdForm1Export::columnHeadings() as $heading)
@@ -434,23 +436,18 @@ class ReportsController extends Controller
         return response()->download($path, 'sbfp-form-1.docx')->deleteFileAfterSend(true);
     }
 
-    public function exportAnnualConsolidatedPdf(ReportPeriod|SchoolYear|null $target = null)
+    public function exportAnnualConsolidatedPdf(ReportPeriod $period)
     {
-        $period = $target instanceof ReportPeriod ? $target : null;
-        $schoolYear = $period?->schoolYear ?? ($target instanceof SchoolYear ? $target : SchoolYearManager::activeSchoolYear());
-        $rows = $period ? $this->formRows($this->periodRows($period)) : $this->formRows($this->summaryRows($schoolYear));
+        $schoolYear = $period->schoolYear;
+        $rows = $this->formRows($this->periodRows($period));
 
         return Pdf::loadView('admin.reports.consolidated.print', compact('schoolYear', 'period', 'rows'))->setPaper('a4', 'landscape')->download('sbfp-form-1.pdf');
     }
 
-    public function exportAnnualConsolidatedSql(ReportPeriod|SchoolYear|null $target = null): Response
+    public function exportAnnualConsolidatedSql(ReportPeriod $period): Response
     {
-        $period = $target instanceof ReportPeriod ? $target : null;
         $query = DB::table('report_period_rows');
-        if ($period)
-            $query->where('report_period_id', $period->id);
-        else
-            $query->whereIn('report_period_id', ReportPeriod::where('school_year_id', $target instanceof SchoolYear ? $target->id : SchoolYearManager::activeSchoolYearId())->pluck('id'));
+        $query->where('report_period_id', $period->id);
         $sql = "-- NutriSight SBFP Form 1 aggregate rows\n";
         foreach ($query->get() as $record) {
             $attributes = (array) $record;
@@ -466,48 +463,6 @@ class ReportsController extends Controller
     {
         $period->loadMissing('rows');
         return $period->rows->isEmpty() ? $this->blankRows() : $period->rows->sortBy(['grade_level', 'sex'])->values()->toArray();
-    }
-
-    private function summaryRows(SchoolYear $schoolYear): array
-    {
-        $rows = collect($this->blankRows())->keyBy(fn($row) => $row['grade_level'] . '-' . $row['sex']);
-        $students = Student::with([
-            'enrollments' => function ($query) use ($schoolYear) {
-                $query->where('school_year_id', $schoolYear->id)
-                    ->with('sbfpParticipant.nutritionMeasurements');
-            },
-        ])->whereHas('enrollments', fn($query) => $query->where('school_year_id', $schoolYear->id))->get();
-
-        foreach ($students as $student) {
-            $enrollment = $student->enrollments->first();
-            if (!$enrollment) {
-                continue;
-            }
-            $key = $enrollment->grade_level . '-' . $this->sexKey($student->sex);
-            $row = $rows->get($key);
-            if (!$row) {
-                continue;
-            }
-
-            // One enrolment per student; use the best/latest available term once.
-            $row['enrollment']++;
-            $measurements = $enrollment->sbfpParticipant?->nutritionMeasurements ?? collect();
-            $measurement = collect(['end', 'mid', 'baseline'])
-                ->map(fn($term) => $measurements->where('measurement_period', $term)->sortByDesc('created_at')->first())
-                ->filter()->first();
-
-            if ($measurement) {
-                $row['pupils_weighed']++;
-                if (filled($measurement->height)) {
-                    $row['pupils_height_taken']++;
-                }
-                $this->incrementStatus($row, 'bmi', $measurement->bmi_category);
-                $this->incrementStatus($row, 'hfa', $measurement->hfa);
-            }
-            $rows->put($key, $row);
-        }
-
-        return $rows->values()->all();
     }
 
     private function formRows(array $rows): array
@@ -669,11 +624,14 @@ class ReportsController extends Controller
             }
 
             $measurements = $participant?->nutritionMeasurements?->sortByDesc('created_at') ?? collect();
-            $baseline = $measurements->where('measurement_period', 'baseline')->first()
-                ?? $measurements->sortBy('created_at')->first();
+            $baseline = $measurements->firstWhere('measurement_period', 'baseline');
             if ($baseline && in_array($baseline->bmi_category, ['Wasted', 'Severely Wasted'], true)) {
                 $malnourished++;
-                if ($measurements->first()?->bmi_category === 'Normal') {
+                $latestPeriodMeasurement = collect(['endline', 'midline', 'baseline'])
+                    ->map(fn ($period) => $measurements->firstWhere('measurement_period', $period))
+                    ->filter()
+                    ->first();
+                if ($latestPeriodMeasurement?->bmi_category === 'Normal') {
                     $recovered++;
                 }
             }
