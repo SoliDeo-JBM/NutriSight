@@ -21,6 +21,7 @@ class DashboardController extends Controller
         $selectedPeriod = $request->get('period', 'all');
         $periods = ['Baseline', 'Midline', 'Endline'];
         $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $activeSchoolYear = SchoolYearManager::activeSchoolYear();
 
         // Get all SBFP participants for active school year
         $students = Student::with(['enrollments' => function ($q) use ($activeSyId) {
@@ -127,7 +128,7 @@ class DashboardController extends Controller
             ? 'Super Admin Dashboard - System Nutrition Overview'
             : 'Admin Dashboard - Nutritional Analytics & Period Progress';
 
-        return view('dashboards.admin', compact('sbfpStudents', 'totalSbfpStudents', 'bmiDistribution', 'periodBmiChartLabels', 'periodBmiChartData', 'recoveredCount', 'recoveryRate', 'selectedPeriod', 'sectionAttendanceLabels', 'sectionAttendanceRates', 'dashboardRoute', 'dashboardTitle'));
+        return view('dashboards.admin', compact('sbfpStudents', 'totalSbfpStudents', 'bmiDistribution', 'periodBmiChartLabels', 'periodBmiChartData', 'recoveredCount', 'recoveryRate', 'selectedPeriod', 'activeSchoolYear', 'sectionAttendanceLabels', 'sectionAttendanceRates', 'dashboardRoute', 'dashboardTitle'));
     }
 
     public function encoder()

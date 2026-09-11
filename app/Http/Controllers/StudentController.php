@@ -144,7 +144,11 @@ class StudentController extends Controller
                 }
                 $q->whereHas('sbfpParticipant', function ($participantQuery) {
                     $participantQuery->where(function ($participantFilter) {
-                        $participantFilter->whereIn('parent_consent', ['approved', 'pending', ''])
+                        $participantFilter->where(function ($nonApproved) {
+                            $nonApproved->whereNull('parent_consent')
+                                ->orWhere('parent_consent', '')
+                                ->orWhere('parent_consent', '!=', 'approved');
+                        })
                             ->orWhereNull('parent_consent')
                             ->orWhereHas('nutritionMeasurements', function ($sub) {
                                 $sub->where('measurement_period', 'baseline')
@@ -793,8 +797,27 @@ class StudentController extends Controller
                     continue;
                 }
 
-                $path = $file->store('sbfp-profiles', 'r2');
-                $url = Storage::disk('r2')->url($path);
+                try {
+                    $path = $file->store('sbfp-profiles', 'r2');
+                } catch (\Throwable $exception) {
+                    throw ValidationException::withMessages([
+                        'profiles' => 'Cloudflare R2 rejected the profile image. No database record was changed.',
+                    ]);
+                }
+                if (!$path) {
+                    throw ValidationException::withMessages([
+                        'profiles' => 'The profile image could not be stored in Cloudflare R2. No database record was changed.',
+                    ]);
+                }
+
+                $publicUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+                if ($publicUrl === '') {
+                    throw ValidationException::withMessages([
+                        'profiles' => 'Cloudflare R2 public URL is not configured. No database record was changed.',
+                    ]);
+                }
+
+                $url = $publicUrl . '/' . ltrim($path, '/');
 
                 $participant->update(['profile_image_url' => $url]);
                 $updated++;

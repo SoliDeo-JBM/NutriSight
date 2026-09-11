@@ -2,7 +2,10 @@
 
 @section('content')
 <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-    <h1 class="text-2xl font-bold">{{ $dashboardTitle }}</h1>
+    <div>
+        <h1 class="text-2xl font-bold">{{ $dashboardTitle }}</h1>
+        <p class="mt-1 text-sm text-gray-500">School Year: {{ $activeSchoolYear?->year ?? 'Not selected' }}</p>
+    </div>
     <form method="GET" action="{{ route($dashboardRoute) }}">
         <label for="dashboard-period" class="sr-only">Select period</label>
         <select id="dashboard-period" name="period" onchange="this.form.submit()" class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1 px-2">
@@ -95,14 +98,14 @@
                         $latestAssessment = $student->dashboardPeriods[$period][0];
                         @endphp
                         <div class="text-xs bg-blue-50 p-2 rounded inline-block">
-                            <div><strong>H:</strong> {{ $latestAssessment->height_m * 100 }}cm</div>
-                            <div><strong>W:</strong> {{ $latestAssessment->weight_kg }}kg</div>
+                                <div><strong>H:</strong> {{ $latestAssessment->height }}cm</div>
+                                <div><strong>W:</strong> {{ $latestAssessment->weight }}kg</div>
                             <div><strong>BMI:</strong> {{ $latestAssessment->bmi }}</div>
                             <div class="text-xs font-semibold
-                                        @if($latestAssessment->nutritional_status == 'Normal') text-green-700
-                                        @elseif(in_array($latestAssessment->nutritional_status, ['Wasted', 'Severely Wasted'])) text-red-700
+                                    @if($latestAssessment->bmi_category == 'Normal') text-green-700
+                                    @elseif(in_array($latestAssessment->bmi_category, ['Wasted', 'Severely Wasted'])) text-red-700
                                         @else text-yellow-700 @endif">
-                                {{ $latestAssessment->nutritional_status }}
+                                {{ $latestAssessment->bmi_category }}
                             </div>
                         </div>
                         @else

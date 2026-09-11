@@ -117,10 +117,14 @@ class StudentViewController extends Controller
                 $q->where('school_year_id', $activeSyId)
                     ->whereHas('sbfpParticipant', function ($participantQuery) {
                         $participantQuery->where(function ($sub) {
-                            $sub->where('parent_consent', '!=', 'disapproved')
-                                ->orWhereNull('parent_consent');
-                        })->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                            $measurementQuery->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                            $sub->where(function ($nonApproved) {
+                                $nonApproved->whereNull('parent_consent')
+                                    ->orWhere('parent_consent', '')
+                                    ->orWhere('parent_consent', '!=', 'approved');
+                            })->orWhereHas('nutritionMeasurements', function ($measurementQuery) {
+                                $measurementQuery->where('measurement_period', 'baseline')
+                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                            });
                         });
                     });
             });
