@@ -5,12 +5,8 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\Enrollment;
-use App\Models\SbfpParticipant;
-use App\Services\AuditLogger;
 use App\Services\SchoolYearManager;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class StudentViewController extends Controller
 {
@@ -177,36 +173,4 @@ class StudentViewController extends Controller
         return view('admin.students.sbfp', compact('students', 'gradeLevels', 'sections', 'sexes', 'sortOptions', 'routePrefix'));
     }
 
-    public function uploadProfileImages(Request $request)
-    {
-        $request->validate([
-            'profiles' => ['required', 'array'],
-            'profiles.*' => ['nullable', 'image', 'max:4096'],
-        ]);
-
-        $updated = 0;
-
-        DB::transaction(function () use ($request, &$updated) {
-            foreach ($request->file('profiles', []) as $participantId => $file) {
-                if (!$file) {
-                    continue;
-                }
-
-                $participant = SbfpParticipant::find($participantId);
-                if (!$participant) {
-                    continue;
-                }
-
-                $path = $file->store('sbfp-profiles', 'r2');
-                $url = Storage::disk('r2')->url($path);
-
-                $participant->update(['profile_image_url' => $url]);
-                $updated++;
-            }
-        });
-
-        AuditLogger::log('Updated', 'SBFP Participants', "Uploaded {$updated} profile image(s) for SBFP participants.");
-
-        return back()->with('success', "Uploaded {$updated} profile image(s).");
-    }
 }

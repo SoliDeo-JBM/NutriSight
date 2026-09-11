@@ -80,13 +80,9 @@
                 </div>
             </div>
 
-            <!-- Action Buttons -->
-            <div class="flex gap-2 pt-2">
-                <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
-                    <i class="fas fa-filter mr-2"></i> Apply Filters
-                </button>
-                <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index') : route('admin.accounts.index') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
-                    <i class="fas fa-redo mr-2"></i> Clear Filters
+            <div class="flex justify-end pt-1">
+                <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index') : route('admin.accounts.index') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
+                    <i class="fas fa-rotate-left"></i> Reset filters
                 </a>
             </div>
         </form>

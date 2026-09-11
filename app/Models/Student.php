@@ -44,8 +44,8 @@ class Student extends Model
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
-        $consent = $enrollment?->sbfpParticipant?->parent_consent;
-        return $consent === 'pending' ? null : $consent;
+        $consent = trim((string) ($enrollment?->sbfpParticipant?->parent_consent ?? ''));
+        return $consent === '' || $consent === 'pending' ? null : $consent;
     }
 
     public function getDisapprovalReasonAttribute()
@@ -60,17 +60,6 @@ class Student extends Model
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
         return $enrollment?->sbfpParticipant?->parent_consent === 'approved';
-    }
-
-    public function getTermProgressAttribute()
-    {
-        $periods = $this->periodProgress;
-
-        return [
-            'Term 1' => $periods['Baseline'],
-            'Term 2' => $periods['Midline'],
-            'Term 3' => $periods['Endline'],
-        ];
     }
 
     public function getPeriodProgressAttribute()

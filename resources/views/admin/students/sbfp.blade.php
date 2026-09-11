@@ -77,22 +77,6 @@
         </form>
     </div>
 
-    @if($routePrefix !== 'super-admin')
-    @php
-        $profileImageParticipants = collect(isset($students) ? $students->items() : [])->map(function ($student) {
-            $participant = $student->enrollments->first()?->sbfpParticipant;
-            return $participant ? [
-                'id' => $participant->id,
-                'name' => trim($student->last_name . ', ' . $student->first_name),
-                'image' => $participant->profile_image_url,
-            ] : null;
-        })->filter()->values();
-    @endphp
-    <div>
-        <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route($routePrefix . '.students.sbfp.profile-images')" />
-    </div>
-    @endif
-
     <!-- SBFP Table -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
@@ -182,7 +166,7 @@
                                     @if($student->parent_approval_status === 'disapproved') bg-red-100 text-red-800
                                     @elseif($student->parent_approval_status === 'approved' || $isWasted) bg-green-100 text-green-800
                                     @else bg-yellow-100 text-yellow-800 @endif">
-                                {{ ucfirst($student->parent_approval_status ?? ($isWasted ? 'Approved (Auto)' : 'Pending')) }}
+                                {{ ucfirst($student->parent_approval_status ?: ($isWasted ? 'Approved (Auto)' : 'Pending')) }}
                             </span>
                             @if($student->disapproval_reason)
                             <div class="text-xs text-gray-500 mt-1">Reason: {{ ucfirst(str_replace('_', ' ', $student->disapproval_reason)) }}</div>

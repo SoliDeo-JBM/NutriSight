@@ -136,7 +136,7 @@
                                 'guardian' => $student->guardian_name ?? '-',
                                 'guardian_contact' => $student->guardian_contact ?? '-',
                                 'guardian_email' => $student->guardian_email ?? '-',
-                                'approval' => ucfirst($student->parent_approval_status ?? 'Pending'),
+                                'approval' => ucfirst($student->parent_approval_status ?: 'Pending'),
                                 'reason' => $student->disapproval_reason ? ucfirst(str_replace('_', ' ', $student->disapproval_reason)) : '-',
                                 'periods' => collect($periodData)->map(fn ($measurement) => $measurement ? [
                                     'weight' => $measurement->weight,
@@ -232,7 +232,7 @@
                             </thead>
                             <tbody>
                                 @foreach($students ?? [] as $student)
-                                    @php $approval = $student->parent_approval_status ?? 'pending'; @endphp
+                                    @php $approval = $student->parent_approval_status ?: 'pending'; @endphp
                                     @php
                                         $storedReason = $student->disapproval_reason;
                                         $reasonChoice = in_array($storedReason, ['unwilling', 'medical_condition'], true) ? $storedReason : ($storedReason ? 'custom' : '');

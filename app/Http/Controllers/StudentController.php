@@ -143,9 +143,13 @@ class StudentController extends Controller
                         ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
                 }
                 $q->whereHas('sbfpParticipant', function ($participantQuery) {
-                    $participantQuery->whereHas('nutritionMeasurements', function ($sub) {
-                        $sub->where('measurement_period', 'baseline')
-                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                    $participantQuery->where(function ($participantFilter) {
+                        $participantFilter->whereIn('parent_consent', ['approved', 'pending', ''])
+                            ->orWhereNull('parent_consent')
+                            ->orWhereHas('nutritionMeasurements', function ($sub) {
+                                $sub->where('measurement_period', 'baseline')
+                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                            });
                     });
                 });
             });
@@ -167,7 +171,11 @@ class StudentController extends Controller
         }
 
         $hasPendingApproval = (clone $query)
-            ->whereHas('enrollments.sbfpParticipant', fn ($q) => $q->whereNull('parent_consent'))
+            ->whereHas('enrollments.sbfpParticipant', fn ($q) => $q->where(function ($pendingQuery) {
+                $pendingQuery->whereNull('parent_consent')
+                    ->orWhere('parent_consent', '')
+                    ->orWhere('parent_consent', 'pending');
+            }))
             ->exists();
 
         if ($request->filled('approval_status')) {
@@ -176,6 +184,7 @@ class StudentController extends Controller
                 if ($approvalStatus === 'pending') {
                     $q->where(function ($pendingQuery) {
                         $pendingQuery->whereNull('parent_consent')
+                            ->orWhere('parent_consent', '')
                             ->orWhere('parent_consent', 'pending');
                     });
                 } else {
