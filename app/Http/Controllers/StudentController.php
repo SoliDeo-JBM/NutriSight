@@ -143,17 +143,9 @@ class StudentController extends Controller
                         ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
                 }
                 $q->whereHas('sbfpParticipant', function ($participantQuery) {
-                    $participantQuery->where(function ($participantFilter) {
-                        $participantFilter->where(function ($nonApproved) {
-                            $nonApproved->whereNull('parent_consent')
-                                ->orWhere('parent_consent', '')
-                                ->orWhere('parent_consent', '!=', 'approved');
-                        })
-                            ->orWhereNull('parent_consent')
-                            ->orWhereHas('nutritionMeasurements', function ($sub) {
-                                $sub->where('measurement_period', 'baseline')
-                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                            });
+                    $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                        $measurementQuery->where('measurement_period', 'baseline')
+                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
                     });
                 });
             });
