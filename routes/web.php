@@ -151,6 +151,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::post('/students/sbfp/profile-images', [App\Http\Controllers\Admin\StudentViewController::class, 'uploadProfileImages'])->name('students.sbfp.profile-images');
         Route::get('/sections', [App\Http\Controllers\Admin\SectionController::class, 'index'])->name('sections.index');
         Route::post('/sections', [App\Http\Controllers\Admin\SectionController::class, 'store'])->name('sections.store');
         Route::post('/sections/carry-over', [App\Http\Controllers\Admin\SectionController::class, 'carryOver'])->name('sections.carry-over');
@@ -174,6 +175,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/{student}/edit', [App\Http\Controllers\StudentController::class, 'edit'])->name('students.edit');
         Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');
+        Route::post('/students/sbfp/profile-images', [App\Http\Controllers\StudentController::class, 'uploadProfileImages'])->name('students.sbfp.profile-images');
         Route::post('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'storeBulkAssessments'])->name('students.assessment.bulk');
         Route::patch('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkAssessments'])->name('students.assessment.bulk.update');
         Route::patch('/students/{student}/assessment/period', [App\Http\Controllers\StudentController::class, 'updatePeriod'])->name('students.assessment.period.update');

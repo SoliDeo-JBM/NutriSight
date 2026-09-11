@@ -12,6 +12,7 @@ use App\Services\AuditLogger;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Carbon\Carbon;
 
@@ -751,5 +752,48 @@ class StudentController extends Controller
         AuditLogger::log('Created', 'Email', 'Sent feeding day email notice to guardian of ' . $student->first_name . ' ' . $student->last_name);
 
         return back()->with('success', 'Feeding day notice email sent successfully to ' . $student->guardian_email);
+    }
+
+    public function uploadProfileImages(Request $request)
+    {
+        $request->validate([
+            'profiles' => ['required', 'array'],
+            'profiles.*' => ['nullable', 'image', 'max:4096'],
+        ]);
+
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $updated = 0;
+
+        DB::transaction(function () use ($request, $user, $activeSyId, &$updated) {
+            foreach ($request->file('profiles', []) as $participantId => $file) {
+                if (!$file) {
+                    continue;
+                }
+
+                $participant = SbfpParticipant::with('enrollment')->find($participantId);
+                if (!$participant || !$participant->enrollment || $participant->enrollment->school_year_id != $activeSyId) {
+                    continue;
+                }
+
+                if ($user && $user->isEncoder() && (
+                    (string) $participant->enrollment->grade_level !== (string) $user->advisory_grade_level ||
+                    strtolower(trim($participant->enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
+                )) {
+                    continue;
+                }
+
+                $path = $file->store('sbfp-profiles', 'r2');
+                $url = Storage::disk('r2')->url($path);
+
+                $participant->update(['profile_image_url' => $url]);
+                $updated++;
+            }
+        });
+
+        AuditLogger::log('Updated', 'SBFP Participants', "Uploaded {$updated} profile image(s) for advisory SBFP participants.");
+
+        return back()->with('success', "Uploaded {$updated} profile image(s).");
     }
 }
