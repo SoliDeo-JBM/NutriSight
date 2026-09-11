@@ -18,6 +18,7 @@ use Illuminate\Support\Facades\Route;
 | Public Routes
 |--------------------------------------------------------------------------
 */
+
 Route::get('/', function () {
     return view('welcome');
 })->name('home');
@@ -70,6 +71,8 @@ Route::middleware('auth')->group(function () {
     // Role-protected dashboards
     Route::middleware('role:super_admin')->prefix('super-admin')->name('super-admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard');
+        Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'adminIndex'])->name('attendance.index');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
         Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
         Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
@@ -97,6 +100,8 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
+        Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'adminIndex'])->name('attendance.index');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
         Route::get('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'index'])->name('meal-plans.index');
         Route::post('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'store'])->name('meal-plans.store');
         Route::put('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'update'])->name('meal-plans.update');

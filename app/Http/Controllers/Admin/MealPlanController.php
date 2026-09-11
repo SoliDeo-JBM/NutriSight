@@ -15,10 +15,15 @@ class MealPlanController extends Controller
     {
         $year = (int) $request->input('year', Carbon::today()->year);
         $month = (int) $request->input('month', Carbon::today()->month);
-        $currentDate = Carbon::create($year, $month, 1);
-        $date = Carbon::parse($request->input('date', $currentDate->toDateString()))->toDateString();
+        $requestedDate = $request->input('date');
+        $currentDate = $requestedDate
+            ? Carbon::parse($requestedDate)->startOfMonth()
+            : Carbon::today()->startOfMonth();
+        $date = $requestedDate
+            ? Carbon::parse($requestedDate)->toDateString()
+            : Carbon::create($year, $month, min(Carbon::today()->day, $currentDate->daysInMonth))->toDateString();
         $mealPlans = MealPlan::whereDate('meal_date', $date)->latest()->get();
-        $plannedDates = MealPlan::query()->select('meal_date')->distinct()->pluck('meal_date')->map(fn ($mealDate) => Carbon::parse($mealDate)->toDateString())->all();
+        $plannedDates = MealPlan::query()->select('meal_date')->distinct()->pluck('meal_date')->map(fn($mealDate) => Carbon::parse($mealDate)->toDateString())->all();
 
         return view('admin.meal-plans.index', compact('currentDate', 'date', 'mealPlans', 'plannedDates'));
     }

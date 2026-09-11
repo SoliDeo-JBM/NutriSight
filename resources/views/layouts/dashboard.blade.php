@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -14,6 +15,7 @@
     <link rel="stylesheet" href="{{ asset('css/' . Auth::user()->role . '-dashboard.css') }}">
     @endif
 </head>
+
 <body>
     <!-- Mobile Sidebar Backdrop -->
     <div id="sidebarBackdrop" class="sidebar-backdrop" onclick="toggleSidebar()"></div>
@@ -32,6 +34,9 @@
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             @if(Auth::user()->role === 'super_admin')
+            <a href="{{ route('super-admin.attendance.index') }}" class="nav-link {{ request()->routeIs('super-admin.attendance.*') ? 'active' : '' }}" onclick="toggleSidebar()">
+                <i class="fas fa-calendar-check"></i> Complete Attendance List
+            </a>
             <!-- Student Management Dropdown -->
             <div x-data="{ open: {{ request()->routeIs('super-admin.students.*') ? 'true' : 'false' }} }" class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
@@ -89,6 +94,9 @@
             <a href="{{ route('admin.meal-plans.index') }}" class="nav-link {{ request()->routeIs('admin.meal-plans.*') ? 'active' : '' }}" onclick="toggleSidebar()">
                 <i class="fas fa-utensils"></i> Meal Plan
             </a>
+            <a href="{{ route('admin.attendance.index') }}" class="nav-link {{ request()->routeIs('admin.attendance.*') ? 'active' : '' }}" onclick="toggleSidebar()">
+                <i class="fas fa-calendar-check"></i> Complete Attendance List
+            </a>
             <!-- Student Management Dropdown -->
             <div x-data="{ open: {{ request()->routeIs('admin.students.*') ? 'true' : 'false' }} }" class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
@@ -145,13 +153,13 @@
                     <span class="text-xs font-semibold text-gray-600 hidden sm:inline"><i class="fas fa-calendar-alt mr-1"></i> School Year:</span>
                     <select name="school_year_id" onchange="this.form.submit()" class="border border-gray-300 rounded px-2.5 py-1 text-xs font-medium text-gray-700 bg-white focus:outline-none focus:border-blue-500">
                         @php
-                            $allSy = \App\Services\SchoolYearManager::allSchoolYears();
-                            $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
+                        $allSy = \App\Services\SchoolYearManager::allSchoolYears();
+                        $activeSyId = \App\Services\SchoolYearManager::activeSchoolYearId();
                         @endphp
                         @foreach($allSy as $sy)
-                                <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
-                                     {{ $sy->year }} {{ $sy->is_active ? '(Active)' : '' }}
-                                </option>
+                        <option value="{{ $sy->id }}" {{ $activeSyId == $sy->id ? 'selected' : '' }}>
+                            {{ $sy->year }} {{ $sy->is_active ? '(Active)' : '' }}
+                        </option>
                         @endforeach
                     </select>
                 </form>
@@ -160,19 +168,19 @@
 
         <div class="content-body">
             @if(session('success'))
-                <div id="success-alert" class="success-alert">
-                    <i class="fas fa-check-circle"></i>
-                    <span>{{ session('success') }}</span>
-                </div>
-                <script>
-                    setTimeout(() => {
-                        const alert = document.getElementById('success-alert');
-                        if (alert) {
-                            alert.style.opacity = '0';
-                            setTimeout(() => alert.remove(), 200);
-                        }
-                    }, 1500);
-                </script>
+            <div id="success-alert" class="success-alert">
+                <i class="fas fa-check-circle"></i>
+                <span>{{ session('success') }}</span>
+            </div>
+            <script>
+                setTimeout(() => {
+                    const alert = document.getElementById('success-alert');
+                    if (alert) {
+                        alert.style.opacity = '0';
+                        setTimeout(() => alert.remove(), 200);
+                    }
+                }, 1500);
+            </script>
             @endif
 
             @yield('content')
@@ -223,6 +231,7 @@
         function openLogoutModal() {
             document.getElementById('logoutModal').classList.remove('hidden');
         }
+
         function closeLogoutModal() {
             document.getElementById('logoutModal').classList.add('hidden');
         }
@@ -238,4 +247,5 @@
         window.addEventListener('meal-required', openMealRequiredModal);
     </script>
 </body>
+
 </html>

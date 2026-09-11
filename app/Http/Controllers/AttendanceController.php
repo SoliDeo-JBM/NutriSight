@@ -20,31 +20,62 @@ class AttendanceController extends Controller
 {
     public function index(Request $request)
     {
+        return $this->attendanceIndex($request, true, 'encoder');
+    }
+
+    public function adminIndex(Request $request)
+    {
+        $routePrefix = Auth::user()->role === 'super_admin' ? 'super-admin' : 'admin';
+
+        return $this->attendanceIndex($request, false, $routePrefix);
+    }
+
+    private function attendanceIndex(Request $request, bool $encoderScope, string $routePrefix)
+    {
         $year = $request->input('year', Carbon::today()->year);
         $month = $request->input('month', Carbon::today()->month);
-        
-        $defaultDate = Carbon::create($year, $month, 1)->toDateString();
-        $date = $request->input('date', $defaultDate);
-        
+
+        $defaultDate = Carbon::today();
+        $date = $request->filled('date')
+            ? Carbon::parse($request->input('date'))->toDateString()
+            : Carbon::create($year, $month, min($defaultDate->day, Carbon::create($year, $month)->daysInMonth))->toDateString();
+
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $studentQuery = Student::with([
-                'enrollments' => function ($q) use ($activeSyId) {
-                    $q->where('school_year_id', $activeSyId)
-                        ->with('sbfpParticipant.nutritionMeasurements');
-                },
-            ])
-            ->whereHas('enrollments', function($q) use ($activeSyId, $user) {
+            'enrollments' => function ($q) use ($activeSyId) {
+                $q->where('school_year_id', $activeSyId)
+                    ->with('sbfpParticipant.nutritionMeasurements');
+            },
+        ])
+            ->whereHas('enrollments', function ($q) use ($activeSyId, $user, $encoderScope) {
                 $q->where('school_year_id', $activeSyId);
-                if ($user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
+                if ($encoderScope && $user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
                     $q->where('grade_level', $user->advisory_grade_level)
-                      ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                 }
             });
 
-        $sbfpStudents = $studentQuery->get()->filter(function ($student) use ($activeSyId, $date) {
+        if (!$encoderScope) {
+            $studentQuery->whereHas('enrollments', function ($enrollmentQuery) use ($activeSyId) {
+                $enrollmentQuery->where('school_year_id', $activeSyId)
+                    ->whereHas('sbfpParticipant', function ($participantQuery) {
+                        $participantQuery->where('parent_consent', 'approved')
+                            ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                                $measurementQuery->where('measurement_period', 'baseline')
+                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                            });
+                    });
+            })->whereHas('enrollments', function ($query) use ($activeSyId, $request) {
+                $query->where('school_year_id', $activeSyId)
+                    ->when($request->filled('grade_level'), fn($q) => $q->where('grade_level', $request->input('grade_level')))
+                    ->when($request->filled('section'), fn($q) => $q->where('section', $request->input('section')));
+            });
+        }
+
+        $sbfpStudents = $studentQuery->get()->filter(function ($student) use ($activeSyId, $date, $encoderScope) {
             $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
             if (!$enrollment || !$enrollment->sbfpParticipant) {
                 return false;
@@ -59,12 +90,16 @@ class AttendanceController extends Controller
                 return true;
             }
 
+            if (!$encoderScope) {
+                return $participant->parent_consent === 'approved';
+            }
+
             if ($participant->parent_consent === 'disapproved') {
                 return false;
             }
             return $participant->parent_consent === 'approved';
         });
-        
+
         // Get attendance logs for the date keyed by sbfp_participant_id
         $participantIds = $sbfpStudents->pluck('enrollments')->flatten()->pluck('sbfpParticipant.id')->filter();
         $attendanceLogs = StudentAttendanceRecord::where('attendance_date', $date)
@@ -78,7 +113,10 @@ class AttendanceController extends Controller
             ->map(fn($d) => Carbon::parse($d)->toDateString())
             ->toArray();
 
-        return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'loggedDates'));
+        $gradeLevels = $encoderScope ? collect() : \App\Models\Enrollment::where('school_year_id', $activeSyId)->distinct()->orderBy('grade_level')->pluck('grade_level');
+        $sections = $encoderScope ? collect() : \App\Models\Enrollment::where('school_year_id', $activeSyId)->distinct()->orderBy('section')->pluck('section');
+
+        return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'loggedDates', 'routePrefix', 'gradeLevels', 'sections'));
     }
 
     public function scan(Request $request)
@@ -86,7 +124,7 @@ class AttendanceController extends Controller
         $request->validate(['lrn' => 'required']);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $student = Student::with(['enrollments' => function($q) use ($activeSyId) {
+        $student = Student::with(['enrollments' => function ($q) use ($activeSyId) {
             $q->where('school_year_id', $activeSyId)->with('sbfpParticipant');
         }])->where('lrn', $request->lrn)->first();
 
@@ -114,7 +152,7 @@ class AttendanceController extends Controller
 
         if ($participant->parent_consent !== 'approved') {
             return response()->json([
-            'error' => 'Parent approval is required before recording attendance.',
+                'error' => 'Parent approval is required before recording attendance.',
                 'student_name' => $studentName,
                 'grade_level' => $enrollment->grade_level,
                 'section' => $enrollment->section
@@ -173,8 +211,10 @@ class AttendanceController extends Controller
         ]);
 
         $participant = SbfpParticipant::with('enrollment.student')->findOrFail($validated['sbfp_participant_id']);
-        if ($validated['status'] === 'present'
-            && !MealPlan::whereDate('meal_date', $validated['date'])->exists()) {
+        if (
+            $validated['status'] === 'present'
+            && !MealPlan::whereDate('meal_date', $validated['date'])->exists()
+        ) {
             return back()->with('error', 'Add meal first before recording present attendance.');
         }
 
@@ -193,8 +233,10 @@ class AttendanceController extends Controller
             ]
         );
 
-        if ($validated['status'] === 'present'
-            && (!$existingRecord || $existingRecord->status !== 'present')) {
+        if (
+            $validated['status'] === 'present'
+            && (!$existingRecord || $existingRecord->status !== 'present')
+        ) {
             $meal = MealPlan::whereDate('meal_date', $validated['date'])->pluck('meal_name')->implode(', ');
             $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal);
         }

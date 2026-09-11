@@ -15,7 +15,7 @@ class SectionController extends Controller
     public function index()
     {
         $activeSy = SchoolYearManager::activeSchoolYear();
-        
+
         // 1. Get sections from enrollments
         $enrollmentSections = Enrollment::where('school_year_id', $activeSy?->id)
             ->select('grade_level', 'section')
@@ -23,7 +23,7 @@ class SectionController extends Controller
             ->get();
 
         // 2. Get sections from teacher users' advisory assignments
-        $userSections = User::whereIn('role', [User::ROLE_ENCODER, User::ROLE_ADMIN])
+        $userSections = User::where('role', User::ROLE_ENCODER)
             ->whereNotNull('advisory_grade_level')
             ->whereNotNull('advisory_section')
             ->select('advisory_grade_level as grade_level', 'advisory_section as section')
@@ -33,11 +33,12 @@ class SectionController extends Controller
         // Merge and unique by grade_level + section
         $allSections = $enrollmentSections->concat($userSections)->unique(fn($item) => $item->grade_level . '-' . strtolower($item->section));
 
-        $sections = $allSections->values()->map(function($item, $index) {
-            $adviser = User::where('advisory_grade_level', (string)$item->grade_level)
+        $sections = $allSections->values()->map(function ($item, $index) {
+            $adviser = User::where('role', User::ROLE_ENCODER)
+                ->where('advisory_grade_level', (string)$item->grade_level)
                 ->whereRaw('LOWER(advisory_section) = ?', [strtolower($item->section)])
                 ->first();
-            
+
             return (object)[
                 'id' => $index + 1,
                 'grade_level' => $item->grade_level,
@@ -47,7 +48,7 @@ class SectionController extends Controller
             ];
         })->sortBy([['grade_level', 'asc'], ['name', 'asc']]);
 
-        $encoders = User::whereIn('role', [User::ROLE_ENCODER, User::ROLE_ADMIN])
+        $encoders = User::where('role', User::ROLE_ENCODER)
             ->where('is_active', true)
             ->orderBy('name')
             ->get();

@@ -1,9 +1,10 @@
 ﻿<!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <meta name="description" content="NutriSight helps Marisol Bliss Elementary School manage school-based feeding programs with precise attendance, nutrition, and term progress tracking.">
+    <meta name="description" content="NutriSight helps Marisol Bliss Elementary School manage school-based feeding programs with precise attendance, nutrition, and period progress tracking.">
 
     <title>{{ config('app.name', 'NutriSight') }}</title>
     <link rel="icon" href="{{ asset('favicon.ico') }}" sizes="any">
@@ -12,12 +13,13 @@
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=figtree:400,500,600,700,800&display=swap" rel="stylesheet">
     @if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-        @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     @else
-        <script src="https://cdn.tailwindcss.com"></script>
-        <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     @endif
 </head>
+
 <body class="bg-slate-50 font-sans text-slate-900 antialiased">
     <header class="border-b border-slate-200 bg-white">
         <nav class="mx-auto flex max-w-7xl items-center justify-between px-6 py-4 lg:px-8" aria-label="Main navigation">
@@ -81,7 +83,7 @@
                             </svg>
                         </div>
                         <h3 class="mt-6 text-xl font-bold text-slate-900">BMI Monitoring &amp; Nutritional Status Tracking</h3>
-                        <p class="mt-3 leading-7 text-slate-600">Follow average BMI trends per term and see status distribution across Normal, Wasted, Severely Wasted, Overweight, and Obese classifications.</p>
+                        <p class="mt-3 leading-7 text-slate-600">Follow average BMI trends per period and see status distribution across Normal, Wasted, Severely Wasted, Overweight, and Obese classifications.</p>
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -100,8 +102,8 @@
                                 <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H5a2 2 0 00-2 2v12a2 2 0 002 2h14a2 2 0 002-2V7a2 2 0 00-2-2h-4M9 5a3 3 0 016 0M8 11h8M8 15h5" />
                             </svg>
                         </div>
-                        <h3 class="mt-6 text-xl font-bold text-slate-900">Term Progress Reporting for SBFP Beneficiaries</h3>
-                        <p class="mt-3 leading-7 text-slate-600">Compare student height, weight, BMI, and nutritional status across Term 1, Term 2, and Term 3 in one progress report.</p>
+                        <h3 class="mt-6 text-xl font-bold text-slate-900">Period Progress Reporting for SBFP Beneficiaries</h3>
+                        <p class="mt-3 leading-7 text-slate-600">Compare student height, weight, BMI, and nutritional status across Baseline, Midline, and Endline in one progress report.</p>
                     </article>
 
                     <article class="border border-slate-200 bg-white p-7 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -146,4 +148,5 @@
         </div>
     </footer>
 </body>
+
 </html>

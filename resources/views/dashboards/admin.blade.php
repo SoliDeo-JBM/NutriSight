@@ -1,7 +1,18 @@
 @extends('layouts.dashboard')
 
 @section('content')
-<h1 class="text-2xl font-bold mb-6">Admin Dashboard - Nutritional Analytics & Period Progress</h1>
+<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+    <h1 class="text-2xl font-bold">{{ $dashboardTitle }}</h1>
+    <form method="GET" action="{{ route($dashboardRoute) }}">
+        <label for="dashboard-period" class="sr-only">Select period</label>
+        <select id="dashboard-period" name="period" onchange="this.form.submit()" class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1 px-2">
+            <option value="all" {{ ($selectedPeriod ?? 'all') == 'all' ? 'selected' : '' }}>All Periods (Latest)</option>
+            <option value="Baseline" {{ ($selectedPeriod ?? '') == 'Baseline' ? 'selected' : '' }}>Baseline</option>
+            <option value="Midline" {{ ($selectedPeriod ?? '') == 'Midline' ? 'selected' : '' }}>Midline</option>
+            <option value="Endline" {{ ($selectedPeriod ?? '') == 'Endline' ? 'selected' : '' }}>Endline</option>
+        </select>
+    </form>
+</div>
 
 <!-- KPI Summary Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -28,7 +39,7 @@
 <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
     <!-- BMI Trend Line Chart -->
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-        <h2 class="text-lg font-bold mb-4 text-gray-800">Average BMI Trend per Term</h2>
+        <h2 class="text-lg font-bold mb-4 text-gray-800">Average BMI Trend per Period</h2>
         <div class="relative" style="height: 280px;">
             <canvas id="bmiTrendChart"></canvas>
         </div>
@@ -38,14 +49,6 @@
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4">
             <h2 class="text-lg font-bold text-gray-800">BMI Status Distribution</h2>
-            <form method="GET" action="{{ route('admin.dashboard') }}" class="mt-2 sm:mt-0">
-                <select name="period" onchange="this.form.submit()" class="text-xs border-gray-300 rounded-md shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50 py-1 px-2">
-                    <option value="all" {{ ($selectedPeriod ?? 'all') == 'all' ? 'selected' : '' }}>All Periods (Latest)</option>
-                    <option value="Baseline" {{ ($selectedPeriod ?? '') == 'Baseline' ? 'selected' : '' }}>Baseline</option>
-                    <option value="Midline" {{ ($selectedPeriod ?? '') == 'Midline' ? 'selected' : '' }}>Midline</option>
-                    <option value="Endline" {{ ($selectedPeriod ?? '') == 'Endline' ? 'selected' : '' }}>Endline</option>
-                </select>
-            </form>
         </div>
         <div class="relative flex items-center justify-center" style="height: 280px;">
             <canvas id="bmiDistributionChart"></canvas>

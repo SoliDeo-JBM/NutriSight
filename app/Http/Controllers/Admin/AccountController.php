@@ -22,7 +22,7 @@ class AccountController extends Controller
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
                 $q->whereRaw('LOWER(name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(CAST(deped_id AS TEXT)) LIKE ?', [$searchTerm]);
+                    ->orWhereRaw('LOWER(CAST(deped_id AS TEXT)) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -53,7 +53,7 @@ class AccountController extends Controller
                 $query->orderBy('name', 'asc');
         }
 
-        $advisers = $query->paginate(15);
+        $advisers = $query->paginate(15)->withQueryString();
 
         $gradeLevels = User::where('role', $targetRole)
             ->whereNotNull('advisory_grade_level')
@@ -75,7 +75,11 @@ class AccountController extends Controller
         $currentUser = auth()->user();
         $isSuperAdmin = $currentUser->isSuperAdmin();
         $positions = [
-            'Teacher I', 'Teacher II', 'Teacher III', 'Master Teacher I', 'Master Teacher II'
+            'Teacher I',
+            'Teacher II',
+            'Teacher III',
+            'Master Teacher I',
+            'Master Teacher II'
         ];
         $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
         $sexes = ['Male', 'Female'];

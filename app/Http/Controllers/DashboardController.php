@@ -122,7 +122,12 @@ class DashboardController extends Controller
                 : 0;
         })->all();
 
-        return view('dashboards.admin', compact('sbfpStudents', 'totalSbfpStudents', 'bmiDistribution', 'periodBmiChartLabels', 'periodBmiChartData', 'recoveredCount', 'recoveryRate', 'selectedPeriod', 'sectionAttendanceLabels', 'sectionAttendanceRates'));
+        $dashboardRoute = auth()->user()->role === 'super_admin' ? 'super-admin.dashboard' : 'admin.dashboard';
+        $dashboardTitle = auth()->user()->role === 'super_admin'
+            ? 'Super Admin Dashboard - System Nutrition Overview'
+            : 'Admin Dashboard - Nutritional Analytics & Period Progress';
+
+        return view('dashboards.admin', compact('sbfpStudents', 'totalSbfpStudents', 'bmiDistribution', 'periodBmiChartLabels', 'periodBmiChartData', 'recoveredCount', 'recoveryRate', 'selectedPeriod', 'sectionAttendanceLabels', 'sectionAttendanceRates', 'dashboardRoute', 'dashboardTitle'));
     }
 
     public function encoder()
