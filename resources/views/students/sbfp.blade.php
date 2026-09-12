@@ -2,6 +2,16 @@
 
 @section('content')
     <div x-data="sbfpManager()" x-init="if (@js($hasPendingApproval ?? false)) showApprovalModal = true" x-cloak class="flex flex-col gap-6">
+        @php
+            $profileImageParticipants = collect(isset($students) ? $students->items() : [])->map(function ($student) {
+                $participant = $student->enrollments->first()?->sbfpParticipant;
+                return $participant ? [
+                    'id' => $participant->id,
+                    'name' => trim($student->last_name . ', ' . $student->first_name),
+                    'image' => $participant->profile_image_url,
+                ] : null;
+            })->filter()->values();
+        @endphp
         <!-- Header -->
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
             <div>
@@ -17,6 +27,7 @@
                     <button type="button" @click="openApprovalModal()" class="shrink-0 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 whitespace-nowrap inline-flex items-center gap-2">
                         <i class="fas fa-clipboard-check"></i> Parent's Approval
                     </button>
+                    <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route('encoder.students.sbfp.profile-images')" />
                     <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
                         <i class="fas fa-print"></i> Print Portrait ID QR Sheet
                     </a>
@@ -75,20 +86,6 @@
                 </div>
 
             </form>
-        </div>
-
-        @php
-            $profileImageParticipants = collect(isset($students) ? $students->items() : [])->map(function ($student) {
-                $participant = $student->enrollments->first()?->sbfpParticipant;
-                return $participant ? [
-                    'id' => $participant->id,
-                    'name' => trim($student->last_name . ', ' . $student->first_name),
-                    'image' => $participant->profile_image_url,
-                ] : null;
-            })->filter()->values();
-        @endphp
-        <div>
-            <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route('encoder.students.sbfp.profile-images')" />
         </div>
 
         <!-- SBFP Table -->
@@ -261,7 +258,7 @@
                     </div>
                     <div class="flex gap-2">
                         <button type="submit" class="flex-1 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 font-semibold">Update</button>
-                        <button type="button" @click="closeApprovalModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Back</button>
+                        <button type="button" @click="closeApprovalModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
                     </div>
                 </form>
             </div>

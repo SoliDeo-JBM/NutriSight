@@ -3,6 +3,12 @@
 @section('content')
 <style>
     .attendance-hierarchy { --line: #e2e8f0; }
+    .report-hierarchy-shell .report-card { border-radius: .75rem; }
+    .report-hierarchy-shell .year-header { min-height: 5.25rem; padding: 1rem 1.25rem; }
+    .report-hierarchy-shell .year-header h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 700; }
+    .report-hierarchy-shell .year-header p { font-size: .75rem; line-height: 1rem; }
+    .report-hierarchy-shell .year-content { padding: 1rem; }
+    .report-hierarchy-shell .month-link { min-height: 3.25rem; padding: .75rem 1rem; font-size: .875rem; line-height: 1.25rem; }
     .report-back-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid #dbeafe; border-radius: .5rem; padding: .5rem .75rem; color: #2563eb; background: #eff6ff; font-size: .75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
     .report-back-link:hover { border-color: #93c5fd; background: #dbeafe; transform: translateX(-1px); }
     .attendance-hierarchy .report-card { border: 1px solid var(--line); box-shadow: 0 10px 30px rgba(15,23,42,.05); }
@@ -31,10 +37,10 @@
     .attendance-hierarchy .month-link .row-actions { display: none; }
     .attendance-hierarchy a[href*="school-years"] { display: none; }
 </style>
-<div class="attendance-hierarchy flex flex-col gap-6">
+<div class="report-hierarchy-shell attendance-hierarchy flex flex-col gap-6">
     <div class="flex items-center justify-between gap-4"><div><a href="{{ route('admin.reports.sbfp.index') }}" class="report-back-link"><i class="fas fa-arrow-left"></i><span>Back</span></a><h1 class="mt-3 text-2xl font-bold text-slate-900">SBFP Attendance Report</h1><p class="mt-1 text-sm text-slate-500">Daily feeding attendance by school year and month.</p></div></div>
     @if($errors->any())<div class="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800"><strong>Attendance action not completed</strong><ul class="mt-1 list-disc pl-5">@foreach($errors->all() as $error)<li>{{ $error }}</li>@endforeach</ul></div>@endif
-    <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row"><input id="attendanceSearch" type="search" placeholder="Search school year..." class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:max-w-xs"><div class="flex items-center gap-1" aria-label="Sort school years"><button id="attendanceSortAsc" type="button" class="sort-icon" title="Oldest first" aria-label="Sort oldest first"><i class="fas fa-arrow-up"></i></button><button id="attendanceSortDesc" type="button" class="sort-icon is-active" title="Newest first" aria-label="Sort newest first"><i class="fas fa-arrow-down"></i></button></div><button id="attendanceToggle" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Collapse all</button></div>
+    <div class="flex flex-col gap-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row"><input id="attendanceSearch" type="search" placeholder="Search school year or month..." class="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none sm:max-w-xs"><div class="flex items-center gap-1" aria-label="Sort school years"><button id="attendanceSortAsc" type="button" class="sort-icon" title="Oldest first" aria-label="Sort oldest first"><i class="fas fa-arrow-up"></i></button><button id="attendanceSortDesc" type="button" class="sort-icon is-active" title="Newest first" aria-label="Sort newest first"><i class="fas fa-arrow-down"></i></button></div><button id="attendanceToggle" type="button" class="rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">Collapse all</button></div>
     @forelse($schoolYears as $schoolYear)
         <section data-annual-year="{{ $schoolYear->year }}" class="attendance-year-card report-card overflow-visible rounded-xl bg-white">
             <div class="year-header flex flex-col gap-3 border-b border-slate-200 bg-slate-50 px-5 py-4 sm:flex-row sm:items-center sm:justify-between" tabindex="0" role="button" aria-expanded="true" aria-controls="attendance-content-{{ $schoolYear->id }}"><div class="flex items-center gap-3"><span class="p-1 text-slate-500"><i class="year-chevron fas fa-chevron-down"></i></span><div><h2 class="font-bold text-slate-900">SY {{ $schoolYear->year }}</h2><p class="text-xs text-slate-500">{{ $schoolYear->attendanceReportMonths->count() }} month(s)</p></div></div><div class="flex flex-wrap gap-2" onclick="event.stopPropagation()"><button type="button" onclick="document.getElementById('add-attendance-month-{{ $schoolYear->id }}').classList.toggle('hidden')" class="report-action rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">+ Add Month</button><button type="button" onclick="document.getElementById('edit-attendance-year-{{ $schoolYear->id }}').classList.remove('hidden')" class="report-action rounded-lg bg-amber-500 px-3 py-2 text-xs font-semibold text-white"><i class="fas fa-pen mr-1"></i>Edit</button><form method="POST" action="{{ route('admin.school-years.destroy', $schoolYear) }}" class="inline" onsubmit="return confirm('Delete this school year and all related records?')">@csrf @method('DELETE')<button type="submit" class="report-action rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white" {{ $schoolYear->is_active ? 'disabled title=Activate another school year first' : '' }}><i class="fas fa-trash mr-1"></i>Delete</button></form></div></div>
@@ -50,5 +56,20 @@
 </div>
 <script>
 const attendanceContainer=document.querySelector('.attendance-hierarchy');const attendanceCards=()=>[...attendanceContainer.querySelectorAll('.attendance-year-card')];const attendanceSearch=document.getElementById('attendanceSearch');const sortAttendance=(direction)=>{attendanceCards().sort((a,b)=>direction==='asc'?a.dataset.annualYear.localeCompare(b.dataset.annualYear):b.dataset.annualYear.localeCompare(a.dataset.annualYear)).forEach(c=>attendanceContainer.appendChild(c));document.getElementById('attendanceSortAsc').classList.toggle('is-active',direction==='asc');document.getElementById('attendanceSortDesc').classList.toggle('is-active',direction==='desc');};attendanceSearch?.addEventListener('input',()=>{const q=attendanceSearch.value.toLowerCase();attendanceCards().forEach(c=>c.hidden=!c.dataset.annualYear.toLowerCase().includes(q));});document.getElementById('attendanceSortAsc')?.addEventListener('click',()=>sortAttendance('asc'));document.getElementById('attendanceSortDesc')?.addEventListener('click',()=>sortAttendance('desc'));attendanceContainer.querySelectorAll('.year-header').forEach(header=>{const toggle=()=>{const content=document.getElementById(header.getAttribute('aria-controls'));const collapsed=content.classList.toggle('is-collapsed');header.setAttribute('aria-expanded',String(!collapsed));header.querySelector('.year-chevron').classList.toggle('is-collapsed',collapsed);};header.closest('.attendance-year-card').addEventListener('click',e=>{if(!e.target.closest('a,button,form,input,select,textarea,details,summary'))toggle();});header.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();toggle();}});});document.getElementById('attendanceToggle')?.addEventListener('click',e=>{const collapse=e.target.textContent.trim()==='Collapse all';attendanceCards().forEach(c=>{c.querySelector('.year-content').classList.toggle('is-collapsed',collapse);c.querySelector('.year-chevron').classList.toggle('is-collapsed',collapse);});e.target.textContent=collapse?'Expand all':'Collapse all';});
+</script>
+<script>
+    attendanceSearch?.addEventListener('input', () => {
+        const query = attendanceSearch.value.trim().toLowerCase();
+        attendanceCards().forEach((card) => {
+            const yearMatches = card.dataset.annualYear.toLowerCase().includes(query);
+            let monthMatches = false;
+            card.querySelectorAll('.month-link').forEach((month) => {
+                const matches = !query || yearMatches || month.textContent.toLowerCase().includes(query);
+                month.hidden = !matches;
+                monthMatches = monthMatches || matches;
+            });
+            card.hidden = !yearMatches && !monthMatches;
+        });
+    });
 </script>
 @endsection

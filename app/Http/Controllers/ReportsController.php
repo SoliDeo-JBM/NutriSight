@@ -243,8 +243,15 @@ class ReportsController extends Controller
     public function sbfpYearly()
     {
         $this->reportPeriodManager->syncExistingRecords();
-        $schoolYears = SchoolYear::with(['reportPeriods' => fn($query) => $query->orderBy('month')->orderBy('name')])
+        $schoolYears = SchoolYear::with(['reportPeriods' => fn($query) => $query->orderByRaw("CASE measurement_period WHEN 'baseline' THEN 1 WHEN 'mid' THEN 2 WHEN 'end' THEN 3 ELSE 4 END")->orderBy('month')->orderBy('name')])
             ->orderByDesc('start_date')->get();
+        $schoolYears->each(function (SchoolYear $schoolYear): void {
+            $schoolYear->reportPeriods->each(function (ReportPeriod $period): void {
+                if ($period->month) {
+                    $period->name = date('F', mktime(0, 0, 0, (int) $period->month, 1));
+                }
+            });
+        });
 
         return view('admin.reports.consolidated.index', compact('schoolYears'));
     }
@@ -281,6 +288,9 @@ class ReportsController extends Controller
     public function showReportPeriod(ReportPeriod $period)
     {
         $this->refreshReportPeriod($period);
+        if ($period->month) {
+            $period->name = date('F', mktime(0, 0, 0, (int) $period->month, 1));
+        }
         $period->load(['schoolYear', 'rows' => fn($query) => $query->orderBy('grade_level')->orderBy('sex')]);
         $rows = $this->formRows($period->rows->isEmpty() ? $this->blankRows() : $period->rows->toArray());
 

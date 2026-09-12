@@ -9,6 +9,7 @@
             default => ''
         };
     @endphp
+    @php($canEditStaffDetails = $user->role === 'super_admin')
     <div class="flex flex-col gap-6 max-w-4xl mx-auto">
         <!-- Header -->
         <div>
@@ -49,23 +50,10 @@
                         <input type="text" name="name" x-model="form.name" :disabled="!isEditing" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
                     </div>
 
-                    <!-- Email (Non-editable) -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address (Read-only)</label>
-                        <input type="email" value="{{ $user->email }}" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
-                        <p class="text-xs text-gray-400 mt-1">Email address cannot be modified.</p>
-                    </div>
-
-                    <!-- DepEd ID -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID</label>
-                        <input type="text" name="deped_id" x-model="form.deped_id" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
-                    </div>
-
                     <!-- Sex -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
-                        <select name="sex" x-model="form.sex" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                        <select name="sex" x-model="form.sex" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
                             <option value="">Select Sex</option>
                             <option value="Male">Male</option>
                             <option value="Female">Female</option>
@@ -78,10 +66,40 @@
                         <input type="date" name="birthdate" x-model="form.birthdate" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
                     </div>
 
+                    <!-- Email (Non-editable) -->
+                    <div>
+                        @if($canEditStaffDetails)
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
+                                <input type="email" name="email" x-model="form.email" :disabled="!isEditing" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                            @else
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address (Read-only)</label>
+                                <input type="email" value="{{ $user->email }}" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
+                                <p class="text-xs text-gray-400 mt-1">Email address cannot be modified.</p>
+                            @endif
+                    </div>
+
+                    <!-- DepEd ID -->
+                    <div>
+                            @if($canEditStaffDetails)
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID</label>
+                                <input type="text" name="deped_id" x-model="form.deped_id" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                            @else
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID (Read-only)</label>
+                                <input type="text" name="deped_id" x-model="form.deped_id" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
+                                <p class="text-xs text-gray-400 mt-1">DepEd ID / Employee ID cannot be modified.</p>
+                            @endif
+                    </div>
+
                     <!-- Position -->
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Position / Title</label>
-                        <input type="text" name="position" x-model="form.position" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                            @if($canEditStaffDetails)
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Position / Title</label>
+                                <input type="text" name="position" x-model="form.position" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                            @else
+                                <label class="block text-sm font-semibold text-gray-700 mb-2">Position / Title (Read-only)</label>
+                                <input type="text" name="position" x-model="form.position" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
+                                <p class="text-xs text-gray-400 mt-1">Position / Title cannot be modified.</p>
+                            @endif
                     </div>
 
                     @if($user->role === 'encoder')
@@ -223,9 +241,10 @@
     <script>
         function profileManager() {
             return {
-                isEditing: @json($errors->has('name') || $errors->has('deped_id') || $errors->has('sex') || $errors->has('birthdate') || $errors->has('position') || $errors->has('advisory_grade_level') || $errors->has('advisory_section')),
+                isEditing: @json($errors->has('name') || $errors->has('email') || $errors->has('deped_id') || $errors->has('sex') || $errors->has('birthdate') || $errors->has('position') || $errors->has('advisory_grade_level') || $errors->has('advisory_section')),
                 form: {
                     name: @json(old('name', $user->name)),
+                        email: @json(old('email', $user->email)),
                     deped_id: @json(old('deped_id', $user->deped_id)),
                     sex: @json(old('sex', $user->sex)),
                     birthdate: @json(old('birthdate', $user->birthdate)),
@@ -235,6 +254,7 @@
                 },
                 original: {
                     name: @json(old('name', $user->name)),
+                        email: @json(old('email', $user->email)),
                     deped_id: @json(old('deped_id', $user->deped_id)),
                     sex: @json(old('sex', $user->sex)),
                     birthdate: @json(old('birthdate', $user->birthdate)),

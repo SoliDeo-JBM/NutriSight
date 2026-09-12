@@ -3,6 +3,12 @@
 @section('content')
 <style>
     .annual-report-shell { --report-ink: #172033; --report-muted: #64748b; --report-line: #e2e8f0; }
+    .report-hierarchy-shell .report-card { border-radius: .75rem; }
+    .report-hierarchy-shell .year-header { min-height: 5.25rem; padding: 1rem 1.25rem; }
+    .report-hierarchy-shell .year-header h2 { font-size: 1rem; line-height: 1.5rem; font-weight: 700; }
+    .report-hierarchy-shell .year-header p { font-size: .75rem; line-height: 1rem; }
+    .report-hierarchy-shell .year-content { padding: 1rem; }
+    .report-hierarchy-shell .period-link { min-height: 3.25rem; padding: .75rem 1rem; font-size: .875rem; line-height: 1.25rem; }
     .report-back-link { display: inline-flex; align-items: center; gap: .45rem; border: 1px solid #dbeafe; border-radius: .5rem; padding: .5rem .75rem; color: #2563eb; background: #eff6ff; font-size: .75rem; font-weight: 600; transition: background .15s ease, border-color .15s ease, transform .15s ease; }
     .report-back-link:hover { border-color: #93c5fd; background: #dbeafe; transform: translateX(-1px); }
     .annual-report-shell .report-card { border: 1px solid var(--report-line); box-shadow: 0 10px 30px rgba(15, 23, 42, .05); }
@@ -34,7 +40,7 @@
     .annual-report-shell .period-link .row-actions { display: none; }
     .annual-report-shell a[href*="school-years"] { display: none; }
 </style>
-<div class="annual-report-shell flex flex-col gap-6">
+<div class="report-hierarchy-shell annual-report-shell flex flex-col gap-6">
     <div class="flex items-center justify-between gap-4">
         <div><a href="{{ route('admin.reports.sbfp.index') }}" class="report-back-link"><i class="fas fa-arrow-left"></i><span>Back</span></a><h1 class="mt-3 text-2xl font-bold text-gray-900">SBFP Annual Consolidated Report</h1><p class="mt-1 text-sm text-gray-500">DepEd SNS Form 1 baseline aggregate reporting by school year.</p></div>
         <a href="{{ route('admin.school-years.index') }}" class="report-action rounded-lg bg-blue-600 px-3 py-2.5 text-xs font-semibold text-white hover:bg-blue-700"><i class="fas fa-calendar-plus mr-1"></i> Add School Year</a>
@@ -96,5 +102,10 @@
     annualSortDesc?.addEventListener('click', () => sortAnnualYears('desc'));
     annualContainer.querySelectorAll('.year-header').forEach((header) => { const toggleYear = () => { const content = document.getElementById(header.getAttribute('aria-controls')); const collapsed = content.classList.toggle('is-collapsed'); header.setAttribute('aria-expanded', String(!collapsed)); header.querySelector('.year-chevron').classList.toggle('is-collapsed', collapsed); }; header.closest('.report-year-card').addEventListener('click', (event) => { if (!event.target.closest('a, button, form, input, select, textarea, details, summary')) toggleYear(); }); header.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); toggleYear(); } }); });
     annualToggle?.addEventListener('click', () => { const collapse = annualToggle.textContent.trim() === 'Collapse all'; annualCards().forEach((card) => { card.querySelector('.year-content').classList.toggle('is-collapsed', collapse); card.querySelector('.year-chevron').classList.toggle('is-collapsed', collapse); }); annualToggle.textContent = collapse ? 'Expand all' : 'Collapse all'; });
+</script>
+<script>
+    document.querySelectorAll('.annual-report-shell .period-link strong').forEach((label) => {
+        label.textContent = label.textContent.replace(/^Mid\s*·/, 'Midline.').replace(/^End\s*·/, 'Endline.').replace(/^Baseline\s*·/, 'Baseline.');
+    });
 </script>
 @endsection

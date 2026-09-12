@@ -21,11 +21,17 @@ class AccountSettingsController extends Controller
 
         $validated = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'deped_id' => ['nullable', 'string', 'max:255', 'unique:users,deped_id,' . $user->id],
             'sex' => ['nullable', 'in:Male,Female'],
             'birthdate' => ['nullable', 'date'],
-            'position' => ['nullable', 'string', 'max:255'],
         ]);
+
+        if ($user->role === 'super_admin') {
+            $validated = array_merge($validated, $request->validate([
+                    'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+                'deped_id' => ['nullable', 'string', 'max:255', 'unique:users,deped_id,' . $user->id],
+                'position' => ['nullable', 'string', 'max:255'],
+            ]));
+        }
 
         $user->update($validated);
 
