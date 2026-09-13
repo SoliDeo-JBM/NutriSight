@@ -3,11 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Models\SchoolYearUserRecord;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rule;
+use App\Services\SchoolYearManager;
 
 class AccountController extends Controller
 {
@@ -17,22 +19,38 @@ class AccountController extends Controller
         $targetRole = $currentUser->isSuperAdmin() ? 'admin' : 'encoder';
 
         $query = User::where('role', $targetRole);
+        $activeSchoolYearId = SchoolYearManager::activeSchoolYearId();
+
+        if ($activeSchoolYearId) {
+            $query->whereHas('schoolYearUserRecords', function ($recordQuery) use ($activeSchoolYearId, $targetRole) {
+                $recordQuery->where('school_year_id', $activeSchoolYearId)->where('role', $targetRole);
+            });
+        }
 
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
-            $query->where(function ($q) use ($searchTerm) {
+            $query->where(function ($q) use ($searchTerm, $activeSchoolYearId) {
                 $q->whereRaw('LOWER(name) LIKE ?', [$searchTerm])
-                    ->orWhereRaw('LOWER(CAST(deped_id AS TEXT)) LIKE ?', [$searchTerm]);
+                    ->orWhereHas('schoolYearUserRecords', function ($recordQuery) use ($searchTerm, $activeSchoolYearId) {
+                        $recordQuery->where('school_year_id', $activeSchoolYearId)
+                            ->whereRaw('LOWER(CAST(deped_id AS TEXT)) LIKE ?', [$searchTerm]);
+                    });
             });
         }
 
         if ($request->filled('grade_level')) {
-            $query->where('advisory_grade_level', $request->input('grade_level'));
+            $query->whereHas('schoolYearUserRecords', function ($recordQuery) use ($activeSchoolYearId, $request) {
+                $recordQuery->where('school_year_id', $activeSchoolYearId)
+                    ->where('advisory_grade_level', $request->input('grade_level'));
+            });
         }
 
         if ($request->filled('position')) {
-            $query->where('position', $request->input('position'));
+            $query->whereHas('schoolYearUserRecords', function ($recordQuery) use ($activeSchoolYearId, $request) {
+                $recordQuery->where('school_year_id', $activeSchoolYearId)
+                    ->where('position', $request->input('position'));
+            });
         }
 
         if ($request->filled('sex')) {
@@ -45,7 +63,12 @@ class AccountController extends Controller
                 $query->orderBy('name', 'asc');
                 break;
             case 'grade_level_asc':
-                $query->orderBy('advisory_grade_level', 'asc');
+                $query->orderBy(
+                    SchoolYearUserRecord::select('advisory_grade_level')
+                        ->whereColumn('user_id', 'users.id')
+                        ->where('school_year_id', $activeSchoolYearId),
+                    'asc'
+                );
                 break;
             case 'date_newest':
                 $query->orderBy('created_at', 'desc');
@@ -57,14 +80,20 @@ class AccountController extends Controller
         $advisers = $query->paginate(15)->withQueryString();
 
         $gradeLevels = User::where('role', $targetRole)
-            ->whereNotNull('advisory_grade_level')
+            ->whereHas('schoolYearUserRecords', fn ($recordQuery) => $recordQuery
+                ->where('school_year_id', $activeSchoolYearId)
+                ->whereNotNull('advisory_grade_level'))
             ->distinct()
-            ->pluck('advisory_grade_level');
+            ->join('school_year_user_records', 'users.id', '=', 'school_year_user_records.user_id')
+            ->where('school_year_user_records.school_year_id', $activeSchoolYearId)
+            ->pluck('school_year_user_records.advisory_grade_level');
 
         $positions = User::where('role', $targetRole)
-            ->whereNotNull('position')
+            ->join('school_year_user_records', 'users.id', '=', 'school_year_user_records.user_id')
+            ->where('school_year_user_records.school_year_id', $activeSchoolYearId)
+            ->whereNotNull('school_year_user_records.position')
             ->distinct()
-            ->pluck('position');
+            ->pluck('school_year_user_records.position');
 
         $sexes = ['Male', 'Female'];
 
@@ -107,7 +136,7 @@ class AccountController extends Controller
             'advisory_section' => $isSuperAdmin ? 'nullable|string|max:255' : 'required|string|max:255',
         ]);
 
-        User::create([
+        $user = User::create([
             'deped_id' => $validated['deped_id'],
             'name' => $validated['name'],
             'email' => $validated['email'],
@@ -120,6 +149,7 @@ class AccountController extends Controller
             'role' => $targetRole,
             'is_active' => true,
         ]);
+        $user->syncSchoolYearUserRecord(SchoolYearManager::activeSchoolYearId());
 
         \App\Services\AuditLogger::log('Created', 'Accounts', 'Created new ' . $targetRole . ' account for ' . $validated['name']);
 
@@ -153,7 +183,33 @@ class AccountController extends Controller
             }
         }
 
-        $user->update($validated);
+        $user->update([
+            'name' => $validated['name'],
+            'sex' => $validated['sex'] ?? null,
+            'birthdate' => $validated['birthdate'] ?? null,
+            'email' => $validated['email'],
+            'deped_id' => $validated['deped_id'] ?? null,
+            'position' => $validated['position'] ?? null,
+            'advisory_grade_level' => $validated['advisory_grade_level'] ?? null,
+            'advisory_section' => $validated['advisory_section'] ?? null,
+        ]);
+
+        $assignment = $user->currentSchoolYearUserRecord() ?? $user->syncSchoolYearUserRecord();
+        if ($assignment) {
+            $assignment->update([
+                'deped_id' => $validated['deped_id'] ?? null,
+                'position' => $validated['position'] ?? null,
+                'advisory_grade_level' => $validated['advisory_grade_level'] ?? null,
+                'advisory_section' => $validated['advisory_section'] ?? null,
+            ]);
+        } else {
+            $user->update([
+                'deped_id' => $validated['deped_id'] ?? null,
+                'position' => $validated['position'] ?? null,
+                'advisory_grade_level' => $validated['advisory_grade_level'] ?? null,
+                'advisory_section' => $validated['advisory_section'] ?? null,
+            ]);
+        }
 
         \App\Services\AuditLogger::log('Updated', 'Accounts', 'Updated account profile for ' . $user->name);
 

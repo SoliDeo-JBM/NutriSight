@@ -33,7 +33,31 @@ class AccountSettingsController extends Controller
             ]));
         }
 
-        $user->update($validated);
+        $user->update([
+            'name' => $validated['name'],
+            'sex' => $validated['sex'] ?? null,
+            'birthdate' => $validated['birthdate'] ?? null,
+            ...($user->role === 'super_admin' ? ['email' => $validated['email']] : []),
+            ...($user->role === 'super_admin' ? [
+                'deped_id' => $validated['deped_id'] ?? null,
+                'position' => $validated['position'] ?? null,
+            ] : []),
+        ]);
+
+        if ($user->role === 'super_admin') {
+            $assignment = $user->currentSchoolYearUserRecord() ?? $user->syncSchoolYearUserRecord();
+            if ($assignment) {
+                $assignment->update([
+                    'deped_id' => $validated['deped_id'] ?? null,
+                    'position' => $validated['position'] ?? null,
+                ]);
+            } else {
+                $user->update([
+                    'deped_id' => $validated['deped_id'] ?? null,
+                    'position' => $validated['position'] ?? null,
+                ]);
+            }
+        }
 
         \App\Services\AuditLogger::log('Updated', 'Account Settings', 'Updated account profile information');
 

@@ -212,19 +212,8 @@ class DashboardController extends Controller
 
     private function measurementForPeriod(array $periodProgress, string $selectedPeriod)
     {
-        $periodOrder = match ($selectedPeriod) {
-            'Baseline' => ['Baseline'],
-            'Midline' => ['Midline', 'Baseline'],
-            'Endline' => ['Endline', 'Midline', 'Baseline'],
-            default => ['Endline', 'Midline', 'Baseline'],
-        };
-
-        foreach ($periodOrder as $period) {
-            if (!empty($periodProgress[$period])) {
-                return $periodProgress[$period][0];
-            }
-        }
-
-        return null;
+        return !empty($periodProgress[$selectedPeriod])
+            ? $periodProgress[$selectedPeriod][0]
+            : null;
     }
 }

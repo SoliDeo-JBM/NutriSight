@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\SchoolYear;
+use App\Models\User;
 use App\Services\AuditLogger;
 use App\Services\SchoolYearManager;
 use Illuminate\Http\Request;
@@ -31,6 +32,10 @@ class SchoolYearController extends Controller
             'end_date' => $validated['end_date'],
             'is_active' => false,
         ]);
+
+        User::query()->each(function (User $user) use ($schoolYear): void {
+            $user->syncSchoolYearUserRecord($schoolYear->id);
+        });
 
         AuditLogger::log('created', 'School Years', 'Created academic school year ' . $schoolYear->year);
 
