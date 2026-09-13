@@ -17,6 +17,7 @@ class RolePageSmokeTest extends TestCase
         $this->createActiveSchoolYear($user);
 
         $this->actingAs($user)->get('/super-admin/accounts')->assertOk();
+        $this->actingAs($user)->get('/super-admin/students/sbfp')->assertOk();
         $this->actingAs($user)->get('/super-admin/attendance')->assertOk();
     }
 

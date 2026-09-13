@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Session;
 use App\Services\SchoolYearManager;
 
 /**
@@ -42,30 +43,24 @@ class Student extends Model
 
     public function getParentApprovalStatusAttribute()
     {
-        $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        $enrollment = $this->activeEnrollment();
         $consent = trim((string) ($enrollment?->sbfpParticipant?->parent_consent ?? ''));
         return $consent === '' || $consent === 'pending' ? null : $consent;
     }
 
     public function getDisapprovalReasonAttribute()
     {
-        $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
-        return $enrollment?->sbfpParticipant?->disapproval_reason;
+        return $this->activeEnrollment()?->sbfpParticipant?->disapproval_reason;
     }
 
     public function getIsPermittedAttribute()
     {
-        $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
-        return $enrollment?->sbfpParticipant?->parent_consent === 'approved';
+        return $this->activeEnrollment()?->sbfpParticipant?->parent_consent === 'approved';
     }
 
     public function getPeriodProgressAttribute()
     {
-        $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $enrollment = $this->enrollments()->where('school_year_id', $activeSyId)->first();
+        $enrollment = $this->activeEnrollment();
         $measurements = $enrollment?->sbfpParticipant?->nutritionMeasurements ?? collect();
 
         $periods = ['Baseline' => [], 'Midline' => [], 'Endline' => []];
@@ -82,6 +77,17 @@ class Student extends Model
             }
         }
         return $periods;
+    }
+
+    protected function activeEnrollment(): ?Enrollment
+    {
+        $activeSyId = Session::get('active_school_year_id') ?? SchoolYearManager::activeSchoolYearId();
+
+        if ($this->relationLoaded('enrollments')) {
+            return $this->enrollments->firstWhere('school_year_id', $activeSyId);
+        }
+
+        return $this->enrollments()->where('school_year_id', $activeSyId)->first();
     }
 
     public function enrollments()

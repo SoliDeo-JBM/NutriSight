@@ -9,7 +9,6 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use App\Models\Enrollment; // Added this import so the method below works!
 use App\Services\SchoolYearManager;
 
 class User extends Authenticatable
@@ -77,13 +76,6 @@ class User extends Authenticatable
             self::ROLE_ENCODER => 'encoder.dashboard',
             default => 'home',
         };
-    }
-
-    public function advisoryEnrollments()
-    {
-        // Matches the teacher's assigned section text directly to the enrollments table
-        return Enrollment::where('grade_level', $this->advisory_grade_level)
-                         ->where('section', $this->advisory_section);
     }
 
     public function schoolYearUserRecords()
