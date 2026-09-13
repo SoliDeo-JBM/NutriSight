@@ -79,13 +79,7 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
-        Route::get('/students/promote', [App\Http\Controllers\Admin\StudentPromotionController::class, 'index'])->name('students.promote');
-        Route::post('/students/promote', [App\Http\Controllers\Admin\StudentPromotionController::class, 'store'])->name('students.promote.store');
-        Route::get('/sections', [App\Http\Controllers\Admin\SectionController::class, 'index'])->name('sections.index');
-        Route::post('/sections', [App\Http\Controllers\Admin\SectionController::class, 'store'])->name('sections.store');
-        Route::post('/sections/carry-over', [App\Http\Controllers\Admin\SectionController::class, 'carryOver'])->name('sections.carry-over');
-        Route::put('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'update'])->name('sections.update');
-        Route::delete('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'destroy'])->name('sections.destroy');
+        Route::patch('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'update'])->name('accounts.update');
         Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
         Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
         Route::patch('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'update'])->name('school-years.update');
@@ -146,11 +140,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
-        Route::get('/sections', [App\Http\Controllers\Admin\SectionController::class, 'index'])->name('sections.index');
-        Route::post('/sections', [App\Http\Controllers\Admin\SectionController::class, 'store'])->name('sections.store');
-        Route::post('/sections/carry-over', [App\Http\Controllers\Admin\SectionController::class, 'carryOver'])->name('sections.carry-over');
-        Route::put('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'update'])->name('sections.update');
-        Route::delete('/sections/{section}', [App\Http\Controllers\Admin\SectionController::class, 'destroy'])->name('sections.destroy');
+        Route::patch('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'update'])->name('accounts.update');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
@@ -159,7 +149,6 @@ Route::middleware('auth')->group(function () {
     });
 
     Route::middleware('role:super_admin|admin')->group(function () {
-        Route::patch('/accounts/{user}/toggle-status', [App\Http\Controllers\Admin\AccountController::class, 'toggleStatus'])->name('accounts.toggle-status');
         Route::delete('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'destroy'])->name('accounts.destroy');
     });
 

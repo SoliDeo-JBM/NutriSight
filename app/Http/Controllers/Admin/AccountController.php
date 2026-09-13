@@ -7,6 +7,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use Illuminate\Validation\Rule;
 
 class AccountController extends Controller
 {
@@ -125,22 +126,39 @@ class AccountController extends Controller
         return redirect()->route($redirectRoute)->with('success', 'Account created successfully.');
     }
 
-    public function toggleStatus(User $user)
+    public function update(Request $request, User $user)
     {
         $currentUser = auth()->user();
-        if ($currentUser->isSuperAdmin() && $user->role !== 'admin') {
-            abort(403);
+        $expectedRole = $currentUser->isSuperAdmin() ? User::ROLE_ADMIN : User::ROLE_ENCODER;
+
+        abort_unless($user->role === $expectedRole, 403);
+
+        $validated = $request->validate([
+            'name' => ['required', 'string', 'max:255'],
+            'sex' => ['nullable', 'in:Male,Female'],
+            'birthdate' => ['nullable', 'date'],
+            'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
+            'deped_id' => ['nullable', 'string', 'max:255', Rule::unique('users', 'deped_id')->ignore($user->id)],
+            'position' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        if ($user->isEncoder()) {
+            $validated = array_merge($validated, $request->validate([
+                'advisory_grade_level' => ['nullable', 'integer', 'between:0,6'],
+                'advisory_section' => ['nullable', 'string', 'max:255'],
+            ]));
+
+            if (array_key_exists('advisory_section', $validated) && $validated['advisory_section'] !== null) {
+                $validated['advisory_section'] = ucfirst(strtolower($validated['advisory_section']));
+            }
         }
-        if ($currentUser->isAdmin() && $user->role !== 'encoder') {
-            abort(403);
-        }
 
-        $user->is_active = !$user->is_active;
-        $user->save();
+        $user->update($validated);
 
-        \App\Services\AuditLogger::log('Updated', 'Accounts', 'Toggled active status for user ' . $user->name);
+        \App\Services\AuditLogger::log('Updated', 'Accounts', 'Updated account profile for ' . $user->name);
 
-        return back()->with('success', 'Account status updated successfully.');
+        $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
+        return redirect()->route($redirectRoute)->with('success', 'Account updated successfully.');
     }
 
     public function destroy(Request $request, User $user)
