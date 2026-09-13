@@ -4,10 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use App\Models\StudentAttendanceRecord;
+use App\Models\User;
 use App\Services\SchoolYearManager;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
@@ -126,8 +128,8 @@ class DashboardController extends Controller
                 : 0;
         })->all();
 
-        $dashboardRoute = auth()->user()->role === 'super_admin' ? 'super-admin.dashboard' : 'admin.dashboard';
-        $dashboardTitle = auth()->user()->role === 'super_admin'
+        $dashboardRoute = Auth::user()->role === 'super_admin' ? 'super-admin.dashboard' : 'admin.dashboard';
+        $dashboardTitle = Auth::user()->role === 'super_admin'
             ? 'Super Admin Dashboard - System Nutrition Overview'
             : 'Admin Dashboard - Nutritional Analytics & Period Progress';
 
@@ -136,7 +138,8 @@ class DashboardController extends Controller
 
     public function encoder()
     {
-        $user = auth()->user();
+        /** @var User $user */
+        $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $studentQuery = Student::whereHas('enrollments', function ($q) use ($activeSyId, $user) {

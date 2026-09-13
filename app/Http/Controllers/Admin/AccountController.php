@@ -9,13 +9,15 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Auth;
 use App\Services\SchoolYearManager;
 
 class AccountController extends Controller
 {
     public function index(Request $request)
     {
-        $currentUser = auth()->user();
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
         $targetRole = $currentUser->isSuperAdmin() ? 'admin' : 'encoder';
 
         $query = User::where('role', $targetRole);
@@ -79,7 +81,7 @@ class AccountController extends Controller
 
         $advisers = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = User::where('role', $targetRole)
+        $gradeLevels = User::where('users.role', $targetRole)
             ->whereHas('schoolYearUserRecords', fn ($recordQuery) => $recordQuery
                 ->where('school_year_id', $activeSchoolYearId)
                 ->whereNotNull('advisory_grade_level'))
@@ -88,7 +90,7 @@ class AccountController extends Controller
             ->where('school_year_user_records.school_year_id', $activeSchoolYearId)
             ->pluck('school_year_user_records.advisory_grade_level');
 
-        $positions = User::where('role', $targetRole)
+        $positions = User::where('users.role', $targetRole)
             ->join('school_year_user_records', 'users.id', '=', 'school_year_user_records.user_id')
             ->where('school_year_user_records.school_year_id', $activeSchoolYearId)
             ->whereNotNull('school_year_user_records.position')
@@ -102,7 +104,8 @@ class AccountController extends Controller
 
     public function create()
     {
-        $currentUser = auth()->user();
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
         $isSuperAdmin = $currentUser->isSuperAdmin();
         $positions = [
             'Teacher I',
@@ -119,7 +122,8 @@ class AccountController extends Controller
 
     public function store(Request $request)
     {
-        $currentUser = auth()->user();
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
         $isSuperAdmin = $currentUser->isSuperAdmin();
         $targetRole = $isSuperAdmin ? 'admin' : 'encoder';
         $redirectRoute = $isSuperAdmin ? 'super-admin.accounts.index' : 'admin.accounts.index';
@@ -158,7 +162,8 @@ class AccountController extends Controller
 
     public function update(Request $request, User $user)
     {
-        $currentUser = auth()->user();
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
         $expectedRole = $currentUser->isSuperAdmin() ? User::ROLE_ADMIN : User::ROLE_ENCODER;
 
         abort_unless($user->role === $expectedRole, 403);
@@ -219,7 +224,8 @@ class AccountController extends Controller
 
     public function destroy(Request $request, User $user)
     {
-        $currentUser = auth()->user();
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
         if ($currentUser->isSuperAdmin() && $user->role !== 'admin') {
             abort(403);
         }
