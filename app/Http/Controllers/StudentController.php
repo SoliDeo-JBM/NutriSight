@@ -839,15 +839,21 @@ class StudentController extends Controller
     {
         $request->validate([
             'profiles' => ['required', 'array'],
-            'profiles.*' => ['nullable', 'image', 'max:4096'],
+            'profiles.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ], [
+            'profiles.*.image' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
+            'profiles.*.mimes' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
+            'profiles.*.max' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
+            'profiles.*.uploaded' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
         ]);
 
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $updated = 0;
+        $skipped = 0;
 
-        DB::transaction(function () use ($request, $user, $activeSyId, &$updated) {
+        DB::transaction(function () use ($request, $user, $activeSyId, &$updated, &$skipped) {
             foreach ($request->file('profiles', []) as $participantId => $file) {
                 if (!$file) {
                     continue;
@@ -855,6 +861,7 @@ class StudentController extends Controller
 
                 $participant = SbfpParticipant::with('enrollment')->find($participantId);
                 if (!$participant || !$participant->enrollment || $participant->enrollment->school_year_id != $activeSyId) {
+                    $skipped++;
                     continue;
                 }
 
@@ -862,12 +869,14 @@ class StudentController extends Controller
                     (string) $participant->enrollment->grade_level !== (string) $user->advisory_grade_level ||
                     strtolower(trim($participant->enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
                 )) {
+                    $skipped++;
                     continue;
                 }
 
                 try {
                     $path = $file->store('sbfp-profiles', 'r2');
                 } catch (\Throwable $exception) {
+                    report($exception);
                     throw ValidationException::withMessages([
                         'profiles' => 'Cloudflare R2 rejected the profile image. No database record was changed.',
                     ]);
@@ -892,10 +901,63 @@ class StudentController extends Controller
             }
         });
 
+        if ($updated === 0) {
+            $message = $skipped > 0
+                ? 'No profile image was uploaded. The selected participant is no longer available for this active school year or advisory assignment.'
+                : 'No profile image was selected.';
+
+            throw ValidationException::withMessages(['profiles' => $message]);
+        }
+
         AuditLogger::log('Updated', 'SBFP Participants', "Uploaded {$updated} profile image(s) for advisory SBFP participants.");
 
         return back()
             ->with('success', "Uploaded {$updated} profile image(s).")
             ->with('profile_image_upload_success', "Uploaded {$updated} profile image(s) successfully.");
+    }
+
+    public function showProfileImage(SbfpParticipant $participant)
+    {
+        $user = Auth::user();
+        $enrollment = $participant->enrollment;
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+
+        if (!$enrollment || $enrollment->school_year_id != $activeSyId || ($user && $user->isEncoder() && (
+            (string) $enrollment->grade_level !== (string) $user->advisory_grade_level ||
+            strtolower(trim($enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
+        ))) {
+            abort(404);
+        }
+
+        $storedValue = (string) $participant->getRawOriginal('profile_image_url');
+        $publicUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
+        $endpoint = rtrim((string) config('filesystems.disks.r2.endpoint'), '/');
+        $path = $storedValue;
+
+        if ($publicUrl !== '' && str_starts_with($path, $publicUrl)) {
+            $path = substr($path, strlen($publicUrl));
+        } elseif ($endpoint !== '' && str_starts_with($path, $endpoint)) {
+            $path = substr($path, strlen($endpoint));
+        }
+
+        $path = ltrim($path, '/');
+
+        try {
+            if ($path === '' || !Storage::disk('r2')->exists($path)) {
+                abort(404);
+            }
+
+            $content = Storage::disk('r2')->get($path);
+            $fileInfo = new \finfo(FILEINFO_MIME_TYPE);
+            $contentType = $fileInfo->buffer($content) ?: 'application/octet-stream';
+        } catch (\Throwable $exception) {
+            report($exception);
+            abort(404);
+        }
+
+        return response($content, 200, [
+            'Content-Type' => $contentType,
+            'Cache-Control' => 'private, max-age=3600',
+        ]);
     }
 }

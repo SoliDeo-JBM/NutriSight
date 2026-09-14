@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Support\Str;
 
 class SbfpParticipant extends Model
 {
@@ -23,18 +22,7 @@ class SbfpParticipant extends Model
             return null;
         }
 
-        $publicUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
-        $endpoint = rtrim((string) config('filesystems.disks.r2.endpoint'), '/');
-
-        if ($publicUrl !== '' && ($endpoint !== '' && Str::startsWith($value, $endpoint))) {
-            return $publicUrl . '/' . ltrim(Str::after($value, $endpoint), '/');
-        }
-
-        if ($publicUrl !== '' && !Str::startsWith($value, ['http://', 'https://'])) {
-            return $publicUrl . '/' . ltrim($value, '/');
-        }
-
-        return $value;
+        return route('encoder.profile-images.show', ['participant' => $this->getKey()]);
     }
 
     // Belongs to a specific Enrollment

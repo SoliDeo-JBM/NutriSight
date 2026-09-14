@@ -180,6 +180,7 @@ Route::middleware('auth')->group(function () {
 
     // Shared Attendance Routes
     Route::middleware('role:encoder|admin|super_admin')->name('encoder.')->group(function () {
+        Route::get('/profile-images/{participant}', [App\Http\Controllers\StudentController::class, 'showProfileImage'])->name('profile-images.show');
         Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
         Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
         Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
