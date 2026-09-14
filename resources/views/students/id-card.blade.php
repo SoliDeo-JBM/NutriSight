@@ -10,12 +10,16 @@
     <link rel="icon" type="image/svg+xml" href="{{ asset('images/id/mbes-logo-1.svg') }}">
     <style>
         * { box-sizing: border-box; }
-        @media print { .no-print { display: none !important; } body { margin: 0; background: white; } }
+        @media print {
+            * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            .no-print { display: none !important; }
+            body { margin: 0; background: white; }
+        }
         body { margin: 0; min-height: 100vh; padding: 40px; background: #f1f5f9; font-family: Arial, sans-serif; text-align: center; }
-        .id-card { position: relative; width: 324px; height: 204px; margin: 0 auto 24px; overflow: hidden; background: #fff5f5; border: 1px solid #000; border-radius: 5px; color: #111827; }
-        .id-header { position: absolute; z-index: 4; top: 15px; left: 0; width: 100%; height: 30px; padding: 6px 8px 4px 70px; background: #1818ef; color: #fff; text-align: left; font-size: 9px; font-weight: 700; line-height: 10px; opacity: 1; }
+        .id-card { position: relative; width: 324px; height: 204px; margin: 0 auto 24px; overflow: hidden; background: #fff5f5; border: 1px solid #000; border-radius: 5px; color: #111827; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .id-header { position: absolute; z-index: 4; top: 15px; left: 0; width: 100%; height: 30px; padding: 6px 8px 4px 70px; background: #1818ef; color: #fff; text-align: left; font-size: 9px; font-weight: 700; line-height: 10px; opacity: 1; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .id-logo { position: absolute; z-index: 5; top: 11px; left: 21px; width: 39px; height: 39px; }
-        .id-background-logo { position: absolute; z-index: 0; top: 23px; left: 88px; width: 163px; height: 163px; pointer-events: none; }
+        .id-background-logo { position: absolute; z-index: 0; top: 23px; left: 88px; width: 163px; height: 163px; pointer-events: none; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
         .id-profile { position: absolute; z-index: 2; display: block; top: 74px; left: 21px; width: 90px; height: 90px; border: 1px solid #000; background: #d9d9d9; object-fit: cover; }
         .id-meta { position: absolute; z-index: 2; top: 82px; left: 123px; width: 108px; text-align: left; font-size: 8px; line-height: 12px; }
         .id-meta strong { display: block; font-size: 10px; line-height: 12px; overflow-wrap: anywhere; }
