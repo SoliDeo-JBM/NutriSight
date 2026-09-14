@@ -2,6 +2,29 @@
 
 @section('content')
     <div x-data="sbfpManager()" x-init="if (@js($hasPendingApproval ?? false)) showApprovalModal = true" x-cloak class="flex flex-col gap-6">
+        @if(session('profile_image_upload_success'))
+        <div
+            x-data="{ open: true }"
+            x-show="open"
+            x-transition
+            class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="profile-image-upload-success-title"
+        >
+            <div class="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl">
+                <div class="mb-4 text-emerald-600 text-4xl">
+                    <i class="fas fa-check-circle" aria-hidden="true"></i>
+                </div>
+                <h2 id="profile-image-upload-success-title" class="mb-2 text-lg font-bold text-gray-900">Profile Images Uploaded</h2>
+                <p class="mb-6 text-sm text-gray-600">{{ session('profile_image_upload_success') }}</p>
+                <button type="button" @click="open = false" class="rounded bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
+                    OK
+                </button>
+            </div>
+        </div>
+        @endif
+
         @php
             $profileImageParticipants = collect(isset($students) ? $students->items() : [])->map(function ($student) {
                 $participant = $student->enrollments->first()?->sbfpParticipant;
@@ -29,7 +52,7 @@
                     </button>
                     <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route('encoder.students.sbfp.profile-images')" />
                     <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
-                        <i class="fas fa-print"></i> Print Portrait ID QR Sheet
+                        <i class="fas fa-print"></i> Print Landscape ID QR Sheet
                     </a>
                 </div>
             </div>
@@ -190,7 +213,7 @@
                                         <div class="p-1 bg-white border inline-block shadow-sm rounded">
                                              {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
                                         </div>
-                                        <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" @click.stop class="text-[11px] text-blue-600 hover:underline mt-1">Print Portrait ID</a>
+                                        <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" @click.stop class="text-[11px] text-blue-600 hover:underline mt-1">Print Landscape ID</a>
                                     </div>
                                 @else
                                     <span class="text-gray-400 text-xs italic">Requires Approval</span>

@@ -12,25 +12,33 @@
         $currentCarbon = \Carbon\Carbon::parse($date);
         @endphp
 
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-            <!-- Month & Year Dropdown Selectors -->
-            <form method="GET" action="{{ route($routePrefix . '.attendance.index') }}" class="flex flex-wrap items-center gap-2 self-start">
-                <select name="month" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
-                    @for($m = 1; $m <= 12; $m++)
-                        <option value="{{ $m }}" {{ $currentCarbon->month == $m ? 'selected' : '' }}>
-                        {{ \Carbon\Carbon::create()->month($m)->format('F') }}
-                        </option>
+        <div class="flex justify-center mb-6">
+            @php
+            $previousMonth = $currentCarbon->copy()->subMonth()->startOfMonth();
+            $nextMonth = $currentCarbon->copy()->addMonth()->startOfMonth();
+            @endphp
+            <div class="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <a href="{{ route($routePrefix . '.attendance.index', ['date' => $previousMonth->toDateString()] + request()->only(['grade_level', 'section'])) }}" class="flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 bg-white text-lg font-bold text-gray-700 hover:bg-gray-100" aria-label="Previous month">&lt;</a>
+                <form method="GET" action="{{ route($routePrefix . '.attendance.index') }}" class="flex items-center gap-1">
+                    @if($routePrefix !== 'encoder')
+                    <input type="hidden" name="grade_level" value="{{ request('grade_level') }}">
+                    <input type="hidden" name="section" value="{{ request('section') }}">
+                    @endif
+                    <label class="sr-only" for="attendance-month">Select month</label>
+                    <select id="attendance-month" name="date" onchange="this.form.submit()" class="h-10 appearance-none border-0 bg-transparent px-2 text-center text-lg font-bold text-gray-800 focus:outline-none focus:ring-0">
+                        @for($m = 1; $m <= 12; $m++)
+                            @php $monthDate = $currentCarbon->copy()->month($m)->startOfMonth(); @endphp
+                            <option value="{{ $monthDate->toDateString() }}" @selected($currentCarbon->month === $m)>{{ $monthDate->format('F') }}</option>
                         @endfor
-                </select>
-
-                <select name="year" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
-                    @for($y = \Carbon\Carbon::now()->year - 2; $y <= \Carbon\Carbon::now()->year + 2; $y++)
-                        <option value="{{ $y }}" {{ $currentCarbon->year == $y ? 'selected' : '' }}>
-                            {{ $y }}
-                        </option>
-                        @endfor
-                </select>
-                @if($routePrefix !== 'encoder')
+                    </select>
+                    <span aria-label="Calendar year" class="inline-flex h-10 w-20 items-center justify-center text-lg font-bold text-gray-800">{{ $currentCarbon->year }}</span>
+                </form>
+                <a href="{{ route($routePrefix . '.attendance.index', ['date' => $nextMonth->toDateString()] + request()->only(['grade_level', 'section'])) }}" class="flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 bg-white text-lg font-bold text-gray-700 hover:bg-gray-100" aria-label="Next month">&gt;</a>
+            </div>
+        </div>
+        @if($routePrefix !== 'encoder')
+        <form method="GET" action="{{ route($routePrefix . '.attendance.index') }}" class="mb-6 flex flex-wrap items-center justify-center gap-2">
+            <input type="hidden" name="date" value="{{ $date }}">
                 <select name="grade_level" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
                     <option value="">All Grades</option>
                     @foreach($gradeLevels as $grade)
@@ -43,9 +51,8 @@
                     <option value="{{ $section }}" @selected(request('section')===$section)>{{ $section }}</option>
                     @endforeach
                 </select>
-                @endif
-            </form>
-        </div>
+        </form>
+        @endif
 
         <!-- Calendar Grid -->
         <div class="grid grid-cols-7 gap-2 text-center">

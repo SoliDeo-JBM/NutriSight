@@ -155,6 +155,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:encoder')->prefix('encoder')->name('encoder.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'encoder'])->name('dashboard');
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
+        Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->name('students.change-section');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/{student}/edit', [App\Http\Controllers\StudentController::class, 'edit'])->name('students.edit');
         Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');

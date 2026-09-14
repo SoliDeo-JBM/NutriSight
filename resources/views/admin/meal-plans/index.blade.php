@@ -11,19 +11,29 @@ $startOfMonth = $currentDate->copy()->startOfMonth();
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
     <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 lg:col-span-2">
-        <div class="flex flex-col sm:flex-row justify-between items-center mb-6 gap-4">
-            <form method="GET" action="{{ route('admin.meal-plans.index') }}" class="flex items-center gap-2 self-start">
-                <select name="month" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
-                    @for($month = 1; $month <= 12; $month++)
-                        <option value="{{ $month }}" @selected($currentDate->month === $month)>{{ \Carbon\Carbon::create()->month($month)->format('F') }}</option>
+        <div class="flex justify-center mb-6">
+            @php
+            $previousMonth = $currentDate->copy()->subMonth()->startOfMonth();
+            $nextMonth = $currentDate->copy()->addMonth()->startOfMonth();
+            @endphp
+            <div class="flex items-center justify-center gap-2 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
+                <a href="{{ route('admin.meal-plans.index', ['date' => $previousMonth->toDateString()]) }}" class="flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 bg-white text-lg font-bold text-gray-700 hover:bg-gray-100" aria-label="Previous month">&lt;</a>
+                <form method="GET" action="{{ route('admin.meal-plans.index') }}" class="flex items-center gap-1">
+                    <label class="sr-only" for="meal-plan-month">Select month</label>
+                    <select id="meal-plan-month" name="month" onchange="this.form.submit()" class="h-10 appearance-none border-0 bg-transparent px-2 text-center text-lg font-bold text-gray-800 focus:outline-none focus:ring-0">
+                        @for($month = 1; $month <= 12; $month++)
+                            <option value="{{ $month }}" @selected($currentDate->month === $month)>{{ $currentDate->copy()->month($month)->format('F') }}</option>
                         @endfor
-                </select>
-                <select name="year" onchange="this.form.submit()" class="border rounded px-2 py-1 text-sm bg-white font-semibold">
-                    @for($year = now()->year - 2; $year <= now()->year + 2; $year++)
-                        <option value="{{ $year }}" @selected($currentDate->year === $year)>{{ $year }}</option>
+                    </select>
+                    <label class="sr-only" for="meal-plan-year">Select year</label>
+                    <select id="meal-plan-year" name="year" onchange="this.form.submit()" aria-label="Select calendar year" class="h-10 border-0 bg-transparent px-1 text-center text-lg font-bold text-gray-800 focus:outline-none focus:ring-0">
+                        @for($year = now()->year - 2; $year <= now()->year + 2; $year++)
+                            <option value="{{ $year }}" @selected($currentDate->year === $year)>{{ $year }}</option>
                         @endfor
-                </select>
-            </form>
+                    </select>
+                </form>
+                <a href="{{ route('admin.meal-plans.index', ['date' => $nextMonth->toDateString()]) }}" class="flex h-10 w-10 items-center justify-center rounded-md border border-gray-300 bg-white text-lg font-bold text-gray-700 hover:bg-gray-100" aria-label="Next month">&gt;</a>
+            </div>
         </div>
 
         <div class="grid grid-cols-7 gap-2 text-center">

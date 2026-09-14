@@ -8,9 +8,32 @@
                 <h1 class="text-2xl font-bold text-gray-900">Advisory Student List</h1>
                 <p class="text-sm text-gray-500 mt-1">Master list of advisory students with WHO nutritional metrics.</p>
             </div>
-            <a href="{{ route('encoder.students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
-                <i class="fas fa-plus"></i> Add Advisory Student
-            </a>
+            <div class="flex flex-wrap gap-2">
+                <button type="button" onclick="document.getElementById('change-section-modal').classList.remove('hidden')" class="bg-amber-500 text-white px-4 py-2 rounded text-sm hover:bg-amber-600 inline-flex items-center gap-2 whitespace-nowrap">
+                    <i class="fas fa-pen"></i> Change Section Name
+                </button>
+                <a href="{{ route('encoder.students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
+                    <i class="fas fa-plus"></i> Add Advisory Student
+                </a>
+            </div>
+        </div>
+
+        <div id="change-section-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/40 p-4" onclick="if(event.target===this)this.classList.add('hidden')">
+            <form method="POST" action="{{ route('encoder.students.change-section') }}" class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onclick="event.stopPropagation()">
+                @csrf
+                @method('PATCH')
+                <div class="mb-4 flex items-center justify-between">
+                    <div>
+                        <h2 class="font-bold text-gray-900">Change Section Name</h2>
+                        <p class="mt-1 text-xs text-gray-500">This updates all {{ $user->advisory_section }} students in the active grade and school year.</p>
+                    </div>
+                    <button type="button" onclick="document.getElementById('change-section-modal').classList.add('hidden')" aria-label="Close"><i class="fas fa-times text-gray-400"></i></button>
+                </div>
+                <label for="new-section" class="mb-1 block text-sm font-semibold text-gray-700">New section name</label>
+                <input id="new-section" name="section" value="{{ old('section', $user->advisory_section) }}" required maxlength="255" class="w-full rounded border border-gray-300 p-2 text-sm">
+                @error('section')<p class="mt-2 text-sm text-red-600">{{ $message }}</p>@enderror
+                <button type="submit" class="mt-5 w-full rounded bg-amber-500 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-600">Update Whole Class</button>
+            </form>
         </div>
 
         <!-- Filters & Search Card -->

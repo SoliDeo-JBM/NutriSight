@@ -2,7 +2,17 @@
 
 @section('content')
     <div class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-sm border border-gray-200">
-        <h1 class="text-2xl font-bold mb-6">{{ isset($student) ? 'Edit Advisory Student' : 'Add Advisory Student' }}</h1>
+        @php
+        $advisoryGrade = old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level ?? null);
+        $advisorySection = old('section', $enrollment->section ?? $user->advisory_section ?? null);
+        $advisoryLabel = $advisoryGrade === null || $advisorySection === null
+            ? 'Not assigned'
+            : 'Section (' . $advisorySection . ') - Grade (' . $advisoryGrade . ')';
+        @endphp
+        <div class="mb-6 flex items-start justify-between gap-4">
+            <h1 class="text-2xl font-bold">{{ isset($student) ? 'Edit Advisory Student' : 'Add Advisory Student' }}</h1>
+            <strong class="shrink-0 text-right text-sm text-blue-700">{{ $advisoryLabel }}</strong>
+        </div>
 
         @if ($errors->any())
             <div class="mb-4 bg-red-50 border border-red-200 text-red-600 p-4 rounded text-sm">
@@ -60,25 +70,8 @@
                 </div>
             </div>
 
-            <div class="grid grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Grade Level <span class="text-red-500">*</span></label>
-                    <select name="grade_level" required class="w-full border rounded p-2 text-sm">
-                        <option value="">-- Select Grade Level --</option>
-                        <option value="0" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '0' ? 'selected' : '' }}>Kinder</option>
-                        <option value="1" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '1' ? 'selected' : '' }}>Grade 1</option>
-                        <option value="2" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '2' ? 'selected' : '' }}>Grade 2</option>
-                        <option value="3" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '3' ? 'selected' : '' }}>Grade 3</option>
-                        <option value="4" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '4' ? 'selected' : '' }}>Grade 4</option>
-                        <option value="5" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '5' ? 'selected' : '' }}>Grade 5</option>
-                        <option value="6" {{ old('grade_level', $enrollment->grade_level ?? $user->advisory_grade_level) == '6' ? 'selected' : '' }}>Grade 6</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm font-semibold mb-1">Section <span class="text-red-500">*</span></label>
-                    <input type="text" name="section" value="{{ old('section', $enrollment->section ?? $user->advisory_section) }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Diamond">
-                </div>
-            </div>
+            <input type="hidden" name="grade_level" value="{{ $advisoryGrade }}">
+            <input type="hidden" name="section" value="{{ $advisorySection }}">
 
             <div class="grid grid-cols-2 gap-4">
                 <div>

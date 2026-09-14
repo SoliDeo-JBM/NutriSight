@@ -115,7 +115,51 @@ class StudentController extends Controller
             'lrn_desc' => 'LRN / ID (Descending)',
         ];
 
-        return view('students.index', compact('students', 'sexes', 'bmiCategories', 'sortOptions'));
+        return view('students.index', compact('students', 'sexes', 'bmiCategories', 'sortOptions', 'user'));
+    }
+
+    public function changeSectionName(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        abort_unless($user && $user->isEncoder(), 403);
+
+        $validated = $request->validate([
+            'section' => ['required', 'string', 'max:255'],
+        ]);
+
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $oldSection = trim((string) $user->advisory_section);
+        $gradeLevel = $user->advisory_grade_level;
+
+        if ($activeSyId === null || $gradeLevel === null || $oldSection === '') {
+            return back()->withErrors(['section' => 'Set an advisory grade and section before changing the section name.']);
+        }
+
+        $newSection = ucfirst(strtolower(trim($validated['section'])));
+        if (strcasecmp($oldSection, $newSection) === 0) {
+            return back()->withErrors(['section' => 'The new section name must be different from the current section.']);
+        }
+
+        $updatedStudents = DB::transaction(function () use ($activeSyId, $gradeLevel, $oldSection, $newSection, $user) {
+            $updatedStudents = Enrollment::where('school_year_id', $activeSyId)
+                ->where('grade_level', $gradeLevel)
+                ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower($oldSection)])
+                ->update(['section' => $newSection]);
+
+            $assignment = $user->currentSchoolYearUserRecord();
+            if (!$assignment) {
+                throw ValidationException::withMessages(['section' => 'Your active school-year assignment could not be found.']);
+            }
+
+            $assignment->update(['advisory_section' => $newSection]);
+
+            return $updatedStudents;
+        });
+
+        AuditLogger::log('Updated', 'Students', "Renamed advisory section from {$oldSection} to {$newSection} for {$updatedStudents} student enrollment(s).");
+
+        return back()->with('success', "Section renamed to {$newSection}. {$updatedStudents} advisory student enrollment(s) updated.");
     }
 
     public function sbfpIndex(Request $request)
@@ -238,6 +282,8 @@ class StudentController extends Controller
 
     public function store(Request $request)
     {
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
         $validated = $request->validate([
             'lrn' => 'required|unique:students,lrn',
             'last_name' => 'required',
@@ -255,6 +301,11 @@ class StudentController extends Controller
             'guardian_email' => 'nullable|email',
             'address' => 'required',
         ]);
+
+        if ($user?->isEncoder()) {
+            $validated['grade_level'] = $user->advisory_grade_level;
+            $validated['section'] = $user->advisory_section;
+        }
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
         $student = Student::create([
@@ -331,6 +382,11 @@ class StudentController extends Controller
             'guardian_email' => 'nullable|email',
             'address' => 'required',
         ]);
+
+        if ($user?->isEncoder()) {
+            $validated['grade_level'] = $user->advisory_grade_level;
+            $validated['section'] = $user->advisory_section;
+        }
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
 
@@ -712,7 +768,14 @@ class StudentController extends Controller
 
     public function generateIdCard(Student $student)
     {
-        return view('students.id-card', compact('student'));
+        $enrollment = $student->enrollments()
+            ->where('school_year_id', SchoolYearManager::activeSchoolYearId())
+            ->with('sbfpParticipant')
+            ->firstOrFail();
+
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+
+        return view('students.id-card', compact('student', 'enrollment', 'schoolYear'));
     }
 
     public function printBatch()
@@ -721,7 +784,9 @@ class StudentController extends Controller
         $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
-        $query = Student::with(['enrollments.sbfpParticipant.nutritionMeasurements'])
+        $query = Student::with(['enrollments' => function ($enrollmentQuery) use ($activeSyId) {
+                $enrollmentQuery->where('school_year_id', $activeSyId)->with('sbfpParticipant.nutritionMeasurements');
+            }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
@@ -744,7 +809,9 @@ class StudentController extends Controller
             return $participant->parent_consent === 'approved';
         });
 
-        return view('students.print-batch', compact('students'));
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+
+        return view('students.print-batch', compact('students', 'schoolYear'));
     }
 
     public function emailFeedingNotice(Request $request, Student $student)
@@ -827,6 +894,8 @@ class StudentController extends Controller
 
         AuditLogger::log('Updated', 'SBFP Participants', "Uploaded {$updated} profile image(s) for advisory SBFP participants.");
 
-        return back()->with('success', "Uploaded {$updated} profile image(s).");
+        return back()
+            ->with('success', "Uploaded {$updated} profile image(s).")
+            ->with('profile_image_upload_success', "Uploaded {$updated} profile image(s) successfully.");
     }
 }

@@ -33,13 +33,9 @@ class AttendanceController extends Controller
 
     private function attendanceIndex(Request $request, bool $encoderScope, string $routePrefix)
     {
-        $year = $request->input('year', Carbon::today()->year);
-        $month = $request->input('month', Carbon::today()->month);
-
-        $defaultDate = Carbon::today();
         $date = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
-            : Carbon::create($year, $month, min($defaultDate->day, Carbon::create($year, $month)->daysInMonth))->toDateString();
+            : Carbon::today()->toDateString();
 
         /** @var \App\Models\User|null $user */
         $user = Auth::user();

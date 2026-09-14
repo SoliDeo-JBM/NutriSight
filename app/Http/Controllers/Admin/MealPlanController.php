@@ -13,15 +13,19 @@ class MealPlanController extends Controller
 {
     public function index(Request $request)
     {
-        $year = (int) $request->input('year', Carbon::today()->year);
-        $month = (int) $request->input('month', Carbon::today()->month);
         $requestedDate = $request->input('date');
+        $requestedYear = $request->integer('year');
+        $requestedMonth = $request->integer('month');
         $currentDate = $requestedDate
             ? Carbon::parse($requestedDate)->startOfMonth()
-            : Carbon::today()->startOfMonth();
+            : ($requestedYear && $requestedMonth
+                ? Carbon::create($requestedYear, $requestedMonth, 1)
+                : Carbon::today()->startOfMonth());
         $date = $requestedDate
             ? Carbon::parse($requestedDate)->toDateString()
-            : Carbon::create($year, $month, min(Carbon::today()->day, $currentDate->daysInMonth))->toDateString();
+            : ($requestedYear && $requestedMonth
+                ? $currentDate->toDateString()
+                : Carbon::today()->toDateString());
         $mealPlans = MealPlan::whereDate('meal_date', $date)->latest()->get();
         $plannedDates = MealPlan::query()->select('meal_date')->distinct()->pluck('meal_date')->map(fn($mealDate) => Carbon::parse($mealDate)->toDateString())->all();
 
