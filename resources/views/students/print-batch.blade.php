@@ -43,7 +43,7 @@
         @php
             $enrollment = $student->enrollments->first();
             $participant = $enrollment?->sbfpParticipant;
-            $gradeLabel = $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-');
+            $gradeLabel = $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-'));
         @endphp
         <div class="id-landscape">
             <img class="id-logo" src="{{ asset('images/id/mbes-logo-1.svg') }}" alt="MBES logo">

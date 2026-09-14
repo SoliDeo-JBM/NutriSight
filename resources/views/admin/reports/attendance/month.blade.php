@@ -16,13 +16,14 @@
     .attendance-grid .present { color: #15803d; font-weight: 800; }
     .attendance-grid .absent { color: #dc2626; font-weight: 700; }
     .attendance-grid .total-row td { border-top: 2px solid #172033; background: #dbeafe; font-weight: 700; }
+    .no-print a[href*="/sql"], .no-print button[onclick="window.print()"] { display: none !important; }
     @media print { .sidebar, .sidebar-backdrop, .top-header, .no-print { display: none !important; } .main-content { margin-left: 0 !important; width: 100% !important; } .content-body { padding: 0 !important; } .attendance-grid { min-width: 0; width: 100%; font-size: 8px; } @page { size: landscape; margin: 8mm; } }
 </style>
 
 <div class="flex flex-col gap-5">
     <div class="no-print flex items-center justify-between gap-3">
         <div><a href="{{ route('admin.reports.sbfp.attendance') }}" class="inline-flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"><i class="fas fa-arrow-left"></i> Back</a><h1 class="mt-3 text-xl font-bold text-slate-900">{{ date('F', mktime(0, 0, 0, $month, 1)) }} Attendance · SY {{ $schoolYear->year }}</h1></div>
-        <div class="flex flex-wrap gap-2"><a href="{{ route('admin.reports.sbfp.attendance.month.excel', $reportMonth) }}" class="rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Excel</a><a href="{{ route('admin.reports.sbfp.attendance.month.docx', $reportMonth) }}" class="rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Word</a><a href="{{ route('admin.reports.sbfp.attendance.month.pdf', $reportMonth) }}" class="rounded-lg bg-rose-600 px-3 py-2 text-xs font-semibold text-white">PDF</a><a href="{{ route('admin.reports.sbfp.attendance.month.sql', $reportMonth) }}" class="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white">SQL</a><button onclick="window.print()" class="rounded-lg bg-slate-700 px-3 py-2 text-xs font-semibold text-white"><i class="fas fa-print mr-1"></i> Print</button></div>
+        <div class="flex flex-wrap gap-2"><a href="{{ request()->fullUrl() }}" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-600 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"><i class="fas fa-arrows-rotate"></i> Refresh</a><a href="{{ route('admin.reports.sbfp.attendance.month.excel', $reportMonth) }}" class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><i class="fas fa-file-excel"></i> Excel</a><a href="{{ route('admin.reports.sbfp.attendance.month.docx', $reportMonth) }}" class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"><i class="fas fa-file-word"></i> Word</a><a href="{{ route('admin.reports.sbfp.attendance.month.pdf', $reportMonth) }}" class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"><i class="fas fa-file-pdf"></i> PDF</a></div>
     </div>
 
     <form method="GET" class="no-print flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">

@@ -1,6 +1,6 @@
 @php
     $profileImage = $enrollment->sbfpParticipant?->profile_image_url ?: asset('images/anonymous-profile.svg');
-    $gradeLabel = $enrollment->grade_level == 0 ? 'Kinder' : 'Grade ' . $enrollment->grade_level;
+    $gradeLabel = $enrollment->grade_level == 0 ? 'Kinder' : ($enrollment->grade_level == 7 ? 'SPED' : 'Grade ' . $enrollment->grade_level);
     $schoolYearLabel = $schoolYear?->year ?? '0000-0000';
 @endphp
 <!DOCTYPE html>

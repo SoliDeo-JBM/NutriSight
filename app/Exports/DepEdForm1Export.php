@@ -9,11 +9,13 @@ use Maatwebsite\Excel\Concerns\WithHeadings;
 use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Concerns\WithStyles;
 use Maatwebsite\Excel\Events\AfterSheet;
+use PhpOffice\PhpSpreadsheet\RichText\RichText;
+use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHeadings, WithStyles
 {
-  public function __construct(private readonly array $rows, private readonly mixed $schoolYear = null, private readonly mixed $period = null)
+  public function __construct(private readonly array $rows, private readonly mixed $schoolYear = null, private readonly mixed $period = null, private readonly string $adminName = 'Full Name of the Admin', private readonly string $superAdminName = 'Full Name of the Super Admin')
   {
   }
 
@@ -63,17 +65,29 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
 
   public function headings(): array
   {
+    $periodLabel = ucfirst($this->period?->measurement_period ?? 'Summary');
+    $month = $this->period?->month ? date('F', mktime(0, 0, 0, $this->period->month, 1)) : 'Month';
     return [
-      ['Grade Levels', 'Sex', 'Enrolment', '', 'Pupils Weighed', '', 'BODY MASS INDEX (BMI)', '', '', '', '', '', '', '', '', 'HEIGHT-FOR-AGE (HFA)', '', '', '', '', '', '', '', 'Pupils Taken Height', ''],
-      ['', '', 'Enrolment', 'No.', '%', 'Severely Wasted No.', '%', 'Wasted No.', '%', 'Normal No.', '%', 'Overweight No.', '%', 'Obese No.', '%', 'Severely Stunted No.', '%', 'Stunted No.', '%', 'Normal No.', '%', 'Tall No.', '%', 'No.', '%'],
+      ['Department of Education'],
+      ['Bureau of Learner Support Services'],
+      ['NUTRITIONAL STATUS REPORT OF MARISOL BLISS ELEMENTARY SCHOOL'],
+      ["{$periodLabel} ({$month}) SY {$this->schoolYear?->year}"],
+      ['Grade Levels', 'Enrollment', '', '', 'Pupils Weighed', '', 'BODY MASS INDEX (BMI)', '', '', '', '', '', '', '', '', 'HEIGHT-FOR-AGE (HFA)', '', '', '', '', '', '', '', 'Pupils Taken Height', ''],
+      ['', '', '', '', '', 'Severely Wasted', '', 'Wasted', '', 'Normal', '', 'Overweight', '', 'Obese', '', 'Severely Stunted', '', 'Stunted', '', 'Normal', '', 'Tall', '', '', ''],
+      ['', '', '', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%'],
     ];
   }
 
   public function styles(Worksheet $sheet): array
   {
     return [
-      1 => ['font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1F4E78']], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true]],
-      2 => ['font' => ['bold' => true], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'D9E2F3']], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true]],
+      1 => ['font' => ['size' => 11], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']],
+      2 => ['font' => ['size' => 11], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']],
+      3 => ['font' => ['bold' => true, 'size' => 14], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']],
+      4 => ['font' => ['italic' => true, 'size' => 11], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center']],
+      5 => ['font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => '1F4E78']], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true]],
+      6 => ['font' => ['bold' => true], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'D9E2F3']], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true]],
+      7 => ['font' => ['bold' => true], 'fill' => ['fillType' => 'solid', 'startColor' => ['rgb' => 'EAF1F8']], 'alignment' => ['horizontal' => 'center', 'vertical' => 'center', 'wrapText' => true]],
     ];
   }
 
@@ -82,11 +96,63 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
     return [
       AfterSheet::class => function (AfterSheet $event) {
         $sheet = $event->sheet->getDelegate();
-        foreach (['A1:A2', 'B1:B2', 'C1:C2', 'D1:E1', 'F1:O1', 'P1:W1', 'X1:Y1'] as $range)
+        foreach (['A1:Y1', 'A2:Y2', 'A3:Y3', 'A4:Y4', 'A5:A7', 'B5:C7', 'D5:E6', 'F5:O5', 'P5:W5', 'X5:Y6', 'F6:G6', 'H6:I6', 'J6:K6', 'L6:M6', 'N6:O6', 'P6:Q6', 'R6:S6', 'T6:U6', 'V6:W6'] as $range)
           $sheet->mergeCells($range);
-        $sheet->getRowDimension(1)->setRowHeight(28);
-        $sheet->getRowDimension(2)->setRowHeight(34);
-        $sheet->freezePane('C3');
+        $periodText = new RichText();
+        $periodRun = $periodText->createTextRun(ucfirst($this->period?->measurement_period ?? 'Summary'));
+        $periodRun->getFont()->setItalic(true)->getColor()->setRGB('2563EB');
+        $monthRun = $periodText->createTextRun(' (' . ($this->period?->month ? date('F', mktime(0, 0, 0, $this->period->month, 1)) : 'Month') . ')');
+        $monthRun->getFont()->setItalic(true)->getColor()->setRGB('2563EB');
+        $detailsRun = $periodText->createTextRun(' SY ');
+        $detailsRun->getFont()->setItalic(true);
+        $yearRun = $periodText->createTextRun((string) $this->schoolYear?->year);
+        $yearRun->getFont()->setBold(true)->setItalic(true);
+        $sheet->getCell('A4')->setValue($periodText);
+        foreach ([['images/id/pulungbulu_elem.jpeg', 'A1'], ['images/id/kagawaran_ng_edukasyo.jpeg', 'Y1']] as [$path, $coordinate]) {
+          $drawing = new Drawing();
+          $drawing->setPath(public_path($path));
+          $drawing->setHeight(42);
+          $drawing->setCoordinates($coordinate);
+          $drawing->setOffsetX($coordinate === 'A1' ? 8 : 0);
+          $drawing->setWorksheet($sheet);
+        }
+        $lastRow = count($this->rows) + 7;
+        $sheet->getStyle("A1:Y{$lastRow}")->getAlignment()->setHorizontal('center')->setVertical('center')->setWrapText(true);
+        $rowNumber = 8;
+        foreach (collect($this->rows)->groupBy('grade_level') as $gradeRows) {
+          $lastRowNumber = $rowNumber + $gradeRows->count() - 1;
+          if ($lastRowNumber > $rowNumber)
+            $sheet->mergeCells("A{$rowNumber}:A{$lastRowNumber}");
+          $rowNumber = $lastRowNumber + 1;
+        }
+        $signatureRow = $lastRow + 2;
+        $sheet->mergeCells("A{$signatureRow}:L{$signatureRow}");
+        $sheet->mergeCells("M{$signatureRow}:Y{$signatureRow}");
+        $sheet->mergeCells("A" . ($signatureRow + 1) . ":L" . ($signatureRow + 1));
+        $sheet->mergeCells("M" . ($signatureRow + 1) . ":Y" . ($signatureRow + 1));
+        $sheet->mergeCells("A" . ($signatureRow + 2) . ":L" . ($signatureRow + 2));
+        $sheet->mergeCells("M" . ($signatureRow + 2) . ":Y" . ($signatureRow + 2));
+        $sheet->mergeCells("A" . ($signatureRow + 3) . ":L" . ($signatureRow + 3));
+        $sheet->mergeCells("M" . ($signatureRow + 3) . ":Y" . ($signatureRow + 3));
+        $sheet->setCellValue("A{$signatureRow}", 'Prepared by:');
+        $sheet->setCellValue("M{$signatureRow}", 'Noted by:');
+        $sheet->setCellValue("A" . ($signatureRow + 1), '____________________________');
+        $sheet->setCellValue("M" . ($signatureRow + 1), '________________________________');
+        $sheet->setCellValue("A" . ($signatureRow + 2), $this->adminName);
+        $sheet->setCellValue("M" . ($signatureRow + 2), $this->superAdminName);
+        $sheet->setCellValue("A" . ($signatureRow + 3), 'Project Development Officer');
+        $sheet->setCellValue("M" . ($signatureRow + 3), 'School Head');
+        $sheet->getStyle("A{$signatureRow}:Y" . ($signatureRow + 3))->getAlignment()->setHorizontal('center')->setVertical('center');
+        $sheet->getStyle("A{$signatureRow}:Y{$signatureRow}")->getFont()->setBold(true);
+        $sheet->getStyle("A" . ($signatureRow + 2) . ":Y" . ($signatureRow + 2))->getFont()->setBold(true);
+        $sheet->getRowDimension(1)->setRowHeight(18);
+        $sheet->getRowDimension(2)->setRowHeight(24);
+        $sheet->getRowDimension(3)->setRowHeight(24);
+        $sheet->getRowDimension(4)->setRowHeight(24);
+        $sheet->getRowDimension(5)->setRowHeight(28);
+        $sheet->getRowDimension(6)->setRowHeight(24);
+        $sheet->getRowDimension(7)->setRowHeight(22);
+        $sheet->freezePane('C8');
       }
     ];
   }

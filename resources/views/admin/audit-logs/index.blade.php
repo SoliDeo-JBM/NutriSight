@@ -12,11 +12,11 @@
 
         <!-- Filters & Search Card -->
         <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <form method="GET" action="{{ route($rolePrefix . '.audit-logs.index') }}" class="space-y-4">
+            <form method="GET" action="{{ route($rolePrefix . '.audit-logs.index') }}" class="space-y-4" x-data>
                 <!-- Search Bar -->
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Search Activity / User</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Search description, user name..." class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Search description, user name..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 </div>
 
                 <!-- Filters Row -->
@@ -24,7 +24,7 @@
                     <!-- Module Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Module</label>
-                        <select name="module" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <select name="module" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All Modules</option>
                             @foreach($modules as $mod)
                                 <option value="{{ $mod }}" {{ request('module') == $mod ? 'selected' : '' }}>{{ $mod }}</option>
@@ -35,7 +35,7 @@
                     <!-- Action Filter -->
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-2">Action Type</label>
-                        <select name="action" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <select name="action" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                             <option value="">All Actions</option>
                             @foreach($actions as $act)
                                 <option value="{{ $act }}" {{ request('action') == $act ? 'selected' : '' }}>{{ $act }}</option>
@@ -44,13 +44,9 @@
                     </div>
                 </div>
 
-                <!-- Action Buttons -->
-                <div class="flex gap-2 pt-2">
-                    <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm font-semibold hover:bg-blue-700">
-                        <i class="fas fa-filter mr-2"></i> Apply Filters
-                    </button>
-                    <a href="{{ route($rolePrefix . '.audit-logs.index') }}" class="bg-gray-200 text-gray-700 px-6 py-2 rounded text-sm font-semibold hover:bg-gray-300">
-                        <i class="fas fa-redo mr-2"></i> Clear Filters
+                <div class="flex justify-end pt-1">
+                    <a href="{{ route($rolePrefix . '.audit-logs.index') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
+                        <i class="fas fa-rotate-left"></i> Reset filters
                     </a>
                 </div>
             </form>
@@ -68,7 +64,6 @@
                             <th class="px-4 py-3 border">Module</th>
                             <th class="px-4 py-3 border">Action</th>
                             <th class="px-4 py-3 border">Description</th>
-                            <th class="px-4 py-3 border">IP Address</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-gray-200">
@@ -91,11 +86,10 @@
                                 </span>
                             </td>
                             <td class="px-4 py-3 border">{{ $log->description }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap text-xs font-mono text-gray-600">{{ $log->ip_address ?? '-' }}</td>
                         </tr>
                         @empty
                         <tr>
-                            <td colspan="7" class="px-4 py-8 border text-center text-gray-500">No audit logs found.</td>
+                            <td colspan="6" class="px-4 py-8 border text-center text-gray-500">No audit logs found.</td>
                         </tr>
                         @endforelse
                     </tbody>

@@ -6,7 +6,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">{{ auth()->user()->isSuperAdmin() ? 'Admin Accounts' : 'Adviser Accounts' }}</h1>
-            <p class="text-sm text-gray-500 mt-1">Manage account profiles and secure deletions.</p>
+            <p class="text-sm text-gray-500 mt-1">Manage account profiles and reversible access changes.</p>
         </div>
         <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.create') : route('admin.accounts.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold inline-flex items-center gap-2 whitespace-nowrap">
             <i class="fas fa-plus"></i> {{ auth()->user()->isSuperAdmin() ? 'Add New Admin' : 'Add New Adviser' }}
@@ -42,7 +42,7 @@
                     <select name="grade_level" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">All Grades</option>
                         @foreach($gradeLevels as $grade)
-                        <option value="{{ $grade }}" @selected((string) request('grade_level')===(string) $grade)>{{ (int) $grade === 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
+                        <option value="{{ $grade }}" @selected((string) request('grade_level')===(string) $grade)>{{ (int) $grade === 0 ? 'Kinder' : ((int) $grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -105,7 +105,7 @@
                 </thead>
                 <tbody class="divide-y divide-gray-200">
                     @forelse($advisers as $index => $adviser)
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-gray-50 {{ !$adviser->is_active ? 'bg-gray-100 opacity-75' : '' }}">
                         <td class="px-4 py-4 border text-sm text-gray-900">{{ $advisers->firstItem() + $index }}</td>
                         <td class="px-4 py-4 border text-sm font-semibold text-gray-900">{{ $adviser->name }}</td>
                         <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->deped_id ?? '-' }}</td>
@@ -119,6 +119,10 @@
                                 onclick="openEditModal(this)"
                                 data-action="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.update', $adviser) : route('admin.accounts.update', $adviser) }}"
                                 data-name="{{ $adviser->name }}"
+                                data-first-name="{{ $adviser->first_name }}"
+                                data-middle-name="{{ $adviser->middle_name }}"
+                                data-last-name="{{ $adviser->last_name }}"
+                                data-name-extension="{{ $adviser->name_extension }}"
                                 data-sex="{{ $adviser->sex }}"
                                 data-birthdate="{{ $adviser->birthdate }}"
                                 data-email="{{ $adviser->email }}"
@@ -130,9 +134,9 @@
                                 Edit
                             </button>
 
-                            <!-- Delete Button (Triggers Level 2 Modal) -->
-                            <button type="button" onclick="openDeleteModal('{{ $adviser->id }}', '{{ $adviser->name }}')" class="text-xs px-3 py-1.5 bg-rose-100 text-rose-800 hover:bg-rose-200 rounded font-semibold">
-                                Delete
+                            <!-- Reversible account status action -->
+                            <button type="button" onclick="openStatusModal(this)" data-user-id="{{ $adviser->id }}" data-user-name="{{ $adviser->name }}" data-active="{{ $adviser->is_active ? '1' : '0' }}" class="text-xs px-3 py-1.5 {{ $adviser->is_active ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' }} rounded font-semibold">
+                                {{ $adviser->is_active ? 'Remove' : 'Restore' }}
                             </button>
                         </td>
                     </tr>
@@ -171,8 +175,20 @@
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                    <label for="edit_name" class="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                    <input id="edit_name" type="text" name="name" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <label for="edit_first_name" class="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
+                    <input id="edit_first_name" type="text" name="first_name" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="edit_middle_name" class="block text-sm font-semibold text-gray-700 mb-2">Middle Name</label>
+                    <input id="edit_middle_name" type="text" name="middle_name" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="edit_last_name" class="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
+                    <input id="edit_last_name" type="text" name="last_name" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="edit_name_extension" class="block text-sm font-semibold text-gray-700 mb-2">Name Extension</label>
+                    <input id="edit_name_extension" type="text" name="name_extension" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                 </div>
                 <div>
                     <label for="edit_sex" class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
@@ -203,8 +219,8 @@
                     <label for="edit_grade_level" class="block text-sm font-semibold text-gray-700 mb-2">Advisory Grade Level</label>
                     <select id="edit_grade_level" name="advisory_grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">Select Grade Level</option>
-                        @foreach([0, 1, 2, 3, 4, 5, 6] as $grade)
-                            <option value="{{ $grade }}">{{ $grade === 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
+                        @foreach([0, 1, 2, 3, 4, 5, 6, 7] as $grade)
+                            <option value="{{ $grade }}">{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -223,12 +239,12 @@
     </div>
 </div>
 
-<!-- Level 2 Security Delete Modal -->
+<!-- Account Status Confirmation Modal -->
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <h3 class="text-lg font-bold text-gray-900 mb-2">Confirm Account Deletion</h3>
+        <h3 id="statusModalTitle" class="text-lg font-bold text-gray-900 mb-2">Confirm Account Removal</h3>
         <p class="text-sm text-gray-600 mb-4">
-            Are you sure you want to delete <span id="deleteUserName" class="font-semibold text-gray-900"></span>? This will archive the account and prevent future access.
+            Are you sure you want to <span id="statusActionText">remove</span> <span id="deleteUserName" class="font-semibold text-gray-900"></span>? Removing an account disables access without deleting its database record.
         </p>
 
         <form id="deleteForm" method="POST" class="space-y-4">
@@ -244,8 +260,8 @@
                 <button type="button" onclick="closeDeleteModal()" class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300">
                     Cancel
                 </button>
-                <button type="submit" class="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700">
-                    Confirm Deletion
+                <button id="statusSubmitButton" type="submit" class="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700">
+                    Confirm Removal
                 </button>
             </div>
         </form>
@@ -264,13 +280,21 @@
         });
     }
 
-    function openDeleteModal(userId, userName) {
+    function openStatusModal(button) {
         const modal = document.getElementById('deleteModal');
         const form = document.getElementById('deleteForm');
         const nameSpan = document.getElementById('deleteUserName');
+        const isActive = button.dataset.active === '1';
 
-        form.action = `/accounts/${userId}`;
-        nameSpan.textContent = userName;
+        form.action = isActive ? `/accounts/${button.dataset.userId}` : `/accounts/${button.dataset.userId}/restore`;
+        form.querySelector('input[name="_method"]').value = isActive ? 'DELETE' : 'POST';
+        document.getElementById('statusModalTitle').textContent = isActive ? 'Confirm Account Removal' : 'Confirm Account Restoration';
+        document.getElementById('statusActionText').textContent = isActive ? 'remove' : 'restore';
+        document.getElementById('statusSubmitButton').textContent = isActive ? 'Confirm Removal' : 'Confirm Restoration';
+        document.getElementById('statusSubmitButton').className = isActive
+            ? 'px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700'
+            : 'px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700';
+        nameSpan.textContent = button.dataset.userName;
         modal.classList.remove('hidden');
     }
 
@@ -285,7 +309,10 @@
         const data = button.dataset;
 
         form.action = data.action;
-        document.getElementById('edit_name').value = data.name || '';
+        document.getElementById('edit_first_name').value = data.firstName || '';
+        document.getElementById('edit_middle_name').value = data.middleName || '';
+        document.getElementById('edit_last_name').value = data.lastName || '';
+        document.getElementById('edit_name_extension').value = data.nameExtension || '';
         document.getElementById('edit_sex').value = data.sex || '';
         document.getElementById('edit_birthdate').value = data.birthdate || '';
         document.getElementById('edit_email').value = data.email || '';

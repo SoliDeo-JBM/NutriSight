@@ -104,6 +104,34 @@ class AccountManagementTest extends TestCase
         $this->assertDatabaseMissing('users', ['name' => 'Should Not Update']);
     }
 
+    public function test_admin_can_remove_and_restore_encoder_without_deleting_record(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $encoder = User::factory()->create(['role' => User::ROLE_ENCODER, 'is_active' => true]);
+
+        $response = $this->actingAs($admin)->delete(route('accounts.destroy', $encoder), [
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('admin.accounts.index'));
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'is_active' => false,
+            'deleted_at' => null,
+        ]);
+
+        $response = $this->actingAs($admin)->post(route('accounts.restore', $encoder), [
+            'password' => 'password',
+        ]);
+
+        $response->assertRedirect(route('admin.accounts.index'));
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'is_active' => true,
+            'deleted_at' => null,
+        ]);
+    }
+
     public function test_new_school_year_gets_one_record_for_every_existing_user(): void
     {
         $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);

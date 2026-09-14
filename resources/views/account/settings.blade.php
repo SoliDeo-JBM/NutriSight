@@ -43,11 +43,38 @@
                 @csrf
                 @method('PATCH')
 
+                <!-- DepEd ID -->
+                <div>
+                    @if($canEditStaffDetails)
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID</label>
+                        <input type="text" name="deped_id" x-model="form.deped_id" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                    @else
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID (Read-only)</label>
+                        <input type="text" x-model="form.deped_id" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
+                        <p class="text-xs text-gray-400 mt-1">DepEd ID / Employee ID cannot be modified.</p>
+                    @endif
+                </div>
+
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <!-- Name -->
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Full Name</label>
-                        <input type="text" name="name" x-model="form.name" :disabled="!isEditing" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
+                        <input type="text" name="last_name" x-model="form.last_name" :disabled="!isEditing" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
+                        <input type="text" name="first_name" x-model="form.first_name" :disabled="!isEditing" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Name Extension (Optional)</label>
+                        <input type="text" name="name_extension" x-model="form.name_extension" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed" placeholder="Jr., III">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Middle Name (Optional)</label>
+                        <input type="text" name="middle_name" x-model="form.middle_name" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
                     </div>
 
                     <!-- Sex -->
@@ -75,18 +102,6 @@
                                 <label class="block text-sm font-semibold text-gray-700 mb-2">Email Address (Read-only)</label>
                                 <input type="email" value="{{ $user->email }}" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
                                 <p class="text-xs text-gray-400 mt-1">Email address cannot be modified.</p>
-                            @endif
-                    </div>
-
-                    <!-- DepEd ID -->
-                    <div>
-                            @if($canEditStaffDetails)
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID</label>
-                                <input type="text" name="deped_id" x-model="form.deped_id" :disabled="!isEditing" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:text-gray-500 disabled:cursor-not-allowed">
-                            @else
-                                <label class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID (Read-only)</label>
-                                <input type="text" name="deped_id" x-model="form.deped_id" disabled class="w-full border border-gray-200 bg-gray-100 rounded-lg p-2.5 text-sm text-gray-500 cursor-not-allowed">
-                                <p class="text-xs text-gray-400 mt-1">DepEd ID / Employee ID cannot be modified.</p>
                             @endif
                     </div>
 
@@ -241,9 +256,12 @@
     <script>
         function profileManager() {
             return {
-                isEditing: @json($errors->has('name') || $errors->has('email') || $errors->has('deped_id') || $errors->has('sex') || $errors->has('birthdate') || $errors->has('position') || $errors->has('advisory_grade_level') || $errors->has('advisory_section')),
+                isEditing: @json($errors->has('first_name') || $errors->has('last_name') || $errors->has('middle_name') || $errors->has('name_extension') || $errors->has('email') || $errors->has('deped_id') || $errors->has('sex') || $errors->has('birthdate') || $errors->has('position') || $errors->has('advisory_grade_level') || $errors->has('advisory_section')),
                 form: {
-                    name: @json(old('name', $user->name)),
+                    first_name: @json(old('first_name', $user->first_name)),
+                    middle_name: @json(old('middle_name', $user->middle_name)),
+                    last_name: @json(old('last_name', $user->last_name)),
+                    name_extension: @json(old('name_extension', $user->name_extension)),
                         email: @json(old('email', $user->email)),
                     deped_id: @json(old('deped_id', $user->deped_id)),
                     sex: @json(old('sex', $user->sex)),
@@ -253,7 +271,10 @@
                     advisory_section: @json(old('advisory_section', $user->advisory_section)),
                 },
                 original: {
-                    name: @json(old('name', $user->name)),
+                    first_name: @json(old('first_name', $user->first_name)),
+                    middle_name: @json(old('middle_name', $user->middle_name)),
+                    last_name: @json(old('last_name', $user->last_name)),
+                    name_extension: @json(old('name_extension', $user->name_extension)),
                         email: @json(old('email', $user->email)),
                     deped_id: @json(old('deped_id', $user->deped_id)),
                     sex: @json(old('sex', $user->sex)),

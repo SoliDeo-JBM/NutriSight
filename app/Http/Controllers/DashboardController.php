@@ -103,8 +103,8 @@ class DashboardController extends Controller
         $recoveryRate = $totalSbfpStudents > 0 ? round(($recoveredCount / $totalSbfpStudents) * 100, 1) : 0;
 
         // Aggregate attendance in one query instead of loading every log per grade.
-        $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
-        $gradeLabels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6'];
+        $gradeLevels = [0, 1, 2, 3, 4, 5, 6, 7];
+        $gradeLabels = ['Kinder', 'Grade 1', 'Grade 2', 'Grade 3', 'Grade 4', 'Grade 5', 'Grade 6', 'SPED'];
         $sectionAttendanceLabels = $gradeLabels;
         $attendanceByGrade = DB::table('student_attendance_records as records')
             ->join('sbfp_participants as participants', 'participants.id', '=', 'records.sbfp_participant_id')

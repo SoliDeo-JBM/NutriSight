@@ -114,7 +114,7 @@ class AccountController extends Controller
             'Master Teacher I',
             'Master Teacher II'
         ];
-        $gradeLevels = [0, 1, 2, 3, 4, 5, 6];
+        $gradeLevels = [0, 1, 2, 3, 4, 5, 6, 7];
         $sexes = ['Male', 'Female'];
 
         return view('admin.accounts.create', compact('positions', 'gradeLevels', 'sexes', 'isSuperAdmin'));
@@ -130,7 +130,11 @@ class AccountController extends Controller
 
         $validated = $request->validate([
             'deped_id' => 'required|string|unique:users,deped_id',
-            'name' => 'required|string|max:255',
+            'first_name' => 'required_without:name|nullable|string|max:255',
+            'middle_name' => 'nullable|string|max:255',
+            'last_name' => 'required_without:name|nullable|string|max:255',
+            'name_extension' => 'nullable|string|max:50',
+            'name' => 'nullable|string|max:255',
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::defaults()],
             'sex' => 'required|in:Male,Female',
@@ -142,7 +146,11 @@ class AccountController extends Controller
 
         $user = User::create([
             'deped_id' => $validated['deped_id'],
-            'name' => $validated['name'],
+            'name' => User::composeName($validated['first_name'] ?? null, $validated['middle_name'] ?? null, $validated['last_name'] ?? null, $validated['name_extension'] ?? null) ?: $validated['name'],
+            'first_name' => $validated['first_name'] ?? null,
+            'middle_name' => $validated['middle_name'] ?? null,
+            'last_name' => $validated['last_name'] ?? null,
+            'name_extension' => $validated['name_extension'] ?? null,
             'email' => $validated['email'],
             'password' => Hash::make($validated['password']),
             'sex' => $validated['sex'],
@@ -155,7 +163,7 @@ class AccountController extends Controller
         ]);
         $user->syncSchoolYearUserRecord(SchoolYearManager::activeSchoolYearId());
 
-        \App\Services\AuditLogger::log('Created', 'Accounts', 'Created new ' . $targetRole . ' account for ' . $validated['name']);
+        \App\Services\AuditLogger::log('Created', 'Accounts', 'Created new ' . $targetRole . ' account for ' . $user->name);
 
         return redirect()->route($redirectRoute)->with('success', 'Account created successfully.');
     }
@@ -169,7 +177,11 @@ class AccountController extends Controller
         abort_unless($user->role === $expectedRole, 403);
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
+            'name_extension' => ['nullable', 'string', 'max:50'],
+            'name' => ['nullable', 'string', 'max:255'],
             'sex' => ['nullable', 'in:Male,Female'],
             'birthdate' => ['nullable', 'date'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
@@ -179,7 +191,7 @@ class AccountController extends Controller
 
         if ($user->isEncoder()) {
             $validated = array_merge($validated, $request->validate([
-                'advisory_grade_level' => ['nullable', 'integer', 'between:0,6'],
+                'advisory_grade_level' => ['nullable', 'integer', 'between:0,7'],
                 'advisory_section' => ['nullable', 'string', 'max:255'],
             ]));
 
@@ -189,7 +201,11 @@ class AccountController extends Controller
         }
 
         $user->update([
-            'name' => $validated['name'],
+            'name' => User::composeName($validated['first_name'] ?? null, $validated['middle_name'] ?? null, $validated['last_name'] ?? null, $validated['name_extension'] ?? null) ?: $validated['name'],
+            'first_name' => $validated['first_name'] ?? null,
+            'middle_name' => $validated['middle_name'] ?? null,
+            'last_name' => $validated['last_name'] ?? null,
+            'name_extension' => $validated['name_extension'] ?? null,
             'sex' => $validated['sex'] ?? null,
             'birthdate' => $validated['birthdate'] ?? null,
             'email' => $validated['email'],
@@ -245,11 +261,38 @@ class AccountController extends Controller
             }],
         ]);
 
-        $user->delete();
+        $user->update(['is_active' => false]);
 
-        \App\Services\AuditLogger::log('Deleted', 'Accounts', 'Deleted user account ' . $user->name);
+        \App\Services\AuditLogger::log('Removed', 'Accounts', 'Deactivated user account ' . $user->name);
 
         $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
-        return redirect()->route($redirectRoute)->with('success', 'Account deleted successfully.');
+        return redirect()->route($redirectRoute)->with('success', 'Account removed and access disabled.');
+    }
+
+    public function restore(Request $request, User $user)
+    {
+        /** @var User $currentUser */
+        $currentUser = Auth::user();
+        if ($currentUser->isSuperAdmin() && $user->role !== User::ROLE_ADMIN) {
+            abort(403);
+        }
+        if ($currentUser->isAdmin() && $user->role !== User::ROLE_ENCODER) {
+            abort(403);
+        }
+
+        $request->validate([
+            'password' => ['required', function ($attribute, $value, $fail) use ($currentUser) {
+                if (!Hash::check($value, $currentUser->password)) {
+                    $fail('The password you entered is incorrect.');
+                }
+            }],
+        ]);
+
+        $user->update(['is_active' => true]);
+
+        \App\Services\AuditLogger::log('Restored', 'Accounts', 'Restored user account ' . $user->name);
+
+        $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
+        return redirect()->route($redirectRoute)->with('success', 'Account restored successfully.');
     }
 }

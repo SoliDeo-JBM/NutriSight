@@ -27,7 +27,7 @@
                     <select name="grade_level" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">All Grades</option>
                         @foreach($gradeLevels as $grade)
-                        <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
+                        <option value="{{ $grade }}" {{ request('grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : ($grade == 7 ? 'SPED' : 'Grade ' . $grade) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -120,7 +120,7 @@
                         <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                         <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                        <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }}</td>
+                        <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')) }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->section ?? '-' }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }}</td>
                         <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>

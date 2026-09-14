@@ -74,6 +74,35 @@ class AuthenticationTest extends TestCase
         $this->assertGuest();
     }
 
+    public function test_deactivated_users_can_not_authenticate(): void
+    {
+        $user = User::factory()->create(['is_active' => false]);
+
+        $response = $this->post('/login', [
+            'email' => $user->email,
+            'password' => 'password',
+        ]);
+
+        $this->assertGuest();
+        $response->assertSessionHasErrors('email');
+    }
+
+    public function test_deactivated_authenticated_users_are_logged_out(): void
+    {
+        $user = User::factory()->create(['is_active' => true]);
+
+        $this->actingAs($user);
+        $user->update(['is_active' => false]);
+
+        $response = $this->get(route('encoder.dashboard'));
+
+        $this->assertGuest();
+        $response->assertRedirect(route('login'));
+        $response->assertSessionHasErrors([
+            'email' => 'This account has been deactivated.',
+        ]);
+    }
+
     public function test_users_can_logout(): void
     {
         $user = User::factory()->create();

@@ -18,6 +18,10 @@ class User extends Authenticatable
 
     protected $fillable = [
         'name',
+        'first_name',
+        'middle_name',
+        'last_name',
+        'name_extension',
         'email',
         'password',
         'role',
@@ -66,6 +70,13 @@ class User extends Authenticatable
     public function isAdminOrAbove(): bool
     {
         return in_array($this->role, [self::ROLE_SUPER_ADMIN, self::ROLE_ADMIN]);
+    }
+
+    public static function composeName(?string $firstName, ?string $middleName, ?string $lastName, ?string $nameExtension = null): string
+    {
+        $middleInitial = $middleName ? strtoupper(substr(trim($middleName), 0, 1)) . '.' : null;
+
+        return trim(implode(' ', array_filter([$firstName, $middleInitial, $lastName, $nameExtension])));
     }
 
     public function dashboardRoute(): string

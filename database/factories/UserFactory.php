@@ -34,6 +34,7 @@ class UserFactory extends Factory
             'sex' => 'Female',
             'birthdate' => '1990-01-01',
             'position' => 'Teacher I',
+            'is_active' => true,
         ];
     }
 

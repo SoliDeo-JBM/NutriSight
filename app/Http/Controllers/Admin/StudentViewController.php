@@ -115,11 +115,14 @@ class StudentViewController extends Controller
             })
             ->whereHas('enrollments', function ($q) use ($activeSyId) {
                 $q->where('school_year_id', $activeSyId)
-                    ->whereHas('sbfpParticipant', function ($participantQuery) {
-                        $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                            $measurementQuery->where('measurement_period', 'baseline')
-                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                        });
+                    ->where(function ($eligibilityQuery) {
+                        $eligibilityQuery->where('grade_level', 0)
+                            ->orWhereHas('sbfpParticipant', function ($participantQuery) {
+                                $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                                    $measurementQuery->where('measurement_period', 'baseline')
+                                        ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                                });
+                            });
                     });
             });
 

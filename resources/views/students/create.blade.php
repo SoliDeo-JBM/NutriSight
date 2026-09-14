@@ -70,8 +70,26 @@
                 </div>
             </div>
 
-            <input type="hidden" name="grade_level" value="{{ $advisoryGrade }}">
-            <input type="hidden" name="section" value="{{ $advisorySection }}">
+            @if(isset($student))
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Grade Level <span class="text-red-500">*</span></label>
+                        <select name="grade_level" required class="w-full border rounded p-2 text-sm">
+                            <option value="" disabled {{ old('grade_level', $enrollment->grade_level ?? '') === '' ? 'selected' : '' }}>Select Grade Level</option>
+                            @foreach([0, 1, 2, 3, 4, 5, 6, 7] as $grade)
+                                <option value="{{ $grade }}" {{ (string) old('grade_level', $enrollment->grade_level ?? '') === (string) $grade ? 'selected' : '' }}>{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : $grade) }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold mb-1">Section <span class="text-red-500">*</span></label>
+                        <input type="text" name="section" value="{{ old('section', $enrollment->section ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Mabini">
+                    </div>
+                </div>
+            @else
+                <input type="hidden" name="grade_level" value="{{ $advisoryGrade }}">
+                <input type="hidden" name="section" value="{{ $advisorySection }}">
+            @endif
 
             <div class="grid grid-cols-2 gap-4">
                 <div>

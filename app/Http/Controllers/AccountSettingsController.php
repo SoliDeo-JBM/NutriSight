@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
+use App\Models\User;
 
 class AccountSettingsController extends Controller
 {
@@ -20,7 +21,11 @@ class AccountSettingsController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'name' => ['required', 'string', 'max:255'],
+            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
+            'middle_name' => ['nullable', 'string', 'max:255'],
+            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
+            'name_extension' => ['nullable', 'string', 'max:50'],
+            'name' => ['nullable', 'string', 'max:255'],
             'sex' => ['nullable', 'in:Male,Female'],
             'birthdate' => ['nullable', 'date'],
         ]);
@@ -34,7 +39,11 @@ class AccountSettingsController extends Controller
         }
 
         $user->update([
-            'name' => $validated['name'],
+            'name' => User::composeName($validated['first_name'] ?? null, $validated['middle_name'] ?? null, $validated['last_name'] ?? null, $validated['name_extension'] ?? null) ?: $validated['name'],
+            'first_name' => $validated['first_name'] ?? null,
+            'middle_name' => $validated['middle_name'] ?? null,
+            'last_name' => $validated['last_name'] ?? null,
+            'name_extension' => $validated['name_extension'] ?? null,
             'sex' => $validated['sex'] ?? null,
             'birthdate' => $validated['birthdate'] ?? null,
             ...($user->role === 'super_admin' ? ['email' => $validated['email']] : []),

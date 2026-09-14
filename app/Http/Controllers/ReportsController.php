@@ -9,9 +9,11 @@ use App\Models\AttendanceReportMonth;
 use App\Models\AttendanceReportSection;
 use App\Exports\AttendanceReportExport;
 use App\Exports\AssessmentReportExport;
+use App\Exports\AssessmentReportWorkbookExport;
 use App\Models\SchoolYear;
 use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
+use App\Models\User;
 use App\Services\SchoolYearManager;
 use App\Services\ReportPeriodManager;
 use Barryvdh\DomPDF\Facade\Pdf;
@@ -293,11 +295,14 @@ class ReportsController extends Controller
         }
         $period->load(['schoolYear', 'rows' => fn($query) => $query->orderBy('grade_level')->orderBy('sex')]);
         $rows = $this->formRows($period->rows->isEmpty() ? $this->blankRows() : $period->rows->toArray());
+        [$adminName, $superAdminName] = $this->reportSignatories();
 
         return view('admin.reports.consolidated.report', [
             'schoolYear' => $period->schoolYear,
             'period' => $period,
             'rows' => $rows,
+            'adminName' => $adminName,
+            'superAdminName' => $superAdminName,
             'isSummary' => false,
         ]);
     }
@@ -403,8 +408,9 @@ class ReportsController extends Controller
     {
         $schoolYear = $period->schoolYear;
         $rows = $this->formRows($this->periodRows($period));
+        [$adminName, $superAdminName] = $this->reportSignatories();
 
-        return Excel::download(new DepEdForm1Export($rows, $schoolYear, $period), 'sbfp-form-1-' . ($period?->name ?? 'summary') . '.xlsx');
+        return Excel::download(new DepEdForm1Export($rows, $schoolYear, $period, $adminName, $superAdminName), 'sbfp-form-1-' . ($period?->name ?? 'summary') . '.xlsx');
     }
     public function exportAnnualPeriodExcel(ReportPeriod $period)
     {
@@ -427,19 +433,74 @@ class ReportsController extends Controller
     {
         $schoolYear = $period->schoolYear;
         $rows = $this->formRows($this->periodRows($period));
+        [$adminName, $superAdminName] = $this->reportSignatories();
         $word = new PhpWord();
-        $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
-        $section->addText("SCHOOL-BASED FEEDING PROGRAM - FORM 1", ['bold' => true, 'size' => 14]);
-        $section->addText("Marisol Bliss Elementary School | SY {$schoolYear->year} | {$period->name}");
+        $section = $word->addSection(['orientation' => 'landscape', 'margin' => 250]);
+        $header = $section->addHeader();
+        $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $headerTable->addRow();
+        $headerTable->addCell(1000)->addImage(public_path('images/id/pulungbulu_elem.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
+        $headerText = $headerTable->addCell(8000)->addTextRun(['alignment' => 'center']);
+        $headerText->addText('Department of Education', ['size' => 10]);
+        $headerText->addTextBreak();
+        $headerText->addText('Bureau of Learner Support Services', ['size' => 10]);
+        $headerText->addTextBreak();
+        $headerText->addText('NUTRITIONAL STATUS REPORT OF MARISOL BLISS ELEMENTARY SCHOOL', ['bold' => true, 'size' => 14]);
+        $headerText->addTextBreak();
+        $headerText->addText(ucfirst($period->measurement_period ?? 'Summary'), ['italic' => true, 'color' => '2563EB']);
+        $headerText->addText(' (' . ($period->month ? date('F', mktime(0, 0, 0, $period->month, 1)) : 'Month') . ')', ['italic' => true, 'color' => '2563EB']);
+        $headerText->addText(' SY ', ['italic' => true]);
+        $headerText->addText((string) $schoolYear->year, ['bold' => true, 'italic' => true]);
+        $headerTable->addCell(1000)->addImage(public_path('images/id/kagawaran_ng_edukasyo.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 40]);
         $table->addRow();
-        foreach (DepEdForm1Export::columnHeadings() as $heading)
-            $table->addCell(850)->addText($heading, ['bold' => true, 'size' => 7]);
+        foreach ([['Grade Levels', 1, true], ['Enrollment', 2, true], ['Pupils Weighed', 2, true], ['BODY MASS INDEX (BMI)', 10, false], ['HEIGHT-FOR-AGE (HFA)', 8, false], ['Pupils Taken Height', 2, true]] as [$heading, $span, $vertical]) {
+            $cell = $table->addCell(850, ['gridSpan' => $span]);
+            if ($vertical)
+                $cell->getStyle()->setVMerge('restart');
+            $cell->addText($heading, ['bold' => true, 'size' => 7, 'alignment' => 'center']);
+        }
+        $table->addRow();
+        $cell = $table->addCell(850);
+        $cell->getStyle()->setVMerge('continue');
+        $cell = $table->addCell(850, ['gridSpan' => 2]);
+        $cell->getStyle()->setVMerge('continue');
+        $cell = $table->addCell(850, ['gridSpan' => 2]);
+        $cell->getStyle()->setVMerge('continue');
+        foreach (['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese', 'Severely Stunted', 'Stunted', 'Normal', 'Tall'] as $heading)
+            $table->addCell(850, ['gridSpan' => 2])->addText($heading, ['bold' => true, 'size' => 7, 'alignment' => 'center']);
+        $cell = $table->addCell(850, ['gridSpan' => 2]);
+        $cell->getStyle()->setVMerge('continue');
+        $table->addRow();
+        $cell = $table->addCell(850);
+        $cell->getStyle()->setVMerge('continue');
+        $cell = $table->addCell(850, ['gridSpan' => 2]);
+        $cell->getStyle()->setVMerge('continue');
+        foreach (['No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%', 'No.', '%'] as $heading)
+            $table->addCell(850)->addText($heading, ['bold' => true, 'size' => 7, 'alignment' => 'center']);
         foreach ($rows as $row) {
             $table->addRow();
-            foreach (DepEdForm1Export::values($row) as $value)
-                $table->addCell(850)->addText((string) $value, ['size' => 7]);
+            foreach (DepEdForm1Export::values($row) as $column => $value) {
+                $cell = $table->addCell(850);
+                if ($column === 0) {
+                    $cell->getStyle()->setVMerge($row['sex'] === 'M' ? 'restart' : 'continue');
+                }
+                $cell->addText((string) $value, ['size' => 7, 'alignment' => 'center']);
+            }
         }
+        $signatureTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('Prepared by:', ['bold' => true, 'size' => 8]);
+        $signatureTable->addCell(5000)->addText('Noted by:', ['bold' => true, 'size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('____________________________', ['size' => 8]);
+        $signatureTable->addCell(5000)->addText('________________________________', ['size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText("  {$adminName}", ['bold' => true, 'size' => 8]);
+        $signatureTable->addCell(5000)->addText("  {$superAdminName}", ['bold' => true, 'size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('Project Development Officer', ['size' => 8]);
+        $signatureTable->addCell(5000)->addText('School Head', ['size' => 8]);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-form1-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -450,8 +511,9 @@ class ReportsController extends Controller
     {
         $schoolYear = $period->schoolYear;
         $rows = $this->formRows($this->periodRows($period));
+        [$adminName, $superAdminName] = $this->reportSignatories();
 
-        return Pdf::loadView('admin.reports.consolidated.print', compact('schoolYear', 'period', 'rows'))->setPaper('a4', 'landscape')->download('sbfp-form-1.pdf');
+        return Pdf::loadView('admin.reports.consolidated.print', compact('schoolYear', 'period', 'rows', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('sbfp-form-1.pdf');
     }
 
     public function exportAnnualConsolidatedSql(ReportPeriod $period): Response
@@ -467,6 +529,23 @@ class ReportsController extends Controller
         }
 
         return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="sbfp-form-1.sql"']);
+    }
+
+    private function reportSignatories(): array
+    {
+        $admin = User::where('role', User::ROLE_ADMIN)->orderBy('id')->first();
+        $superAdmin = User::where('role', User::ROLE_SUPER_ADMIN)->orderBy('id')->first();
+        $admin ??= auth()->user()?->isAdmin() ? auth()->user() : null;
+
+        return [
+            $this->formatSignatoryName($admin, 'Full Name of the Admin'),
+            $this->formatSignatoryName($superAdmin, 'Full Name of the Super Admin'),
+        ];
+    }
+
+    private function formatSignatoryName(?User $user, string $fallback): string
+    {
+        return $user?->name ? strtoupper(trim($user->name)) : $fallback;
     }
 
     private function periodRows(ReportPeriod $period): array
@@ -560,7 +639,7 @@ class ReportsController extends Controller
 
     public function exportAssessmentExcel()
     {
-        return Excel::download(new AssessmentReportExport($this->assessmentData(SchoolYearManager::activeSchoolYear())), 'sbfp-assessment.xlsx');
+        return Excel::download(new AssessmentReportWorkbookExport($this->assessmentData(SchoolYearManager::activeSchoolYear())), 'sbfp-assessment.xlsx');
     }
 
     public function exportAssessmentDocx()
@@ -581,6 +660,24 @@ class ReportsController extends Controller
                 $table->addCell(2600)->addText((string) $value);
             }
         }
+        $section->addText('Endline Nutritional Assessment', ['bold' => true, 'size' => 12]);
+        $section->addText('Baseline at-risk cohort assessed against endline reports.');
+        $this->addDocxRows($section, ['Measure', 'Count', 'Percentage'], [
+            ['Baseline at-risk nutrition cohort', $assessment['malnourished'], '100%'],
+            ['Recovered to Normal at endline', $assessment['recovered'], $assessment['recovered_rate'] . '%'],
+            ['Still needing support at endline', $assessment['still_needing_support'], $assessment['still_needing_support_rate'] . '%'],
+        ]);
+        $this->addDocxRows($section, ['Sex', 'Age', 'Attendance result'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['complete'] . ' complete / ' . $row['with_absences'] . ' with absences'], $assessment['attendance_demographics']), 'Demographic Breakdown of Attendance in the SBFP');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Participants'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['count']], $assessment['participant_demographics']), 'Demographic Breakdown of SBFP Participants');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Endline result'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['recovered'] . ' recovered / ' . $row['still_needing_support'] . ' support'], $assessment['recovery_demographics']), 'Demographic Breakdown of Recovered and Still Needing Support');
+        $periodRows = [];
+        foreach ($assessment['period_summary'] as $period => $statuses) {
+            foreach ($statuses as $status => $count) {
+                $periodRows[] = [ucfirst($period), $status, $count];
+            }
+        }
+        $this->addDocxRows($section, ['Period', 'Nutrition status', 'Count'], $periodRows, 'Baseline vs Midline vs Endline Rehabilitation Transition');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -605,6 +702,25 @@ class ReportsController extends Controller
         return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="sbfp-assessment.sql"']);
     }
 
+    private function addDocxRows($section, array $headings, array $rows, ?string $title = null): void
+    {
+        if ($title) {
+            $section->addText($title, ['bold' => true, 'size' => 11]);
+        }
+
+        $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
+        $table->addRow();
+        foreach ($headings as $heading) {
+            $table->addCell(2200)->addText($heading, ['bold' => true]);
+        }
+        foreach ($rows as $row) {
+            $table->addRow();
+            foreach ($row as $value) {
+                $table->addCell(2200)->addText((string) $value);
+            }
+        }
+    }
+
     private function assessmentData(?SchoolYear $schoolYear): array
     {
         $students = Student::with([
@@ -621,13 +737,33 @@ class ReportsController extends Controller
         $completeAttendance = 0;
         $malnourished = 0;
         $recovered = 0;
+        $attendanceDemographics = [];
+        $participantDemographics = [];
+        $recoveryDemographics = [];
+        $periodDemographics = [];
+        $periodSummary = [
+            'baseline' => [],
+            'midline' => [],
+            'endline' => [],
+        ];
 
         foreach ($students as $student) {
             $enrollment = $student->enrollments->first();
             $participant = $enrollment?->sbfpParticipant;
             $records = $participant?->attendanceRecords ?? collect();
+            $sex = strtoupper(substr((string) $student->sex, 0, 1)) === 'F'
+                ? 'Female'
+                : (strtoupper(substr((string) $student->sex, 0, 1)) === 'M' ? 'Male' : 'Unknown');
+            $age = $this->assessmentAge($student, $schoolYear);
+            $demographicKey = $sex . '|' . $age;
+            $this->incrementDemographic($participantDemographics, $demographicKey, $sex, $age);
+
             if ($records->isNotEmpty()) {
                 $attendanceStudents++;
+                $hasAbsence = $records->contains(fn ($record) => strtolower((string) $record->status) === 'absent');
+                $this->incrementDemographic($attendanceDemographics, $demographicKey, $sex, $age);
+                $attendanceDemographics[$demographicKey]['complete'] += $hasAbsence ? 0 : 1;
+                $attendanceDemographics[$demographicKey]['with_absences'] += $hasAbsence ? 1 : 0;
                 if ($records->every(fn ($record) => strtolower((string) $record->status) !== 'absent')) {
                     $completeAttendance++;
                 }
@@ -635,20 +771,39 @@ class ReportsController extends Controller
 
             $measurements = $participant?->nutritionMeasurements?->sortByDesc('created_at') ?? collect();
             $baseline = $measurements->firstWhere('measurement_period', 'baseline');
-            if ($baseline && in_array($baseline->bmi_category, ['Wasted', 'Severely Wasted'], true)) {
+            $periodStatuses = [];
+            foreach (['baseline', 'midline', 'endline'] as $period) {
+                $measurement = $this->measurementForPeriod($measurements, $period);
+                $status = $this->assessmentStatus($measurement?->bmi_category);
+                $periodStatuses[$period] = $status;
+                if ($measurement) {
+                    $periodSummary[$period][$status] = ($periodSummary[$period][$status] ?? 0) + 1;
+                }
+            }
+            $periodDemographics[] = [
+                'sex' => $sex,
+                'age' => $age,
+                'baseline' => $periodStatuses['baseline'],
+                'midline' => $periodStatuses['midline'],
+                'endline' => $periodStatuses['endline'],
+            ];
+
+            if ($baseline && in_array($this->assessmentStatus($baseline->bmi_category), ['Wasted', 'Severely Wasted'], true)) {
                 $malnourished++;
-                $latestPeriodMeasurement = collect(['endline', 'midline', 'baseline'])
-                    ->map(fn ($period) => $measurements->firstWhere('measurement_period', $period))
-                    ->filter()
-                    ->first();
-                if ($latestPeriodMeasurement?->bmi_category === 'Normal') {
+                $endline = $this->measurementForPeriod($measurements, 'endline');
+                $this->incrementDemographic($recoveryDemographics, $demographicKey, $sex, $age);
+                if ($endline?->bmi_category === 'Normal') {
                     $recovered++;
+                    $recoveryDemographics[$demographicKey]['recovered']++;
+                } else {
+                    $recoveryDemographics[$demographicKey]['still_needing_support']++;
                 }
             }
         }
 
         $withAbsences = $attendanceStudents - $completeAttendance;
         $stillNeedingSupport = $malnourished - $recovered;
+        $attendanceDemographics = $this->addAttendanceRates($attendanceDemographics);
 
         return [
             'school_year' => $schoolYear?->year ?? 'No active school year',
@@ -662,7 +817,141 @@ class ReportsController extends Controller
             'recovered_rate' => $malnourished ? round($recovered / $malnourished * 100, 1) : 0,
             'still_needing_support' => $stillNeedingSupport,
             'still_needing_support_rate' => $malnourished ? round($stillNeedingSupport / $malnourished * 100, 1) : 0,
+            'attendance_demographics' => $this->sortDemographics($attendanceDemographics),
+            'attendance_summary' => $this->attendanceSummary($attendanceDemographics),
+            'participant_demographics' => $this->sortDemographics($participantDemographics),
+            'recovery_demographics' => $this->sortDemographics($recoveryDemographics),
+            'period_summary' => $periodSummary,
+            'period_demographics' => $periodDemographics,
         ];
+    }
+
+    private function assessmentAge(Student $student, ?SchoolYear $schoolYear): string
+    {
+        if (!$student->birth_date) {
+            return 'Unknown';
+        }
+
+        $referenceDate = $schoolYear?->start_date ?? now();
+        $completedYears = $student->birth_date->diffInYears($referenceDate);
+
+        return (string) floor((float) $completedYears);
+    }
+
+    private function addAttendanceRates(array $demographics): array
+    {
+        foreach ($demographics as &$row) {
+            $row['attendance_rate'] = $row['count'] ? round($row['complete'] / $row['count'] * 100, 1) : 0;
+            $row['absence_rate'] = $row['count'] ? round($row['with_absences'] / $row['count'] * 100, 1) : 0;
+        }
+
+        return $demographics;
+    }
+
+    private function attendanceSummary(array $demographics): array
+    {
+        $ageGroups = collect($demographics)->groupBy('age')->map(function ($rows, $age) {
+            $total = $rows->sum('count');
+            $complete = $rows->sum('complete');
+            $absences = $rows->sum('with_absences');
+
+            return [
+                'age' => $age,
+                'count' => $total,
+                'complete' => $complete,
+                'with_absences' => $absences,
+                'attendance_rate' => $total ? round($complete / $total * 100, 1) : 0,
+                'absence_rate' => $total ? round($absences / $total * 100, 1) : 0,
+            ];
+        })->values();
+        $sexGroups = collect($demographics)->groupBy('sex')->map(function ($rows, $sex) {
+            $total = $rows->sum('count');
+            $complete = $rows->sum('complete');
+            $absences = $rows->sum('with_absences');
+
+            return [
+                'sex' => $sex,
+                'count' => $total,
+                'complete' => $complete,
+                'with_absences' => $absences,
+                'attendance_rate' => $total ? round($complete / $total * 100, 1) : 0,
+                'absence_rate' => $total ? round($absences / $total * 100, 1) : 0,
+            ];
+        })->values();
+
+        $highest = fn ($left, $right) => $right['attendance_rate'] <=> $left['attendance_rate'] ?: $right['count'] <=> $left['count'];
+        $lowest = fn ($left, $right) => $left['attendance_rate'] <=> $right['attendance_rate'] ?: $right['count'] <=> $left['count'];
+
+        return [
+            'age' => [
+                'highest' => $ageGroups->sort($highest)->first(),
+                'lowest' => $ageGroups->sort($lowest)->first(),
+            ],
+            'sex' => [
+                'highest' => $sexGroups->sort($highest)->first(),
+                'lowest' => $sexGroups->sort($lowest)->first(),
+            ],
+        ];
+    }
+
+    private function incrementDemographic(array &$demographics, string $key, string $sex, string $age): void
+    {
+        if (!isset($demographics[$key])) {
+            $demographics[$key] = [
+                'sex' => $sex,
+                'age' => $age,
+                'count' => 0,
+                'complete' => 0,
+                'with_absences' => 0,
+                'recovered' => 0,
+                'still_needing_support' => 0,
+            ];
+        }
+
+        $demographics[$key]['count']++;
+    }
+
+    private function sortDemographics(array $demographics): array
+    {
+        return collect($demographics)->sort(function ($left, $right) {
+            if ($left['sex'] !== $right['sex']) {
+                return $left['sex'] <=> $right['sex'];
+            }
+
+            if ($left['age'] === 'Unknown') {
+                return $right['age'] === 'Unknown' ? 0 : 1;
+            }
+            if ($right['age'] === 'Unknown') {
+                return -1;
+            }
+
+            return (int) $left['age'] <=> (int) $right['age'];
+        })->values()->all();
+    }
+
+    private function assessmentStatus(?string $status): string
+    {
+        $value = strtolower(trim((string) $status));
+
+        return match (true) {
+            str_contains($value, 'severely wasted'), str_contains($value, 'severely underweight') => 'Severely Wasted',
+            str_contains($value, 'wasted'), str_contains($value, 'underweight') => 'Wasted',
+            str_contains($value, 'normal') => 'Normal',
+            str_contains($value, 'overweight') => 'Overweight',
+            str_contains($value, 'obese') => 'Obese',
+            default => 'No report',
+        };
+    }
+
+    private function measurementForPeriod($measurements, string $period)
+    {
+        $periods = [
+            'baseline' => ['baseline'],
+            'midline' => ['midline', 'mid'],
+            'endline' => ['endline', 'end'],
+        ];
+
+        return $measurements->first(fn ($measurement) => in_array(strtolower((string) $measurement->measurement_period), $periods[$period], true));
     }
 
     private function groupMeasurementsByQuarter($measurements)

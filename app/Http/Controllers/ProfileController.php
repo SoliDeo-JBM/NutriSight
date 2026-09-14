@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\ProfileUpdateRequest;
+use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -26,7 +27,9 @@ class ProfileController extends Controller
      */
     public function update(ProfileUpdateRequest $request): RedirectResponse
     {
-        $request->user()->fill($request->validated());
+        $validated = $request->validated();
+        $validated['name'] = User::composeName($validated['first_name'] ?? null, $validated['middle_name'] ?? null, $validated['last_name'] ?? null, $validated['name_extension'] ?? null) ?: ($validated['name'] ?? $request->user()->name);
+        $request->user()->fill($validated);
 
         if ($request->user()->isDirty('email')) {
             $request->user()->email_verified_at = null;

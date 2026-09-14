@@ -119,7 +119,7 @@
                     'birthdate' => optional($student->birth_date)->format('Y-m-d') ?? '-',
                     'age' => $student->birth_date?->age ?? '-',
                     'sex' => $student->sex ?? '-',
-                    'grade' => $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-'),
+                    'grade' => $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')),
                     'section' => $enrollment?->section ?? '-',
                     'guardian' => $student->guardian_name ?? '-',
                     'guardian_contact' => $student->guardian_contact ?? '-',
@@ -137,7 +137,7 @@
                         <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                         <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                        <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : 'Grade ' . ($enrollment?->grade_level ?? '-') }}</td>
+                        <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')) }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->section ?? '-' }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date ?? '-' }}</td>
                         <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>

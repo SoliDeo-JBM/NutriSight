@@ -27,30 +27,45 @@
             <form action="{{ route($isSuperAdmin ? 'super-admin.accounts.store' : 'admin.accounts.store') }}" method="POST" class="space-y-6">
                 @csrf
 
-                <!-- DepEd ID & Full Name -->
+                <!-- DepEd Employee ID -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">
+                        DepEd Employee ID <span class="text-red-500">*</span>
+                    </label>
+                    <input type="text" name="deped_id" value="{{ old('deped_id') }}" required
+                           class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('deped_id') border-red-500 @enderror"
+                           placeholder="e.g., 123456">
+                    @error('deped_id')
+                        <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
+                    @enderror
+                </div>
+
+                <!-- Name -->
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                            DepEd Employee ID <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" name="deped_id" value="{{ old('deped_id') }}" required 
-                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('deped_id') border-red-500 @enderror"
-                               placeholder="e.g., 123456">
-                        @error('deped_id')
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Last Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="last_name" value="{{ old('last_name') }}" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('last_name') border-red-500 @enderror" placeholder="e.g., Santos">
+                        @error('last_name')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
                     </div>
-
                     <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">
-                            Full Name <span class="text-red-500">*</span>
-                        </label>
-                        <input type="text" name="name" value="{{ old('name') }}" required 
-                               class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('name') border-red-500 @enderror"
-                               placeholder="e.g., Maria Garcia Santos">
-                        @error('name')
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">First Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="first_name" value="{{ old('first_name') }}" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('first_name') border-red-500 @enderror" placeholder="e.g., Maria">
+                        @error('first_name')
                             <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                         @enderror
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Name Extension (Optional)</label>
+                        <input type="text" name="name_extension" value="{{ old('name_extension') }}" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('name_extension') border-red-500 @enderror" placeholder="e.g., Jr., III">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Middle Name (Optional)</label>
+                        <input type="text" name="middle_name" value="{{ old('middle_name') }}" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('middle_name') border-red-500 @enderror" placeholder="e.g., Garcia">
                     </div>
                 </div>
 
@@ -263,7 +278,7 @@
                                 class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('advisory_grade_level') border-red-500 @enderror">
                             <option value="" disabled {{ old('advisory_grade_level') !== null ? '' : 'selected' }}>Select Grade Level</option>
                             @foreach($gradeLevels as $grade)
-                                <option value="{{ $grade }}" {{ old('advisory_grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : $grade }}</option>
+                                <option value="{{ $grade }}" {{ old('advisory_grade_level') == $grade ? 'selected' : '' }}>{{ $grade == 0 ? 'Kinder' : ($grade == 7 ? 'SPED' : $grade) }}</option>
                             @endforeach
                         </select>
                         @error('advisory_grade_level')

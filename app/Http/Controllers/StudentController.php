@@ -189,11 +189,14 @@ class StudentController extends Controller
                     $q->where('grade_level', $user->advisory_grade_level)
                         ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
                 }
-                $q->whereHas('sbfpParticipant', function ($participantQuery) {
-                    $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                        $measurementQuery->where('measurement_period', 'baseline')
-                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                    });
+                $q->where(function ($eligibilityQuery) {
+                    $eligibilityQuery->where('grade_level', 0)
+                        ->orWhereHas('sbfpParticipant', function ($participantQuery) {
+                            $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                                $measurementQuery->where('measurement_period', 'baseline')
+                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                            });
+                        });
                 });
             });
 
@@ -292,7 +295,7 @@ class StudentController extends Controller
             'middle_name' => 'nullable',
             'birth_date' => 'required|date',
             'sex' => 'required',
-            'grade_level' => 'required|integer',
+            'grade_level' => 'required|integer|between:0,7',
             'section' => 'required|string',
             'weight' => 'required|numeric',
             'height' => 'required|numeric',
@@ -373,7 +376,7 @@ class StudentController extends Controller
             'middle_name' => 'nullable',
             'birth_date' => 'required|date',
             'sex' => 'required',
-            'grade_level' => 'required|integer',
+            'grade_level' => 'required|integer|between:0,7',
             'section' => 'required|string',
             'weight' => 'required|numeric',
             'height' => 'required|numeric',
@@ -382,11 +385,6 @@ class StudentController extends Controller
             'guardian_email' => 'nullable|email',
             'address' => 'required',
         ]);
-
-        if ($user?->isEncoder()) {
-            $validated['grade_level'] = $user->advisory_grade_level;
-            $validated['section'] = $user->advisory_section;
-        }
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
 

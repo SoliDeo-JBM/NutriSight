@@ -52,7 +52,7 @@ Route::middleware('guest')->group(function () {
 | Authenticated Routes
 |--------------------------------------------------------------------------
 */
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'active'])->group(function () {
     // Redirect /dashboard to the appropriate role-based dashboard
     Route::get('/dashboard', function () {
         /** @var \App\Models\User $user */
@@ -150,6 +150,7 @@ Route::middleware('auth')->group(function () {
 
     Route::middleware('role:super_admin|admin')->group(function () {
         Route::delete('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'destroy'])->name('accounts.destroy');
+        Route::post('/accounts/{user}/restore', [App\Http\Controllers\Admin\AccountController::class, 'restore'])->name('accounts.restore');
     });
 
     Route::middleware('role:encoder')->prefix('encoder')->name('encoder.')->group(function () {
