@@ -22,7 +22,10 @@ class SbfpParticipant extends Model
             return null;
         }
 
-        return route('encoder.profile-images.show', ['participant' => $this->getKey()]);
+        return route('encoder.profile-images.show', [
+            'participant' => $this->getKey(),
+            'v' => optional($this->updated_at)->timestamp,
+        ]);
     }
 
     // Belongs to a specific Enrollment

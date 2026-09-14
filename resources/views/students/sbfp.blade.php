@@ -2,31 +2,12 @@
 
 @section('content')
     <div x-data="sbfpManager()" x-init="if (@js($hasPendingApproval ?? false)) showApprovalModal = true" x-cloak class="flex flex-col gap-6">
-        @if(session('profile_image_upload_success'))
-        <div
-            x-data="{ open: true }"
-            x-show="open"
-            x-transition
-            class="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 p-4"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="profile-image-upload-success-title"
-        >
-            <div class="w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl">
-                <div class="mb-4 text-emerald-600 text-4xl">
-                    <i class="fas fa-check-circle" aria-hidden="true"></i>
-                </div>
-                <h2 id="profile-image-upload-success-title" class="mb-2 text-lg font-bold text-gray-900">Profile Images Uploaded</h2>
-                <p class="mb-6 text-sm text-gray-600">{{ session('profile_image_upload_success') }}</p>
-                <button type="button" @click="open = false" class="rounded bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700">
-                    OK
-                </button>
-            </div>
-        </div>
-        @endif
-
         @php
-            $profileImageParticipants = collect(isset($students) ? $students->items() : [])->map(function ($student) {
+            $approvedStudents = collect(isset($students) ? $students->items() : [])->filter(function ($student) {
+                return $student->enrollments->first()?->sbfpParticipant?->parent_consent === 'approved';
+            })->values();
+
+            $profileImageParticipants = $approvedStudents->map(function ($student) {
                 $participant = $student->enrollments->first()?->sbfpParticipant;
                 return $participant ? [
                     'id' => $participant->id,
@@ -312,7 +293,7 @@
                                 <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Weight (kg)</th><th class="px-3 py-2 border">Height (cm)</th></tr>
                             </thead>
                             <tbody>
-                                @foreach($students ?? [] as $student)
+                                @foreach($approvedStudents as $student)
                                     @php
                                         $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
                                             $record = $student->periodProgress[ucfirst($period)][0] ?? null;
@@ -362,7 +343,7 @@
                                 <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Weight (kg)</th><th class="px-3 py-2 border">Height (cm)</th></tr>
                             </thead>
                             <tbody>
-                                @foreach($students ?? [] as $student)
+                                @foreach($approvedStudents as $student)
                                     @php
                                         $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
                                             $record = $student->periodProgress[ucfirst($period)][0] ?? null;

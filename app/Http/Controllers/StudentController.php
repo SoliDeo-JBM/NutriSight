@@ -878,19 +878,19 @@ class StudentController extends Controller
                 } catch (\Throwable $exception) {
                     report($exception);
                     throw ValidationException::withMessages([
-                        'profiles' => 'Cloudflare R2 rejected the profile image. No database record was changed.',
+                        'profiles' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
                     ]);
                 }
                 if (!$path) {
                     throw ValidationException::withMessages([
-                        'profiles' => 'The profile image could not be stored in Cloudflare R2. No database record was changed.',
+                        'profiles' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
                     ]);
                 }
 
                 $publicUrl = rtrim((string) config('filesystems.disks.r2.url'), '/');
                 if ($publicUrl === '') {
                     throw ValidationException::withMessages([
-                        'profiles' => 'Cloudflare R2 public URL is not configured. No database record was changed.',
+                        'profiles' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
                     ]);
                 }
 
@@ -912,8 +912,7 @@ class StudentController extends Controller
         AuditLogger::log('Updated', 'SBFP Participants', "Uploaded {$updated} profile image(s) for advisory SBFP participants.");
 
         return back()
-            ->with('success', "Uploaded {$updated} profile image(s).")
-            ->with('profile_image_upload_success', "Uploaded {$updated} profile image(s) successfully.");
+            ->with('success', "Uploaded {$updated} profile image(s).");
     }
 
     public function showProfileImage(SbfpParticipant $participant)
