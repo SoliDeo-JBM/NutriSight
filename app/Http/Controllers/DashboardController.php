@@ -13,6 +13,14 @@ use Illuminate\Support\Facades\Auth;
 
 class DashboardController extends Controller
 {
+    public function landing()
+    {
+        return view('welcome', [
+            'landingPreviewMetrics' => $this->landingPreviewMetrics(),
+            'landingAssessmentMetrics' => $this->landingAssessmentMetrics(),
+        ]);
+    }
+
     public function superAdmin(Request $request)
     {
         return $this->admin($request);
@@ -218,5 +226,128 @@ class DashboardController extends Controller
         return !empty($periodProgress[$selectedPeriod])
             ? $periodProgress[$selectedPeriod][0]
             : null;
+    }
+
+    private function landingPreviewMetrics(): array
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $periods = ['Baseline', 'Midline', 'Endline'];
+        $students = Student::with(['enrollments' => function ($query) use ($activeSyId) {
+            $query->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements' => function ($measurementQuery) {
+                $measurementQuery->orderBy('created_at', 'desc');
+            }]);
+        }])->whereHas('enrollments', function ($query) use ($activeSyId) {
+            $query->where('school_year_id', $activeSyId)->whereHas('sbfpParticipant', function ($participantQuery) {
+                $participantQuery->where('parent_consent', 'approved')
+                    ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                        $measurementQuery->where('measurement_period', 'baseline')
+                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                    });
+            });
+        })->get()->map(function ($student) use ($activeSyId) {
+            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
+            $student->dashboardPeriods = $this->groupMeasurementsByPeriod($enrollment?->sbfpParticipant?->nutritionMeasurements ?? collect());
+            return $student;
+        });
+
+        $total = $students->count();
+        $metrics = [];
+
+        foreach ($periods as $period) {
+            $distribution = array_fill_keys(['Normal', 'Wasted', 'Severely Wasted', 'Overweight', 'Obese'], 0);
+            $periodBmiTotal = 0;
+            $periodBmiCount = 0;
+
+            foreach ($students as $student) {
+                $measurement = $this->measurementForPeriod($student->dashboardPeriods, $period);
+                if (!$measurement) {
+                    continue;
+                }
+
+                if (array_key_exists($measurement->bmi_category, $distribution)) {
+                    $distribution[$measurement->bmi_category]++;
+                }
+                $periodBmiTotal += $measurement->bmi;
+                $periodBmiCount++;
+            }
+
+            $normal = $distribution['Normal'];
+            $metrics[$period] = [
+                'total' => $total,
+                'recovery' => $total > 0 ? round(($normal / $total) * 100, 1) : 0,
+                'recovered' => $normal,
+                'normal' => $normal,
+                'atRisk' => $distribution['Wasted'] + $distribution['Severely Wasted'],
+                'averages' => $periodBmiCount > 0 ? round($periodBmiTotal / $periodBmiCount, 2) : 0,
+                'trend' => $this->landingBmiTrend($students, $periods),
+                'distribution' => array_values($distribution),
+            ];
+        }
+
+        return $metrics;
+    }
+
+    private function landingBmiTrend($students, array $periods): array
+    {
+        return collect($periods)->map(function ($period) use ($students) {
+            $measurements = $students->map(fn ($student) => $this->measurementForPeriod($student->dashboardPeriods, $period))->filter();
+            return $measurements->isNotEmpty() ? round($measurements->avg('bmi'), 2) : 0;
+        })->values()->all();
+    }
+
+    private function landingAssessmentMetrics(): array
+    {
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+        $students = Student::with(['enrollments' => function ($query) use ($schoolYear) {
+            $query->where('school_year_id', $schoolYear?->id)
+                ->with(['sbfpParticipant.nutritionMeasurements', 'sbfpParticipant.attendanceRecords']);
+        }])->whereHas('enrollments', function ($query) use ($schoolYear) {
+            $query->where('school_year_id', $schoolYear?->id)
+                ->whereHas('sbfpParticipant', fn ($participant) => $participant->where('parent_consent', 'approved'));
+        })->get();
+
+        $attendanceStudents = 0;
+        $completeAttendance = 0;
+        $malnourished = 0;
+        $recovered = 0;
+
+        foreach ($students as $student) {
+            $participant = $student->enrollments->first()?->sbfpParticipant;
+            $records = $participant?->attendanceRecords ?? collect();
+
+            if ($records->isNotEmpty()) {
+                $attendanceStudents++;
+                if ($records->every(fn ($record) => strtolower((string) $record->status) !== 'absent')) {
+                    $completeAttendance++;
+                }
+            }
+
+            $measurements = $participant?->nutritionMeasurements?->sortByDesc('created_at') ?? collect();
+            $baseline = $measurements->firstWhere('measurement_period', 'baseline');
+            if ($baseline && in_array($baseline->bmi_category, ['Wasted', 'Severely Wasted'], true)) {
+                $malnourished++;
+                $endline = $measurements->firstWhere('measurement_period', 'endline');
+                if ($endline?->bmi_category === 'Normal') {
+                    $recovered++;
+                }
+            }
+        }
+
+        $withAbsences = $attendanceStudents - $completeAttendance;
+        $stillNeedingSupport = $malnourished - $recovered;
+
+        return [
+            'schoolYear' => $schoolYear?->year ?? 'No active school year',
+            'attendanceStudents' => $attendanceStudents,
+            'completeAttendance' => $completeAttendance,
+            'completeAttendanceRate' => $attendanceStudents ? round($completeAttendance / $attendanceStudents * 100, 1) : 0,
+            'withAbsences' => $withAbsences,
+            'withAbsencesRate' => $attendanceStudents ? round($withAbsences / $attendanceStudents * 100, 1) : 0,
+            'malnourished' => $malnourished,
+            'recovered' => $recovered,
+            'recoveredRate' => $malnourished ? round($recovered / $malnourished * 100, 1) : 0,
+            'stillNeedingSupport' => $stillNeedingSupport,
+            'stillNeedingSupportRate' => $malnourished ? round($stillNeedingSupport / $malnourished * 100, 1) : 0,
+        ];
     }
 }

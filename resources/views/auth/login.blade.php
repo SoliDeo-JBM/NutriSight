@@ -48,6 +48,12 @@
         <!-- 100% width on mobile, 45% on md and above -->
         <div class="w-full md:w-[45%] flex items-center justify-center px-6 py-12 sm:px-12 lg:px-20 bg-white">
             <div class="w-full max-w-md">
+                <a href="{{ route('home') }}" class="mb-8 inline-flex items-center gap-2 text-sm font-semibold text-gray-600 transition-colors hover:text-orange-600 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-4 w-4" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
+                    </svg>
+                    <span>Back to landing page</span>
+                </a>
                 
                 <!-- Mobile Header: Only visible when the left column is hidden -->
                 <div class="md:hidden mb-10 text-center">
