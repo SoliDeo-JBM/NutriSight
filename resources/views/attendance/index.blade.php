@@ -105,7 +105,7 @@
         @php
         $participantId = $student->enrollments->first()?->sbfpParticipant?->id;
         $log = $participantId ? ($attendanceLogs[$participantId] ?? null) : null;
-        $status = $log ? $log->status : 'absent';
+        $status = $log?->status;
         @endphp
         <div class="flex flex-col p-3 border rounded-lg bg-gray-50 gap-2">
             <div>
