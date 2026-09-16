@@ -26,9 +26,7 @@ use PhpOffice\PhpWord\PhpWord;
 
 class ReportsController extends Controller
 {
-    public function __construct(private readonly ReportPeriodManager $reportPeriodManager)
-    {
-    }
+    public function __construct(private readonly ReportPeriodManager $reportPeriodManager) {}
 
     public function admin()
     {
@@ -154,8 +152,18 @@ class ReportsController extends Controller
 
     public function showAttendanceSummary(SchoolYear $schoolYear)
     {
+        $approvedBeneficiary = function ($query) use ($schoolYear) {
+            $query->where('school_year_id', $schoolYear->id)
+                ->whereHas('sbfpParticipant', function ($participantQuery) {
+                    $participantQuery->where('parent_consent', 'approved')
+                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                            $measurementQuery->where('measurement_period', 'baseline')
+                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                        });
+                });
+        };
         $students = Student::with(['enrollments' => fn($query) => $query->where('school_year_id', $schoolYear->id)->with('sbfpParticipant.attendanceRecords')])
-            ->whereHas('enrollments', fn($query) => $query->where('school_year_id', $schoolYear->id))->orderBy('last_name')->orderBy('first_name')->get()
+            ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
             ->map(function (Student $student) use ($schoolYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $present = $records->filter(fn($record) => in_array(strtolower((string) $record->status), ['present', 'p', 'served']))->count();
@@ -167,14 +175,24 @@ class ReportsController extends Controller
     private function attendanceStudents(SchoolYear $schoolYear, int $month, ?int $grade = null, ?string $section = null)
     {
         $calendarYear = $this->attendanceCalendarYear($schoolYear, $month);
+        $approvedBeneficiary = function ($query) use ($schoolYear, $grade, $section) {
+            $query->where('school_year_id', $schoolYear->id)
+                ->when($grade !== null, fn($q) => $q->where('grade_level', $grade))
+                ->when($section !== null, fn($q) => $q->where('section', $section))
+                ->whereHas('sbfpParticipant', function ($participantQuery) {
+                    $participantQuery->where('parent_consent', 'approved')
+                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                            $measurementQuery->where('measurement_period', 'baseline')
+                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                        });
+                });
+        };
         return Student::with([
             'enrollments' => function ($query) use ($schoolYear, $grade, $section) {
                 $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section))->with('sbfpParticipant.attendanceRecords');
             }
         ])
-            ->whereHas('enrollments', function ($query) use ($schoolYear, $grade, $section) {
-                $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section));
-            })->orderBy('last_name')->orderBy('first_name')->get()
+            ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
             ->map(function (Student $student, int $index) use ($month, $calendarYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $days = [];
@@ -401,7 +419,6 @@ class ReportsController extends Controller
         foreach ($rows as $row) {
             ReportPeriodRow::updateOrCreate(['report_period_id' => $period->id, 'grade_level' => $row['grade_level'], 'sex' => $row['sex']], $row);
         }
-
     }
 
     public function exportAnnualConsolidatedExcel(ReportPeriod $period)
@@ -439,7 +456,8 @@ class ReportsController extends Controller
         $header = $section->addHeader();
         $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
         $headerTable->addRow();
-        $headerTable->addCell(1000)->addImage(public_path('images/id/pulungbulu_elem.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
+        // Same school logo used on the SBFP student ID cards.
+        $headerTable->addCell(1000)->addImage(public_path('images/id/mbes-logo-1.png'), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
         $headerText = $headerTable->addCell(8000)->addTextRun(['alignment' => 'center']);
         $headerText->addText('Department of Education', ['size' => 10]);
         $headerText->addTextBreak();
@@ -647,18 +665,22 @@ class ReportsController extends Controller
         $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 600]);
-        $section->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
-        $section->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
+        $headerTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $headerTable->addRow();
+        // Same school logo used on the SBFP student ID cards.
+        // $headerTable->addCell(1000)->addImage(public_path('images/id/mbes-logo-1.png'), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
+        $headerText = $headerTable->addCell(9000)->addTextRun(['alignment' => 'center']);
+        $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
+        $headerText->addTextBreak();
+        $headerText->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
         $table->addRow();
         foreach (AssessmentReportExport::columnHeadings() as $heading) {
             $table->addCell(2600)->addText($heading, ['bold' => true]);
         }
-        foreach (AssessmentReportExport::values($assessment) as $row) {
-            $table->addRow();
-            foreach ($row as $value) {
-                $table->addCell(2600)->addText((string) $value);
-            }
+        $table->addRow();
+        foreach (AssessmentReportExport::values($assessment) as $value) {
+            $table->addCell(2600)->addText((string) $value);
         }
         $section->addText('Endline Nutritional Assessment', ['bold' => true, 'size' => 12]);
         $section->addText('Baseline at-risk cohort assessed against endline reports.');
@@ -667,9 +689,9 @@ class ReportsController extends Controller
             ['Recovered to Normal at endline', $assessment['recovered'], $assessment['recovered_rate'] . '%'],
             ['Still needing support at endline', $assessment['still_needing_support'], $assessment['still_needing_support_rate'] . '%'],
         ]);
-        $this->addDocxRows($section, ['Sex', 'Age', 'Attendance result'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['complete'] . ' complete / ' . $row['with_absences'] . ' with absences'], $assessment['attendance_demographics']), 'Demographic Breakdown of Attendance in the SBFP');
-        $this->addDocxRows($section, ['Sex', 'Age', 'Participants'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['count']], $assessment['participant_demographics']), 'Demographic Breakdown of SBFP Participants');
-        $this->addDocxRows($section, ['Sex', 'Age', 'Endline result'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['recovered'] . ' recovered / ' . $row['still_needing_support'] . ' support'], $assessment['recovery_demographics']), 'Demographic Breakdown of Recovered and Still Needing Support');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Attendance result'], array_map(fn($row) => [$row['sex'], $row['age'], $row['complete'] . ' complete / ' . $row['with_absences'] . ' with absences'], $assessment['attendance_demographics']), 'Demographic Breakdown of Attendance in the SBFP');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Participants'], array_map(fn($row) => [$row['sex'], $row['age'], $row['count']], $assessment['participant_demographics']), 'Demographic Breakdown of SBFP Participants');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Endline result'], array_map(fn($row) => [$row['sex'], $row['age'], $row['recovered'] . ' recovered / ' . $row['still_needing_support'] . ' support'], $assessment['recovery_demographics']), 'Demographic Breakdown of Recovered and Still Needing Support');
         $periodRows = [];
         foreach ($assessment['period_summary'] as $period => $statuses) {
             foreach ($statuses as $status => $count) {
@@ -677,7 +699,7 @@ class ReportsController extends Controller
             }
         }
         $this->addDocxRows($section, ['Period', 'Nutrition status', 'Count'], $periodRows, 'Baseline vs Midline vs Endline Rehabilitation Transition');
-        $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn ($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
+        $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -695,8 +717,8 @@ class ReportsController extends Controller
     public function exportAssessmentSql(): Response
     {
         $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
-        $columns = implode(', ', array_map(fn ($column) => '`' . $column . '`', AssessmentReportExport::columnKeys()));
-        $values = implode(', ', array_map(fn ($value) => DB::getPdo()->quote((string) $value), AssessmentReportExport::values($assessment)));
+        $columns = implode(', ', array_map(fn($column) => '`' . $column . '`', AssessmentReportExport::columnKeys()));
+        $values = implode(', ', array_map(fn($value) => DB::getPdo()->quote((string) $value), AssessmentReportExport::values($assessment)));
         $sql = "-- NutriSight SBFP Assessment report export\nINSERT INTO `sbfp_assessment_report_exports` ({$columns}) VALUES ({$values});\n";
 
         return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="sbfp-assessment.sql"']);
@@ -730,7 +752,7 @@ class ReportsController extends Controller
             },
         ])->whereHas('enrollments', function ($query) use ($schoolYear) {
             $query->where('school_year_id', $schoolYear?->id)
-                ->whereHas('sbfpParticipant', fn ($participant) => $participant->where('parent_consent', 'approved'));
+                ->whereHas('sbfpParticipant', fn($participant) => $participant->where('parent_consent', 'approved'));
         })->get();
 
         $attendanceStudents = 0;
@@ -760,11 +782,11 @@ class ReportsController extends Controller
 
             if ($records->isNotEmpty()) {
                 $attendanceStudents++;
-                $hasAbsence = $records->contains(fn ($record) => strtolower((string) $record->status) === 'absent');
+                $hasAbsence = $records->contains(fn($record) => strtolower((string) $record->status) === 'absent');
                 $this->incrementDemographic($attendanceDemographics, $demographicKey, $sex, $age);
                 $attendanceDemographics[$demographicKey]['complete'] += $hasAbsence ? 0 : 1;
                 $attendanceDemographics[$demographicKey]['with_absences'] += $hasAbsence ? 1 : 0;
-                if ($records->every(fn ($record) => strtolower((string) $record->status) !== 'absent')) {
+                if ($records->every(fn($record) => strtolower((string) $record->status) !== 'absent')) {
                     $completeAttendance++;
                 }
             }
@@ -879,8 +901,8 @@ class ReportsController extends Controller
             ];
         })->values();
 
-        $highest = fn ($left, $right) => $right['attendance_rate'] <=> $left['attendance_rate'] ?: $right['count'] <=> $left['count'];
-        $lowest = fn ($left, $right) => $left['attendance_rate'] <=> $right['attendance_rate'] ?: $right['count'] <=> $left['count'];
+        $highest = fn($left, $right) => $right['attendance_rate'] <=> $left['attendance_rate'] ?: $right['count'] <=> $left['count'];
+        $lowest = fn($left, $right) => $left['attendance_rate'] <=> $right['attendance_rate'] ?: $right['count'] <=> $left['count'];
 
         return [
             'age' => [
@@ -951,7 +973,7 @@ class ReportsController extends Controller
             'endline' => ['endline', 'end'],
         ];
 
-        return $measurements->first(fn ($measurement) => in_array(strtolower((string) $measurement->measurement_period), $periods[$period], true));
+        return $measurements->first(fn($measurement) => in_array(strtolower((string) $measurement->measurement_period), $periods[$period], true));
     }
 
     private function groupMeasurementsByQuarter($measurements)

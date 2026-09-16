@@ -15,9 +15,7 @@ use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
 
 class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHeadings, WithStyles
 {
-  public function __construct(private readonly array $rows, private readonly mixed $schoolYear = null, private readonly mixed $period = null, private readonly string $adminName = 'Full Name of the Admin', private readonly string $superAdminName = 'Full Name of the Super Admin')
-  {
-  }
+  public function __construct(private readonly array $rows, private readonly mixed $schoolYear = null, private readonly mixed $period = null, private readonly string $adminName = 'Full Name of the Admin', private readonly string $superAdminName = 'Full Name of the Super Admin') {}
 
   public static function columnHeadings(): array
   {
@@ -108,7 +106,8 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
         $yearRun = $periodText->createTextRun((string) $this->schoolYear?->year);
         $yearRun->getFont()->setBold(true)->setItalic(true);
         $sheet->getCell('A4')->setValue($periodText);
-        foreach ([['images/id/pulungbulu_elem.jpeg', 'A1'], ['images/id/kagawaran_ng_edukasyo.jpeg', 'Y1']] as [$path, $coordinate]) {
+        // MBES school logo on the left, DepEd seal on the right.
+        foreach ([['images/id/mbes-logo-1.png', 'A1'], ['images/id/kagawaran_ng_edukasyo.jpeg', 'Y1']] as [$path, $coordinate]) {
           $drawing = new Drawing();
           $drawing->setPath(public_path($path));
           $drawing->setHeight(42);
