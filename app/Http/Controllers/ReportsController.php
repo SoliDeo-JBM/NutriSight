@@ -230,7 +230,7 @@ class ReportsController extends Controller
         $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING', ['bold' => true, 'size' => 13]);
         $headerText->addTextBreak();
         $headerText->addText('For the month of ' . date('F', mktime(0, 0, 0, $month->month, 1)) . ', SY ' . $month->schoolYear->year);
-        $headerTable->addCell(1000)->addImage(public_path('images/id/kagawaran_ng_edukasyo.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
+        $headerTable->addCell(1000)->addImage(public_path('images/id/deped.png'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
         $table = $section->addTable(['borderSize' => 6]);
         $table->addRow();
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
@@ -499,7 +499,7 @@ class ReportsController extends Controller
         $headerText->addText(' (' . ($period->month ? date('F', mktime(0, 0, 0, $period->month, 1)) : 'Month') . ')', ['italic' => true, 'color' => '2563EB']);
         $headerText->addText(' SY ', ['italic' => true]);
         $headerText->addText((string) $schoolYear->year, ['bold' => true, 'italic' => true]);
-        $headerTable->addCell(1000)->addImage(public_path('images/id/kagawaran_ng_edukasyo.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
+        $headerTable->addCell(1000)->addImage(public_path('images/id/deped.png'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 40]);
         $table->addRow();
         foreach ([['Grade Levels', 1, true], ['Enrollment', 2, true], ['Pupils Weighed', 2, true], ['BODY MASS INDEX (BMI)', 10, false], ['HEIGHT-FOR-AGE (HFA)', 8, false], ['Pupils Taken Height', 2, true]] as [$heading, $span, $vertical]) {
@@ -705,7 +705,7 @@ class ReportsController extends Controller
         $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
         $headerText->addTextBreak();
         $headerText->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
-        $headerTable->addCell(1000)->addImage(public_path('images/id/kagawaran_ng_edukasyo.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
+        $headerTable->addCell(1000)->addImage(public_path('images/id/deped.png'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
         $table->addRow();
         foreach (AssessmentReportExport::columnHeadings() as $heading) {
