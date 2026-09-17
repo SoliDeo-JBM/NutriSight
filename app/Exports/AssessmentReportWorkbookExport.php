@@ -144,7 +144,7 @@ class AssessmentReportSheet implements FromArray, WithEvents, WithHeadings, With
             $sheet->setCellValue('G' . ($signatureRow + 2), $this->superAdminName);
             $sheet->setCellValue('A' . ($signatureRow + 3), 'Project Development Officer');
             $sheet->setCellValue('G' . ($signatureRow + 3), 'School Head');
-            foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/deped.png'), 'K1']] as [$path, $coordinate]) {
+            foreach ([[SchoolLogoService::path(), 'A1'], [SchoolLogoService::depedPath(), 'K1']] as [$path, $coordinate]) {
                 $drawing = new Drawing();
                 $drawing->setPath($path);
                 $drawing->setHeight(42);

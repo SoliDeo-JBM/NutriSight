@@ -108,7 +108,7 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
         $yearRun->getFont()->setBold(true)->setItalic(true);
         $sheet->getCell('A4')->setValue($periodText);
         // MBES school logo on the left, DepEd seal on the right.
-        foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/deped.png'), 'Y1']] as [$path, $coordinate]) {
+        foreach ([[SchoolLogoService::path(), 'A1'], [SchoolLogoService::depedPath(), 'Y1']] as [$path, $coordinate]) {
           $drawing = new Drawing();
           $drawing->setPath($path);
           $drawing->setHeight(42);

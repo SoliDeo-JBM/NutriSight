@@ -78,7 +78,7 @@ class AttendanceReportExport implements FromArray, ShouldAutoSize, WithEvents, W
       $sheet->setCellValue($notedStart . ($signatureRow + 2), $this->superAdminName);
       $sheet->setCellValue('A' . ($signatureRow + 3), 'Project Development Officer');
       $sheet->setCellValue($notedStart . ($signatureRow + 3), 'School Head');
-      foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/deped.png'), $lastColumn . '1']] as [$path, $coordinate]) {
+      foreach ([[SchoolLogoService::path(), 'A1'], [SchoolLogoService::depedPath(), $lastColumn . '1']] as [$path, $coordinate]) {
         $drawing = new Drawing();
         $drawing->setPath($path);
         $drawing->setHeight(42);

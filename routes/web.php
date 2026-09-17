@@ -86,7 +86,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
         Route::get('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'edit'])->name('school-logo.edit');
         Route::get('/school-logo/file', [App\Http\Controllers\SchoolLogoController::class, 'file'])->name('school-logo.file');
+        Route::get('/school-logo/deped-file', [App\Http\Controllers\SchoolLogoController::class, 'depedFile'])->name('school-logo.deped-file');
         Route::put('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'update'])->name('school-logo.update');
+        Route::put('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'updateDepEd'])->name('school-logo.deped.update');
+        Route::delete('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'reset'])->name('school-logo.reset');
+        Route::delete('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'resetDepEd'])->name('school-logo.deped.reset');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
