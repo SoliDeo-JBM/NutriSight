@@ -35,7 +35,8 @@ class AttendanceReportExport implements FromArray, ShouldAutoSize, WithEvents, W
 
   public function headings(): array
   {
-    $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $this->month->month, (int) substr((string) $this->month->schoolYear->year, 0, 4) + ($this->month->month < 6 ? 1 : 0));
+    $calendarYear = (int) substr((string) $this->month->schoolYear->year, 0, 4) + ($this->month->month < 6 ? 1 : 0);
+    $daysInMonth = (int) date('t', mktime(0, 0, 0, $this->month->month, 1, $calendarYear));
     return self::columnHeadings($daysInMonth);
   }
 

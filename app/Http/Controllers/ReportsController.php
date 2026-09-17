@@ -117,7 +117,7 @@ class ReportsController extends Controller
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
         $grades = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('grade_level')->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('section')->distinct()->orderBy('section')->pluck('section');
-        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => cal_days_in_month(CAL_GREGORIAN, $month->month, $calendarYear), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection]);
+        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear)), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection]);
     }
 
     public function storeAttendanceSection(Request $request, AttendanceReportMonth $month)
@@ -143,7 +143,7 @@ class ReportsController extends Controller
         $section->load('month.schoolYear');
         $students = $this->attendanceStudents($section->month->schoolYear, $section->month->month, $section->grade_level, $section->section);
         $calendarYear = $this->attendanceCalendarYear($section->month->schoolYear, $section->month->month);
-        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => cal_days_in_month(CAL_GREGORIAN, $section->month->month, $calendarYear), 'students' => $students]);
+        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => (int) date('t', mktime(0, 0, 0, $section->month->month, 1, $calendarYear)), 'students' => $students]);
     }
 
     public function showAttendanceGradeSummary(AttendanceReportMonth $month, int $grade)
@@ -199,7 +199,7 @@ class ReportsController extends Controller
             ->map(function (Student $student, int $index) use ($month, $calendarYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $days = [];
-                $daysInMonth = \cal_days_in_month(CAL_GREGORIAN, $month, $calendarYear);
+                $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $calendarYear));
                 for ($day = 1; $day <= $daysInMonth; $day++) {
                     $record = $records->first(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
                     $days[$day] = $record?->status;
@@ -234,7 +234,7 @@ class ReportsController extends Controller
         $table = $section->addTable(['borderSize' => 6]);
         $table->addRow();
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
-        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month->month, $calendarYear);
+        $daysInMonth = (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear));
         foreach (AttendanceReportExport::columnHeadings($daysInMonth) as $heading)
             $table->addCell(700)->addText($heading, ['bold' => true, 'size' => 7]);
         foreach ($students as $student) {
