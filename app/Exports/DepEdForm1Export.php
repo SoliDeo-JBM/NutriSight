@@ -110,7 +110,7 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
         // MBES school logo on the left, DepEd seal on the right.
         foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/kagawaran_ng_edukasyo.jpeg'), 'Y1']] as [$path, $coordinate]) {
           $drawing = new Drawing();
-          $drawing->setPath(public_path($path));
+          $drawing->setPath($path);
           $drawing->setHeight(42);
           $drawing->setCoordinates($coordinate);
           $drawing->setOffsetX($coordinate === 'A1' ? 8 : 0);

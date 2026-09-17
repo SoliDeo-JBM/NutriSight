@@ -79,7 +79,7 @@ class AttendanceReportExport implements FromArray, ShouldAutoSize, WithEvents, W
       $sheet->setCellValue($notedStart . ($signatureRow + 3), 'School Head');
       foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/kagawaran_ng_edukasyo.jpeg'), $lastColumn . '1']] as [$path, $coordinate]) {
         $drawing = new Drawing();
-        $drawing->setPath(public_path($path));
+        $drawing->setPath($path);
         $drawing->setHeight(42);
         $drawing->setCoordinates($coordinate);
         $drawing->setWorksheet($sheet);

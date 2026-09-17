@@ -8,6 +8,13 @@ use Illuminate\Http\Request;
 
 class SchoolLogoController extends Controller
 {
+    public function file()
+    {
+        return response()->file(SchoolLogoService::path(), [
+            'Cache-Control' => 'no-cache, private',
+        ]);
+    }
+
     public function edit()
     {
         return view('super-admin.school-logo', [

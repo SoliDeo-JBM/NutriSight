@@ -20,9 +20,7 @@ class SchoolLogoService
 
     public static function url(): string
     {
-        $storedPath = self::storedPath();
-
-        return $storedPath ? '/storage/' . ltrim($storedPath, '/') : '/' . ltrim(self::DEFAULT_PATH, '/');
+        return '/super-admin/school-logo/file';
     }
 
     public static function upload(UploadedFile $file): void

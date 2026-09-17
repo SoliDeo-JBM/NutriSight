@@ -199,7 +199,7 @@ class ReportsController extends Controller
             ->map(function (Student $student, int $index) use ($month, $calendarYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $days = [];
-                $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $calendarYear);
+                $daysInMonth = \cal_days_in_month(CAL_GREGORIAN, $month, $calendarYear);
                 for ($day = 1; $day <= $daysInMonth; $day++) {
                     $record = $records->first(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
                     $days[$day] = $record?->status;
