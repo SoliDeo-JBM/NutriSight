@@ -224,13 +224,22 @@ class ReportsController extends Controller
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
         $header = $section->addHeader();
         $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $this->configureDocxHeaderTable($headerTable);
         $headerTable->addRow();
-        $headerTable->addCell(1000)->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
-        $headerText = $headerTable->addCell(8000)->addTextRun(['alignment' => 'center']);
+        $schoolLogoCell = $headerTable->addCell(1000);
+        $this->configureDocxHeaderCell($schoolLogoCell);
+        $schoolLogoCell->getStyle()->setVAlign('center');
+        $schoolLogoCell->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $headerTextCell = $headerTable->addCell(8000);
+        $this->configureDocxHeaderCell($headerTextCell);
+        $headerText = $headerTextCell->addTextRun(['alignment' => 'center']);
         $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING', ['bold' => true, 'size' => 13]);
         $headerText->addTextBreak();
         $headerText->addText('For the month of ' . date('F', mktime(0, 0, 0, $month->month, 1)) . ', SY ' . $month->schoolYear->year);
-        $headerTable->addCell(1000)->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
+        $depedLogoCell = $headerTable->addCell(1000);
+        $this->configureDocxHeaderCell($depedLogoCell);
+        $depedLogoCell->getStyle()->setVAlign('center');
+        $depedLogoCell->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $table = $section->addTable(['borderSize' => 6]);
         $table->addRow();
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
@@ -242,19 +251,7 @@ class ReportsController extends Controller
             foreach (AttendanceReportExport::values($student) as $value)
                 $table->addCell(700)->addText((string) $value, ['size' => 7]);
         }
-        $signatureTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('Prepared by:', ['bold' => true, 'size' => 8]);
-        $signatureTable->addCell(5000)->addText('Noted by:', ['bold' => true, 'size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('____________________________', ['size' => 8]);
-        $signatureTable->addCell(5000)->addText('________________________________', ['size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText("  {$adminName}", ['bold' => true, 'size' => 8]);
-        $signatureTable->addCell(5000)->addText("  {$superAdminName}", ['bold' => true, 'size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('Project Development Officer', ['size' => 8]);
-        $signatureTable->addCell(5000)->addText('School Head', ['size' => 8]);
+        $this->addDocxSignatureTable($section, $adminName, $superAdminName);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-attendance-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
         return response()->download($path, 'attendance-report.docx')->deleteFileAfterSend(true);
@@ -485,10 +482,16 @@ class ReportsController extends Controller
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 250]);
         $header = $section->addHeader();
         $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $this->configureDocxHeaderTable($headerTable);
         $headerTable->addRow();
         // Same school logo used on the SBFP student ID cards.
-        $headerTable->addCell(1000)->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
-        $headerText = $headerTable->addCell(8000)->addTextRun(['alignment' => 'center']);
+        $schoolLogoCell = $headerTable->addCell(1000);
+        $this->configureDocxHeaderCell($schoolLogoCell);
+        $schoolLogoCell->getStyle()->setVAlign('center');
+        $schoolLogoCell->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $headerTextCell = $headerTable->addCell(8000);
+        $this->configureDocxHeaderCell($headerTextCell);
+        $headerText = $headerTextCell->addTextRun(['alignment' => 'center']);
         $headerText->addText('Department of Education', ['size' => 10]);
         $headerText->addTextBreak();
         $headerText->addText('Bureau of Learner Support Services', ['size' => 10]);
@@ -499,7 +502,10 @@ class ReportsController extends Controller
         $headerText->addText(' (' . ($period->month ? date('F', mktime(0, 0, 0, $period->month, 1)) : 'Month') . ')', ['italic' => true, 'color' => '2563EB']);
         $headerText->addText(' SY ', ['italic' => true]);
         $headerText->addText((string) $schoolYear->year, ['bold' => true, 'italic' => true]);
-        $headerTable->addCell(1000)->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
+        $depedLogoCell = $headerTable->addCell(1000);
+        $this->configureDocxHeaderCell($depedLogoCell);
+        $depedLogoCell->getStyle()->setVAlign('center');
+        $depedLogoCell->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 40]);
         $table->addRow();
         foreach ([['Grade Levels', 1, true], ['Enrollment', 2, true], ['Pupils Weighed', 2, true], ['BODY MASS INDEX (BMI)', 10, false], ['HEIGHT-FOR-AGE (HFA)', 8, false], ['Pupils Taken Height', 2, true]] as [$heading, $span, $vertical]) {
@@ -536,19 +542,7 @@ class ReportsController extends Controller
                 $cell->addText((string) $value, ['size' => 7, 'alignment' => 'center']);
             }
         }
-        $signatureTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('Prepared by:', ['bold' => true, 'size' => 8]);
-        $signatureTable->addCell(5000)->addText('Noted by:', ['bold' => true, 'size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('____________________________', ['size' => 8]);
-        $signatureTable->addCell(5000)->addText('________________________________', ['size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText("  {$adminName}", ['bold' => true, 'size' => 8]);
-        $signatureTable->addCell(5000)->addText("  {$superAdminName}", ['bold' => true, 'size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('Project Development Officer', ['size' => 8]);
-        $signatureTable->addCell(5000)->addText('School Head', ['size' => 8]);
+        $this->addDocxSignatureTable($section, $adminName, $superAdminName);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-form1-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -699,13 +693,22 @@ class ReportsController extends Controller
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 600]);
         $header = $section->addHeader();
         $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $this->configureDocxHeaderTable($headerTable);
         $headerTable->addRow();
-        $headerTable->addCell(1000)->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
-        $headerText = $headerTable->addCell(9000)->addTextRun(['alignment' => 'center']);
+        $schoolLogoCell = $headerTable->addCell(1000);
+        $this->configureDocxHeaderCell($schoolLogoCell);
+        $schoolLogoCell->getStyle()->setVAlign('center');
+        $schoolLogoCell->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $headerTextCell = $headerTable->addCell(9000);
+        $this->configureDocxHeaderCell($headerTextCell);
+        $headerText = $headerTextCell->addTextRun(['alignment' => 'center']);
         $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
         $headerText->addTextBreak();
         $headerText->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
-        $headerTable->addCell(1000)->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
+        $depedLogoCell = $headerTable->addCell(1000);
+        $this->configureDocxHeaderCell($depedLogoCell);
+        $depedLogoCell->getStyle()->setVAlign('center');
+        $depedLogoCell->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
         $table->addRow();
         foreach (AssessmentReportExport::columnHeadings() as $heading) {
@@ -733,19 +736,7 @@ class ReportsController extends Controller
         }
         $this->addDocxRows($section, ['Period', 'Nutrition status', 'Count'], $periodRows, 'Baseline vs Midline vs Endline Rehabilitation Transition');
         $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
-        $signatureTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('Prepared by:', ['bold' => true, 'size' => 8]);
-        $signatureTable->addCell(5000)->addText('Noted by:', ['bold' => true, 'size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('____________________________', ['size' => 8]);
-        $signatureTable->addCell(5000)->addText('________________________________', ['size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText("  {$adminName}", ['bold' => true, 'size' => 8]);
-        $signatureTable->addCell(5000)->addText("  {$superAdminName}", ['bold' => true, 'size' => 8]);
-        $signatureTable->addRow();
-        $signatureTable->addCell(5000)->addText('Project Development Officer', ['size' => 8]);
-        $signatureTable->addCell(5000)->addText('School Head', ['size' => 8]);
+        $this->addDocxSignatureTable($section, $adminName, $superAdminName);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -788,6 +779,36 @@ class ReportsController extends Controller
                 $table->addCell(2200)->addText((string) $value);
             }
         }
+    }
+
+    private function addDocxSignatureTable($section, string $adminName, string $superAdminName): void
+    {
+        $signatureTable = $section->addTable(['borderSize' => 0, 'borderColor' => 'FFFFFF', 'cellMargin' => 0]);
+        foreach ([
+            ['Prepared by:', 'Noted by:', ['bold' => true, 'size' => 8]],
+            ['____________________________', '________________________________', ['size' => 8]],
+            [$adminName, $superAdminName, ['bold' => true, 'size' => 8]],
+            ['Project Development Officer', 'School Head', ['size' => 8]],
+        ] as [$prepared, $noted, $style]) {
+            $signatureTable->addRow();
+            $signatureTable->addCell(5000)->addText($prepared, $style + ['alignment' => 'center']);
+            $signatureTable->addCell(5000)->addText($noted, $style + ['alignment' => 'center']);
+        }
+    }
+
+    private function configureDocxHeaderTable($table): void
+    {
+        $table->getStyle()
+            ->setAlignment('center')
+            ->setBorderSize(0)
+            ->setBorderColor('FFFFFF');
+    }
+
+    private function configureDocxHeaderCell($cell): void
+    {
+        $cell->getStyle()
+            ->setBorderSize(0)
+            ->setBorderColor('FFFFFF');
     }
 
     private function assessmentData(?SchoolYear $schoolYear): array

@@ -128,7 +128,6 @@
                 @endforeach
             </div>
             <div class="mt-2 grid grid-cols-3 text-center text-xs font-bold uppercase tracking-wide text-slate-700"><span>Baseline</span><span>Midline</span><span>Endline</span></div>
-            <div class="mt-1 grid grid-cols-3 text-center text-[11px] text-slate-500"><span>{{ array_sum($transitionPeriods->get('baseline', [])) }} participants</span><span>{{ array_sum($transitionPeriods->get('midline', [])) }} participants</span><span>{{ array_sum($transitionPeriods->get('endline', [])) }} participants</span></div>
         </div>
         <div class="mt-6 flex flex-wrap gap-x-5 gap-y-2 border-t border-slate-200 pt-4 text-xs text-slate-700">
             @foreach($transitionCategories as $category => $colors)<span class="inline-flex items-center gap-2"><span class="h-3 w-3 rounded-sm" style="background-color: {{ $colors['bar'] }}"></span>{{ $category }}</span>@endforeach

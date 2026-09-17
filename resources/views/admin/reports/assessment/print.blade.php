@@ -90,32 +90,37 @@
             page-break-inside: avoid;
         }
 
-        .progress-bar {
-            height: 12px;
-            margin: 0 auto;
-            max-width: 760px;
-            border: 1px solid #cbd5e1;
-            background: #f1f5f9;
-            font-size: 0;
-            white-space: nowrap;
+        .transition-grid {
+            border: 0;
+            margin: 6px auto 0;
+            table-layout: fixed;
+            width: 100%;
         }
 
-        .progress-period {
-            display: inline-block;
-            height: 12px;
+        .transition-grid td {
+            border: 0;
+            padding: 0 8px;
+            text-align: center;
             vertical-align: top;
-            width: 33.333%;
-            border-right: 1px solid #fff;
         }
 
-        .progress-period:last-child {
-            border-right: 0;
+        .transition-period-bar {
+            background: #f1f5f9;
+            border: 1px solid #cbd5e1;
+            font-size: 0;
+            height: 12px;
+            margin: 0 auto 4px;
+            white-space: nowrap;
         }
 
         .progress-segment {
             display: inline-block;
             height: 12px;
             vertical-align: top;
+        }
+
+        .transition-period-label {
+            font-weight: bold;
         }
 
         .legend {
@@ -302,27 +307,20 @@
     $endlineNormal = data_get($transitionPeriods->get('endline', []), 'Normal', 0);
     $endlineSupport = ($transitionPeriods->get('endline', [])['Wasted'] ?? 0) + ($transitionPeriods->get('endline', [])['Severely Wasted'] ?? 0);
     @endphp
-    <div class="progress-bar">
-        @foreach(['baseline' => 'Baseline', 'midline' => 'Midline', 'endline' => 'Endline'] as $periodKey => $periodLabel)
-        @php $periodData = $transitionPeriods->get($periodKey, []); $periodTotalCount = array_sum($periodData); @endphp
-        <div class="progress-period">
-            @foreach($transitionCategories as $category => $color)
-            @php $categoryCount = $periodData[$category] ?? 0; $categoryWidth = $periodTotalCount ? $categoryCount / $periodTotalCount * 100 : 0; @endphp
-            @if($categoryCount > 0)<div class="progress-segment" style="width:{{ $categoryWidth }}%; background:{{ $color }};" title="{{ $periodLabel }} - {{ $category }}: {{ $categoryCount }} ({{ round($categoryWidth, 1) }}%)"></div>@endif
+    <table class="transition-grid">
+        <tr>
+            @foreach(['baseline' => 'Baseline', 'midline' => 'Midline', 'endline' => 'Endline'] as $periodKey => $periodLabel)
+            @php $periodData = $transitionPeriods->get($periodKey, []); $periodTotalCount = array_sum($periodData); @endphp
+            <td>
+                <div class="transition-period-bar">
+                    @foreach($transitionCategories as $category => $color)
+                    @php $categoryCount = $periodData[$category] ?? 0; $categoryWidth = $periodTotalCount ? $categoryCount / $periodTotalCount * 100 : 0; @endphp
+                    @if($categoryCount > 0)<div class="progress-segment" style="width:{{ $categoryWidth }}%; background:{{ $color }};" title="{{ $periodLabel }} - {{ $category }}: {{ $categoryCount }} ({{ round($categoryWidth, 1) }}%)"></div>@endif
+                    @endforeach
+                </div>
+                <div class="transition-period-label">{{ $periodLabel }}</div>
+            </td>
             @endforeach
-        </div>
-        @endforeach
-    </div>
-    <table style="margin-top:2px;">
-        <tr>
-            <td style="border:0; text-align:center; font-weight:bold;">Baseline</td>
-            <td style="border:0; text-align:center; font-weight:bold;">Midline</td>
-            <td style="border:0; text-align:center; font-weight:bold;">Endline</td>
-        </tr>
-        <tr>
-            <td style="border:0; text-align:center;">{{ array_sum($transitionPeriods->get('baseline', [])) }} participants</td>
-            <td style="border:0; text-align:center;">{{ array_sum($transitionPeriods->get('midline', [])) }} participants</td>
-            <td style="border:0; text-align:center;">{{ array_sum($transitionPeriods->get('endline', [])) }} participants</td>
         </tr>
     </table>
     <div class="legend">@foreach($transitionCategories as $category => $color)<span class="legend-item"><span class="legend-color" style="background:{{ $color }};"></span>{{ $category }}</span>@endforeach</div>
