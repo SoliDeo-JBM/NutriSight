@@ -9,7 +9,7 @@ class SchoolLogoService
 {
     private const DIRECTORY = 'settings';
     private const FILE_PREFIX = 'school-logo.';
-    private const DEFAULT_PATH = 'images/id/mbes-logo-1.png';
+    private const DEFAULT_PATH = 'images/id/mbes.png';
 
     public static function path(): string
     {
