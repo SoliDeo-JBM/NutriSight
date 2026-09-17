@@ -84,6 +84,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::delete('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'destroy'])->name('school-years.destroy');
         Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
+        Route::get('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'edit'])->name('school-logo.edit');
+        Route::put('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'update'])->name('school-logo.update');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');

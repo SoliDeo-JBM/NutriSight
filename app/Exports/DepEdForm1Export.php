@@ -12,6 +12,7 @@ use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\RichText\RichText;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
 use PhpOffice\PhpSpreadsheet\Worksheet\Worksheet;
+use App\Services\SchoolLogoService;
 
 class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHeadings, WithStyles
 {
@@ -107,7 +108,7 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
         $yearRun->getFont()->setBold(true)->setItalic(true);
         $sheet->getCell('A4')->setValue($periodText);
         // MBES school logo on the left, DepEd seal on the right.
-        foreach ([['images/id/mbes-logo-1.png', 'A1'], ['images/id/kagawaran_ng_edukasyo.jpeg', 'Y1']] as [$path, $coordinate]) {
+        foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/kagawaran_ng_edukasyo.jpeg'), 'Y1']] as [$path, $coordinate]) {
           $drawing = new Drawing();
           $drawing->setPath(public_path($path));
           $drawing->setHeight(42);

@@ -10,6 +10,7 @@ use App\Models\SbfpParticipant;
 use App\Models\AttendanceReportMonth;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
+use App\Services\AttendanceService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
@@ -19,6 +20,10 @@ use Throwable;
 
 class AttendanceController extends Controller
 {
+    public function __construct(private AttendanceService $attendanceService)
+    {
+    }
+
     public function index(Request $request)
     {
         return $this->attendanceIndex($request, true, 'encoder');
@@ -40,6 +45,7 @@ class AttendanceController extends Controller
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
         $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $this->attendanceService->markPastMealDaysAbsent(Auth::id(), $activeSyId);
 
         $studentQuery = Student::with([
             'enrollments' => function ($q) use ($activeSyId) {
@@ -112,8 +118,9 @@ class AttendanceController extends Controller
 
         $gradeLevels = $encoderScope ? collect() : \App\Models\Enrollment::where('school_year_id', $activeSyId)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = $encoderScope ? collect() : \App\Models\Enrollment::where('school_year_id', $activeSyId)->distinct()->orderBy('section')->pluck('section');
+        $hasMeal = MealPlan::whereDate('meal_date', $date)->exists();
 
-        return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'loggedDates', 'routePrefix', 'gradeLevels', 'sections'));
+        return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'loggedDates', 'routePrefix', 'gradeLevels', 'sections', 'hasMeal'));
     }
 
     public function scan(Request $request)
@@ -205,33 +212,37 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'sbfp_participant_id' => 'required|exists:sbfp_participants,id',
             'date' => 'required|date',
-            'status' => 'required|in:present,absent'
+            'status' => 'required|in:present,absent,unmarked'
         ]);
 
         $participant = SbfpParticipant::with('enrollment.student')->findOrFail($validated['sbfp_participant_id']);
-        if (
-            $validated['status'] === 'present'
-            && !MealPlan::whereDate('meal_date', $validated['date'])->exists()
-        ) {
-            return back()->with('error', 'Add meal first before recording present attendance.');
+        $hasMeal = MealPlan::whereDate('meal_date', $validated['date'])->exists();
+        if (in_array($validated['status'], ['present', 'absent'], true) && !$hasMeal) {
+            return back()->with('error', 'Add meal first before recording attendance.');
         }
 
         $existingRecord = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
             ->whereDate('attendance_date', $validated['date'])
             ->first();
 
-        StudentAttendanceRecord::updateOrCreate(
-            [
-                'sbfp_participant_id' => $validated['sbfp_participant_id'],
-                'attendance_date' => $validated['date'],
-            ],
-            [
-                'recorded_by_user_id' => Auth::id(),
-                'status' => $validated['status']
-            ]
-        );
+        if ($validated['status'] === 'unmarked') {
+            $existingRecord?->delete();
+        } else {
+            StudentAttendanceRecord::updateOrCreate(
+                [
+                    'sbfp_participant_id' => $validated['sbfp_participant_id'],
+                    'attendance_date' => $validated['date'],
+                ],
+                [
+                    'recorded_by_user_id' => Auth::id(),
+                    'status' => $validated['status']
+                ]
+            );
+        }
 
-        $this->ensureAttendanceMonth($participant->enrollment->school_year_id, $validated['date']);
+        if ($validated['status'] !== 'unmarked') {
+            $this->ensureAttendanceMonth($participant->enrollment->school_year_id, $validated['date']);
+        }
 
         if (
             $validated['status'] === 'present'

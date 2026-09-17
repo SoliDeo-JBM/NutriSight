@@ -45,10 +45,12 @@
         .export-logo {
             position: absolute;
             top: 0;
-            left: 0;
             width: 42px;
             height: 42px;
         }
+
+        .export-logo.left { left: 20px; }
+        .export-logo.right { right: 20px; }
 
         table {
             border-collapse: collapse;
@@ -131,12 +133,21 @@
             width: 9px;
             margin-right: 3px;
         }
+
+        .signatures { width: 100%; margin-top: 16px; text-align: center; }
+        .signatures td { width: 50%; border: 0; text-align: left; padding-left: 50px; }
+        .signature-stack { width: 190px; }
+        .signature-gap { height: 24px; }
+        .signature-line { border-bottom: 1px solid #333; width: 190px; }
+        .signature-name { text-align: center; font-weight: bold; margin-top: 4px; }
+        .signature-role { text-align: center; margin-top: 2px; }
     </style>
 </head>
 
 <body>
     <div class="export-header">
-        <!-- <img class="export-logo" src="{{ public_path('images/id/mbes-logo-1.png') }}" alt="School logo"> -->
+        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path() }}" alt="School logo">
+        <img class="export-logo right" src="{{ public_path('images/id/kagawaran_ng_edukasyo.jpeg') }}" alt="Department of Education seal">
         <h1>SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT</h1>
         <p class="subtitle">Marisol Bliss Elementary School | SY {{ $assessment['school_year'] }}</p>
     </div>
@@ -316,6 +327,7 @@
     </table>
     <div class="legend">@foreach($transitionCategories as $category => $color)<span class="legend-item"><span class="legend-color" style="background:{{ $color }};"></span>{{ $category }}</span>@endforeach</div>
     <p class="note"><strong>Transition interpretation:</strong> The cohort's Normal status changed from {{ $baselineNormal }} at Baseline to {{ $midlineNormal }} at Midline and {{ $endlineNormal }} at Endline. By Endline, {{ $endlineNormal }} of {{ $transitionTotal }} participants were Normal, while {{ $endlineSupport }} remained Wasted or Severely Wasted and may need continued support.</p>
+    <table class="signatures"><tr><td><div class="signature-stack">Prepared by:<div class="signature-gap"></div><div class="signature-line"></div><div class="signature-name">{{ $adminName }}</div><div class="signature-role">Project Development Officer</div></div></td><td><div class="signature-stack">Noted by:<div class="signature-gap"></div><div class="signature-line"></div><div class="signature-name">{{ $superAdminName }}</div><div class="signature-role">School Head</div></div></td></tr></table>
 </body>
 
 </html>

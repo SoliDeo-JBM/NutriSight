@@ -24,8 +24,8 @@
         
         <!-- LEFT COLUMN: Brand & Visuals -->
         <!-- Visible on md (768px) and above. Slightly wider than the form panel. -->
-        <div class="hidden md:flex md:w-[55%] relative items-center justify-center bg-cover bg-center" 
-             style="background-image: url('https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&q=80&w=1200');">
+           <div class="hidden md:flex md:w-[55%] relative items-center justify-center bg-cover bg-center" 
+               style="background-image: url('{{ asset('images/id/marisol-bliss-school.jpg') }}');">
             
             <!-- High-contrast overlay for readability -->
             <div class="absolute inset-0 bg-stone-900/70 backdrop-blur-sm"></div>

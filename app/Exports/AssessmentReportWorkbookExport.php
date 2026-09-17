@@ -10,17 +10,18 @@ use Maatwebsite\Excel\Concerns\WithMultipleSheets;
 use Maatwebsite\Excel\Concerns\WithTitle;
 use Maatwebsite\Excel\Events\AfterSheet;
 use PhpOffice\PhpSpreadsheet\Worksheet\Drawing;
+use App\Services\SchoolLogoService;
 
 class AssessmentReportWorkbookExport implements Export, WithMultipleSheets
 {
-    public function __construct(private readonly array $assessment) {}
+    public function __construct(private readonly array $assessment, private readonly string $adminName = 'Full Name of the Admin', private readonly string $superAdminName = 'Full Name of the Super Admin') {}
 
     public function sheets(): array
     {
         $assessment = $this->assessment;
 
         return [
-            new AssessmentReportSheet('Summary', AssessmentReportExport::columnHeadings(), [AssessmentReportExport::values($assessment)]),
+            new AssessmentReportSheet('Summary', AssessmentReportExport::columnHeadings(), [AssessmentReportExport::values($assessment)], $this->assessment, $this->adminName, $this->superAdminName),
             new AssessmentReportSheet('Attendance Demographics', ['Sex', 'Age', 'Complete Attendance', 'Complete %', 'With Absences', 'Absence %'], $this->attendanceRows($assessment['attendance_demographics'])),
             new AssessmentReportSheet('Participants', ['Sex', 'Age', 'Participants', 'Percentage'], $this->participantRows($assessment['participant_demographics'])),
             new AssessmentReportSheet('Endline Recovery', ['Sex', 'Age', 'Recovered to Normal', 'Recovered %', 'Still Needing Support', 'Support %'], $this->recoveryRows($assessment['recovery_demographics'])),
@@ -84,6 +85,9 @@ class AssessmentReportSheet implements FromArray, WithEvents, WithHeadings, With
         private readonly string $title,
         private readonly array $headings,
         private readonly array $rows,
+        private readonly array $assessment = [],
+        private readonly string $adminName = 'Full Name of the Admin',
+        private readonly string $superAdminName = 'Full Name of the Super Admin',
     ) {}
 
     public function array(): array
@@ -107,18 +111,50 @@ class AssessmentReportSheet implements FromArray, WithEvents, WithHeadings, With
             return [];
         }
 
-        return [
-            // Same school logo used on the SBFP student ID cards.
-            // AfterSheet::class => function (AfterSheet $event) {
-            //     $drawing = new Drawing();
-            //     $drawing->setName('School logo');
-            //     $drawing->setPath(public_path('images/id/mbes-logo-1.png'));
-            //     $drawing->setHeight(42);
-            //     $drawing->setCoordinates('A1');
-            //     $drawing->setOffsetX(4);
-            //     $drawing->setOffsetY(4);
-            //     $drawing->setWorksheet($event->sheet->getDelegate());
-            // },
-        ];
+        return [AfterSheet::class => function (AfterSheet $event): void {
+            $sheet = $event->sheet->getDelegate();
+            $sheet->insertNewRowBefore(1, 5);
+            $sheet->mergeCells('A1:K1');
+            $sheet->mergeCells('A2:K2');
+            $sheet->mergeCells('A3:K3');
+            $sheet->mergeCells('A4:K4');
+            $lastRow = count($this->rows) + 6;
+            $signatureRow = $lastRow + 2;
+            foreach ([
+                'A' . $signatureRow . ':F' . $signatureRow,
+                'G' . $signatureRow . ':K' . $signatureRow,
+                'A' . ($signatureRow + 1) . ':F' . ($signatureRow + 1),
+                'G' . ($signatureRow + 1) . ':K' . ($signatureRow + 1),
+                'A' . ($signatureRow + 2) . ':F' . ($signatureRow + 2),
+                'G' . ($signatureRow + 2) . ':K' . ($signatureRow + 2),
+                'A' . ($signatureRow + 3) . ':F' . ($signatureRow + 3),
+                'G' . ($signatureRow + 3) . ':K' . ($signatureRow + 3),
+            ] as $range) {
+                $sheet->mergeCells($range);
+            }
+            $sheet->setCellValue('A1', 'Department of Education');
+            $sheet->setCellValue('A2', 'Bureau of Learner Support Services');
+            $sheet->setCellValue('A3', 'SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT');
+            $sheet->setCellValue('A4', 'Marisol Bliss Elementary School | SY ' . ($this->assessment['school_year'] ?? ''));
+            $sheet->setCellValue('A' . $signatureRow, 'Prepared by:');
+            $sheet->setCellValue('G' . $signatureRow, 'Noted by:');
+            $sheet->setCellValue('A' . ($signatureRow + 1), '____________________________');
+            $sheet->setCellValue('G' . ($signatureRow + 1), '________________________________');
+            $sheet->setCellValue('A' . ($signatureRow + 2), $this->adminName);
+            $sheet->setCellValue('G' . ($signatureRow + 2), $this->superAdminName);
+            $sheet->setCellValue('A' . ($signatureRow + 3), 'Project Development Officer');
+            $sheet->setCellValue('G' . ($signatureRow + 3), 'School Head');
+            foreach ([[SchoolLogoService::path(), 'A1'], [public_path('images/id/kagawaran_ng_edukasyo.jpeg'), 'K1']] as [$path, $coordinate]) {
+                $drawing = new Drawing();
+                $drawing->setPath(public_path($path));
+                $drawing->setHeight(42);
+                $drawing->setCoordinates($coordinate);
+                $drawing->setWorksheet($sheet);
+            }
+            $sheet->getStyle('A1:K' . ($signatureRow + 3))->getAlignment()->setHorizontal('center')->setVertical('center')->setWrapText(true);
+            $sheet->getStyle('A3')->getFont()->setBold(true)->setSize(14);
+            $sheet->getStyle('A' . $signatureRow . ':K' . $signatureRow)->getFont()->setBold(true);
+            $sheet->getStyle('A' . ($signatureRow + 2) . ':K' . ($signatureRow + 2))->getFont()->setBold(true);
+        }];
     }
 }

@@ -1,6 +1,121 @@
 @extends('layouts.dashboard')
 
 @section('content')
+@if(in_array($routePrefix, ['encoder', 'admin', 'super-admin'], true))
+<div class="space-y-5">
+    <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+            <h1 class="text-2xl font-bold text-slate-900">{{ $routePrefix === 'encoder' ? 'Attendance List' : 'Complete Attendance List' }}</h1>
+            <p class="mt-1 text-sm text-slate-500">Record feeding attendance for {{ $routePrefix === 'encoder' ? 'your advisory class' : 'all approved SBFP students' }}.</p>
+        </div>
+        <form method="GET" action="{{ route($routePrefix . '.attendance.index') }}" class="flex items-end gap-2">
+            <div>
+                <label for="attendance-date" class="mb-1 block text-xs font-semibold text-slate-600">Feeding date</label>
+                <input id="attendance-date" type="date" name="date" value="{{ $date }}" onchange="this.form.submit()" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">
+            </div>
+            @if($routePrefix !== 'encoder')
+            <div>
+                <label for="attendance-grade" class="mb-1 block text-xs font-semibold text-slate-600">Grade</label>
+                <select id="attendance-grade" name="grade_level" onchange="this.form.submit()" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">
+                    <option value="">All grades</option>
+                    @foreach($gradeLevels as $grade)
+                    <option value="{{ $grade }}" @selected(request('grade_level') == $grade)>{{ $grade == 0 ? 'Kinder' : 'Grade ' . $grade }}</option>
+                    @endforeach
+                </select>
+            </div>
+            <div>
+                <label for="attendance-section" class="mb-1 block text-xs font-semibold text-slate-600">Section</label>
+                <select id="attendance-section" name="section" onchange="this.form.submit()" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">
+                    <option value="">All sections</option>
+                    @foreach($sections as $section)
+                    <option value="{{ $section }}" @selected(request('section') === $section)>{{ $section }}</option>
+                    @endforeach
+                </select>
+            </div>
+            @endif
+        </form>
+    </div>
+
+    <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
+        <div class="relative flex-1">
+            <label for="attendance-search" class="sr-only">Search student name</label>
+            <i class="fas fa-search pointer-events-none absolute left-3 top-3 text-slate-400"></i>
+            <input id="attendance-search" type="search" placeholder="Search student name..." class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+        </div>
+        <select id="attendance-status-filter" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <option value="all">All statuses</option>
+            <option value="present">Present</option>
+            <option value="absent">Absent</option>
+            <option value="unmarked">Unmarked</option>
+        </select>
+        <select id="attendance-sort" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="grade-asc">Grade low-high</option>
+            <option value="section-asc">Section A-Z</option>
+        </select>
+    </div>
+
+    @if(!$hasMeal)
+    <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+        No meal is scheduled for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}. Add a meal before marking a student present or absent.
+    </div>
+    @endif
+
+    <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+        <table id="encoder-attendance-table" class="min-w-full divide-y divide-slate-200">
+            <thead class="bg-slate-100 text-left text-xs font-bold uppercase tracking-wide text-slate-600">
+                <tr><th class="px-4 py-3">No.</th><th class="px-4 py-3">Name of pupil</th><th class="px-4 py-3">Grade level</th><th class="px-4 py-3">Section</th><th class="px-4 py-3">Status</th><th class="min-w-[220px] px-4 py-3 text-center">Action</th></tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-sm">
+            @forelse($sbfpStudents as $student)
+                @php
+                    $enrollment = $student->enrollments->first();
+                    $participantId = $enrollment?->sbfpParticipant?->id;
+                    $status = $participantId ? ($attendanceLogs[$participantId]?->status ?? 'unmarked') : 'unmarked';
+                    $grade = (int) ($enrollment?->grade_level ?? 0);
+                @endphp
+                <tr data-name="{{ strtolower($student->last_name . ' ' . $student->first_name) }}" data-grade="{{ $grade }}" data-section="{{ strtolower($enrollment?->section ?? '') }}" data-status="{{ $status }}" class="attendance-row hover:bg-slate-50">
+                    <td class="px-4 py-3 text-slate-500"></td>
+                    <td class="px-4 py-3 font-semibold text-slate-900">{{ $student->last_name }}, {{ $student->first_name }}<div class="text-xs font-normal text-slate-500">{{ $student->student_number }}</div></td>
+                    <td class="px-4 py-3">{{ $grade === 0 ? 'Kinder' : 'Grade ' . $grade }}</td>
+                    <td class="px-4 py-3">{{ $enrollment?->section }}</td>
+                    <td class="px-4 py-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $status === 'present' ? 'bg-emerald-100 text-emerald-800' : ($status === 'absent' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600') }}">{{ ucfirst($status) }}</span></td>
+                    <td class="min-w-[220px] px-2 py-3"><form action="{{ route($routePrefix . '.attendance.update') }}" method="POST" class="mx-auto grid max-w-[220px] grid-cols-[1fr_1fr_32px] items-center gap-1">@csrf<input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}"><input type="hidden" name="date" value="{{ $date }}"><button type="submit" name="status" value="present" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-emerald-100' }} disabled:cursor-not-allowed disabled:opacity-50">Present</button><button type="submit" name="status" value="absent" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'absent' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-rose-100' }} disabled:cursor-not-allowed disabled:opacity-50">Absent</button><button type="submit" name="status" value="unmarked" title="Clear attendance status" aria-label="Clear attendance status" class="h-8 w-8 rounded-md bg-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">X</button></form></td>
+                </tr>
+            @empty
+                <tr><td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500">No approved SBFP students found.</td></tr>
+            @endforelse
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+    (() => {
+        const table = document.getElementById('encoder-attendance-table');
+        const search = document.getElementById('attendance-search');
+        const filter = document.getElementById('attendance-status-filter');
+        const sort = document.getElementById('attendance-sort');
+        const rows = () => [...table.querySelectorAll('.attendance-row')];
+        const render = () => {
+            const query = search.value.trim().toLowerCase();
+            const status = filter.value;
+            const visible = rows().filter((row) => row.dataset.name.includes(query) && (status === 'all' || row.dataset.status === status));
+            rows().forEach((row) => { row.hidden = !visible.includes(row); });
+            visible.forEach((row, index) => { row.querySelector('td').textContent = index + 1; });
+        };
+        sort.addEventListener('change', () => {
+            const [field, direction] = sort.value.split('-');
+            const body = table.querySelector('tbody');
+            rows().sort((a, b) => { const result = field === 'grade' ? Number(a.dataset.grade) - Number(b.dataset.grade) : a.dataset[field].localeCompare(b.dataset[field], undefined, { numeric: true }); return direction === 'desc' ? -result : result; }).forEach((row) => body.appendChild(row));
+            render();
+        });
+        search.addEventListener('input', render);
+        filter.addEventListener('change', render);
+        render();
+    })();
+</script>
+@else
 <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">{{ $routePrefix === 'encoder' ? 'Attendance Dashboard & Calendar' : 'Complete Attendance List' }}</h1>
 </div>
@@ -134,4 +249,5 @@
     </div>
 </div>
 </div>
+@endif
 @endsection

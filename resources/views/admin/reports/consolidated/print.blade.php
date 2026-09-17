@@ -132,7 +132,7 @@
 
 <body>
     <div class="export-header">
-        <img class="export-logo left" src="{{ public_path('images/id/mbes-logo-1.png') }}" alt="School logo">
+        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path() }}" alt="School logo">
         <img class="export-logo right" src="{{ public_path('images/id/kagawaran_ng_edukasyo.jpeg') }}" alt="Department of Education seal">
         <p class="export-heading">Department of Education</p>
         <p class="export-heading">Bureau of Learner Support Services</p>

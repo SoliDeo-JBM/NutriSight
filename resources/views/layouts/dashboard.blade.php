@@ -51,7 +51,7 @@
             </div>
 
             <!-- System Administration Dropdown -->
-            <div x-data="{ open: {{ request()->routeIs('super-admin.school-years.*', 'super-admin.accounts.*', 'super-admin.audit-logs.*') ? 'true' : 'false' }} }" x-cloak class="my-1">
+            <div x-data="{ open: {{ request()->routeIs('super-admin.school-years.*', 'super-admin.accounts.*', 'super-admin.audit-logs.*', 'super-admin.school-logo.*') ? 'true' : 'false' }} }" x-cloak class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
                     <span class="flex items-center gap-3"><i class="fas fa-cogs w-5 text-center"></i> Administration</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
@@ -60,6 +60,7 @@
                     <a href="{{ route('super-admin.school-years.index') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.school-years.*') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">School Years</a>
                     <a href="{{ route('super-admin.accounts.index') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.accounts.*') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Admin Accounts</a>
                     <a href="{{ route('super-admin.audit-logs.index') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.audit-logs.*') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Audit Logs</a>
+                    <a href="{{ route('super-admin.school-logo.edit') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.school-logo.*') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">School Logo</a>
                 </div>
             </div>
 

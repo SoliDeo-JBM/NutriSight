@@ -40,7 +40,7 @@
 
     <main>
         <section id="hero" class="relative scroll-mt-20 overflow-hidden bg-white">
-            <div class="grid lg:min-h-[620px] lg:grid-cols-[1.1fr_0.9fr]">
+            <div class="grid lg:min-h-[100dvh] lg:grid-cols-[1.1fr_0.9fr]">
                 <div class="relative flex min-h-[420px] items-center justify-center overflow-hidden bg-slate-50 px-4 py-12 sm:px-8 lg:px-10">
                     <div class="relative z-10 w-full max-w-[650px] [perspective:1400px]">
                         <div class="relative rounded-[1.25rem] border-[7px] border-stone-800 bg-stone-800 p-2 shadow-2xl [transform:rotateX(2deg)]">
@@ -129,15 +129,16 @@
                     </div>
                 </div>
 
-                <div class="flex items-center bg-slate-50 px-6 py-16 sm:px-12 lg:px-16">
-                    <div class="max-w-xl">
-                        <h1 class="text-4xl font-extrabold tracking-tight text-slate-900 sm:text-5xl lg:text-6xl">
-                            Feeding Program, <span class="text-orange-600">Programmed</span>
+                <div class="relative flex min-h-[100dvh] items-center bg-cover bg-center px-6 py-16 sm:px-12 lg:px-16" style="background-image: url('{{ asset('images/id/marisol-bliss-school.jpg') }}');">
+                    <div class="absolute inset-0 bg-stone-900/70 backdrop-blur-sm"></div>
+                    <div class="relative z-10 max-w-xl">
+                        <h1 class="text-4xl font-extrabold tracking-tight text-white sm:text-5xl lg:text-6xl">
+                            Feeding Program, <span class="text-orange-400">Programmed</span>
                         </h1>
-                        <p class="mt-6 max-w-lg text-lg leading-8 text-slate-600">One focused workspace for Marisol Bliss' SBFP.</p>
+                        <p class="mt-6 max-w-lg text-xl leading-8 text-slate-200 sm:text-2xl">One focused School Based Feeding Program workspace for <strong class="font-extrabold text-white">Marisol Bliss Elementary School</strong>.</p>
                         <div class="mt-8 flex flex-col gap-3 sm:flex-row">
                             <a href="{{ route('login') }}" class="inline-flex items-center justify-center rounded-lg bg-orange-600 px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-orange-700 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">Get Started</a>
-                            <a href="#features" class="inline-flex items-center justify-center rounded-lg border border-orange-600 px-6 py-3 text-sm font-bold text-orange-600 transition hover:bg-orange-50 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2">Learn More</a>
+                            <a href="#features" class="inline-flex items-center justify-center rounded-lg border border-orange-400 px-6 py-3 text-sm font-bold text-orange-300 transition hover:bg-orange-400/10 focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2">Learn More</a>
                         </div>
                     </div>
                 </div>

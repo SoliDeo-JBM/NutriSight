@@ -34,14 +34,14 @@
 
     <section class="attendance-sheet overflow-x-auto rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
         <table id="attendanceTable" class="attendance-grid w-full">
-            <thead><tr><th rowspan="2" class="title-head number-column">No.</th><th rowspan="2" class="title-head name-column">NAME OF PUPIL</th><th rowspan="2" class="title-head grade-column">GRADE LEVEL</th><th rowspan="2" class="title-head section-column">SECTION</th><th colspan="20" class="title-head">ACTUAL FEEDING</th></tr><tr>@foreach(range(1, 20) as $day)<th class="day-column day-head">{{ $day }}</th>@endforeach</tr></thead>
+            <thead><tr><th rowspan="2" class="title-head number-column">No.</th><th rowspan="2" class="title-head name-column">NAME OF PUPIL</th><th rowspan="2" class="title-head grade-column">GRADE LEVEL</th><th rowspan="2" class="title-head section-column">SECTION</th><th colspan="{{ $daysInMonth }}" class="title-head">ACTUAL FEEDING</th></tr><tr>@foreach(range(1, $daysInMonth) as $day)<th class="day-column day-head">{{ $day }}</th>@endforeach</tr></thead>
             <tbody>
                 @forelse($students as $student)
                     <tr data-name="{{ strtolower($student['name']) }}" data-grade="{{ $student['grade_level'] }}" data-section="{{ strtolower($student['section']) }}"><td class="number-column">{{ $student['number'] }}</td><td class="name-column font-semibold text-slate-800">{{ $student['name'] }}</td><td class="grade-column">{{ $student['grade_level'] === 0 ? 'Kinder' : ($student['grade_level'] === 7 ? 'SPED' : 'Grade ' . $student['grade_level']) }}</td><td class="section-column">{{ $student['section'] }}</td>@foreach($student['days'] as $status)@php($present = in_array(strtolower((string) $status), ['present', 'p', 'served']))<td class="day-column {{ $present ? 'present' : (in_array(strtolower((string) $status), ['absent', 'a']) ? 'absent' : '') }}">{{ $present ? '✓' : (in_array(strtolower((string) $status), ['absent', 'a']) ? 'A' : '') }}</td>@endforeach</tr>
                 @empty
-                    <tr><td colspan="24" class="py-10 text-center text-sm text-slate-500">No enrolled pupils found.</td></tr>
+                    <tr><td colspan="{{ 4 + $daysInMonth }}" class="py-10 text-center text-sm text-slate-500">No enrolled pupils found.</td></tr>
                 @endforelse
-                <tr class="total-row"><td colspan="4" class="name-column text-right">TOTAL:</td>@foreach(range(1, 20) as $day)<td>{{ $students->filter(fn ($student) => in_array(strtolower((string) ($student['days'][$day] ?? '')), ['present', 'p', 'served']))->count() ?: '' }}</td>@endforeach</tr>
+                <tr class="total-row"><td colspan="4" class="name-column text-right">TOTAL:</td>@foreach(range(1, $daysInMonth) as $day)<td>{{ $students->filter(fn ($student) => in_array(strtolower((string) ($student['days'][$day] ?? '')), ['present', 'p', 'served']))->count() ?: '' }}</td>@endforeach</tr>
             </tbody>
         </table>
     </section>

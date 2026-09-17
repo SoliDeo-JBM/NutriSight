@@ -16,6 +16,7 @@ use App\Models\Student;
 use App\Models\User;
 use App\Services\SchoolYearManager;
 use App\Services\ReportPeriodManager;
+use App\Services\SchoolLogoService;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
@@ -113,9 +114,10 @@ class ReportsController extends Controller
         $selectedGrade = $request->filled('grade') ? (int) $request->input('grade') : null;
         $selectedSection = $request->filled('section') ? $request->input('section') : null;
         $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection);
+        $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
         $grades = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('grade_level')->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('section')->distinct()->orderBy('section')->pluck('section');
-        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $this->attendanceCalendarYear($month->schoolYear, $month->month), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection]);
+        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => cal_days_in_month(CAL_GREGORIAN, $month->month, $calendarYear), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection]);
     }
 
     public function storeAttendanceSection(Request $request, AttendanceReportMonth $month)
@@ -140,7 +142,8 @@ class ReportsController extends Controller
     {
         $section->load('month.schoolYear');
         $students = $this->attendanceStudents($section->month->schoolYear, $section->month->month, $section->grade_level, $section->section);
-        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $this->attendanceCalendarYear($section->month->schoolYear, $section->month->month), 'students' => $students]);
+        $calendarYear = $this->attendanceCalendarYear($section->month->schoolYear, $section->month->month);
+        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => cal_days_in_month(CAL_GREGORIAN, $section->month->month, $calendarYear), 'students' => $students]);
     }
 
     public function showAttendanceGradeSummary(AttendanceReportMonth $month, int $grade)
@@ -196,7 +199,8 @@ class ReportsController extends Controller
             ->map(function (Student $student, int $index) use ($month, $calendarYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $days = [];
-                for ($day = 1; $day <= 20; $day++) {
+                $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month, $calendarYear);
+                for ($day = 1; $day <= $daysInMonth; $day++) {
                     $record = $records->first(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
                     $days[$day] = $record?->status;
                 }
@@ -207,26 +211,50 @@ class ReportsController extends Controller
     public function exportAttendanceExcel(AttendanceReportMonth $month)
     {
         $month->load('schoolYear');
-        return Excel::download(new AttendanceReportExport($this->attendanceStudents($month->schoolYear, $month->month), $month), 'attendance-' . $month->month . '.xlsx');
+        [$adminName, $superAdminName] = $this->reportSignatories();
+        return Excel::download(new AttendanceReportExport($this->attendanceStudents($month->schoolYear, $month->month), $month, $adminName, $superAdminName), 'attendance-' . $month->month . '.xlsx');
     }
 
     public function exportAttendanceDocx(AttendanceReportMonth $month)
     {
         $month->load('schoolYear');
         $students = $this->attendanceStudents($month->schoolYear, $month->month);
+        [$adminName, $superAdminName] = $this->reportSignatories();
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
-        $section->addText('SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING', ['bold' => true, 'size' => 13]);
-        $section->addText('For the month of ' . date('F', mktime(0, 0, 0, $month->month, 1)) . ', SY ' . $month->schoolYear->year);
+        $header = $section->addHeader();
+        $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $headerTable->addRow();
+        $headerTable->addCell(1000)->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
+        $headerText = $headerTable->addCell(8000)->addTextRun(['alignment' => 'center']);
+        $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING', ['bold' => true, 'size' => 13]);
+        $headerText->addTextBreak();
+        $headerText->addText('For the month of ' . date('F', mktime(0, 0, 0, $month->month, 1)) . ', SY ' . $month->schoolYear->year);
+        $headerTable->addCell(1000)->addImage(public_path('images/id/kagawaran_ng_edukasyo.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
         $table = $section->addTable(['borderSize' => 6]);
         $table->addRow();
-        foreach (AttendanceReportExport::columnHeadings() as $heading)
+        $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
+        $daysInMonth = cal_days_in_month(CAL_GREGORIAN, $month->month, $calendarYear);
+        foreach (AttendanceReportExport::columnHeadings($daysInMonth) as $heading)
             $table->addCell(700)->addText($heading, ['bold' => true, 'size' => 7]);
         foreach ($students as $student) {
             $table->addRow();
             foreach (AttendanceReportExport::values($student) as $value)
                 $table->addCell(700)->addText((string) $value, ['size' => 7]);
         }
+        $signatureTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('Prepared by:', ['bold' => true, 'size' => 8]);
+        $signatureTable->addCell(5000)->addText('Noted by:', ['bold' => true, 'size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('____________________________', ['size' => 8]);
+        $signatureTable->addCell(5000)->addText('________________________________', ['size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText("  {$adminName}", ['bold' => true, 'size' => 8]);
+        $signatureTable->addCell(5000)->addText("  {$superAdminName}", ['bold' => true, 'size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('Project Development Officer', ['size' => 8]);
+        $signatureTable->addCell(5000)->addText('School Head', ['size' => 8]);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-attendance-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
         return response()->download($path, 'attendance-report.docx')->deleteFileAfterSend(true);
@@ -236,7 +264,9 @@ class ReportsController extends Controller
     {
         $month->load('schoolYear');
         $students = $this->attendanceStudents($month->schoolYear, $month->month);
-        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
+        $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
+        [$adminName, $superAdminName] = $this->reportSignatories();
+        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
     }
 
     public function exportAttendanceSql(AttendanceReportMonth $month): Response
@@ -457,7 +487,7 @@ class ReportsController extends Controller
         $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
         $headerTable->addRow();
         // Same school logo used on the SBFP student ID cards.
-        $headerTable->addCell(1000)->addImage(public_path('images/id/mbes-logo-1.png'), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
+        $headerTable->addCell(1000)->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
         $headerText = $headerTable->addCell(8000)->addTextRun(['alignment' => 'center']);
         $headerText->addText('Department of Education', ['size' => 10]);
         $headerText->addTextBreak();
@@ -657,22 +687,25 @@ class ReportsController extends Controller
 
     public function exportAssessmentExcel()
     {
-        return Excel::download(new AssessmentReportWorkbookExport($this->assessmentData(SchoolYearManager::activeSchoolYear())), 'sbfp-assessment.xlsx');
+        [$adminName, $superAdminName] = $this->reportSignatories();
+        return Excel::download(new AssessmentReportWorkbookExport($this->assessmentData(SchoolYearManager::activeSchoolYear()), $adminName, $superAdminName), 'sbfp-assessment.xlsx');
     }
 
     public function exportAssessmentDocx()
     {
         $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
+        [$adminName, $superAdminName] = $this->reportSignatories();
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 600]);
-        $headerTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $header = $section->addHeader();
+        $headerTable = $header->addTable(['borderSize' => 0, 'cellMargin' => 0]);
         $headerTable->addRow();
-        // Same school logo used on the SBFP student ID cards.
-        // $headerTable->addCell(1000)->addImage(public_path('images/id/mbes-logo-1.png'), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
+        $headerTable->addCell(1000)->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'left']);
         $headerText = $headerTable->addCell(9000)->addTextRun(['alignment' => 'center']);
         $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
         $headerText->addTextBreak();
         $headerText->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
+        $headerTable->addCell(1000)->addImage(public_path('images/id/kagawaran_ng_edukasyo.jpeg'), ['width' => 42, 'height' => 42, 'alignment' => 'right']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
         $table->addRow();
         foreach (AssessmentReportExport::columnHeadings() as $heading) {
@@ -700,6 +733,19 @@ class ReportsController extends Controller
         }
         $this->addDocxRows($section, ['Period', 'Nutrition status', 'Count'], $periodRows, 'Baseline vs Midline vs Endline Rehabilitation Transition');
         $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
+        $signatureTable = $section->addTable(['borderSize' => 0, 'cellMargin' => 0]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('Prepared by:', ['bold' => true, 'size' => 8]);
+        $signatureTable->addCell(5000)->addText('Noted by:', ['bold' => true, 'size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('____________________________', ['size' => 8]);
+        $signatureTable->addCell(5000)->addText('________________________________', ['size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText("  {$adminName}", ['bold' => true, 'size' => 8]);
+        $signatureTable->addCell(5000)->addText("  {$superAdminName}", ['bold' => true, 'size' => 8]);
+        $signatureTable->addRow();
+        $signatureTable->addCell(5000)->addText('Project Development Officer', ['size' => 8]);
+        $signatureTable->addCell(5000)->addText('School Head', ['size' => 8]);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -710,8 +756,9 @@ class ReportsController extends Controller
     {
         $schoolYear = SchoolYearManager::activeSchoolYear();
         $assessment = $this->assessmentData($schoolYear);
+        [$adminName, $superAdminName] = $this->reportSignatories();
 
-        return Pdf::loadView('admin.reports.assessment.print', compact('schoolYear', 'assessment'))->setPaper('a4', 'landscape')->download('sbfp-assessment.pdf');
+        return Pdf::loadView('admin.reports.assessment.print', compact('schoolYear', 'assessment', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('sbfp-assessment.pdf');
     }
 
     public function exportAssessmentSql(): Response
