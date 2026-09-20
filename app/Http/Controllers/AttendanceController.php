@@ -62,46 +62,37 @@ class AttendanceController extends Controller
             });
 
         if (!$encoderScope) {
-            $studentQuery->whereHas('enrollments', function ($enrollmentQuery) use ($activeSyId) {
-                $enrollmentQuery->where('school_year_id', $activeSyId)
-                    ->whereHas('sbfpParticipant', function ($participantQuery) {
-                        $participantQuery->where('parent_consent', 'approved')
-                            ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                                $measurementQuery->where('measurement_period', 'baseline')
-                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                            });
-                    });
-            })->whereHas('enrollments', function ($query) use ($activeSyId, $request) {
+            $studentQuery->whereHas('enrollments', function ($query) use ($activeSyId, $request) {
                 $query->where('school_year_id', $activeSyId)
                     ->when($request->filled('grade_level'), fn($q) => $q->where('grade_level', $request->input('grade_level')))
                     ->when($request->filled('section'), fn($q) => $q->where('section', $request->input('section')));
             });
         }
 
-        $sbfpStudents = $studentQuery->get()->filter(function ($student) use ($activeSyId, $date, $encoderScope) {
-            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
-            if (!$enrollment || !$enrollment->sbfpParticipant) {
-                return false;
-            }
-            $participant = $enrollment->sbfpParticipant;
+        $studentQuery->whereHas('enrollments', function ($enrollmentQuery) use ($activeSyId, $date, $encoderScope) {
+            $enrollmentQuery->where('school_year_id', $activeSyId)
+                ->whereHas('sbfpParticipant', function ($participantQuery) use ($date, $encoderScope) {
+                    if (!$encoderScope) {
+                        $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                            $measurementQuery->where('measurement_period', 'baseline')
+                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                        });
+                    }
 
-            // If attendance record exists for this date, ALWAYS include them (e.g. from QR scan)
-            $hasAttendance = StudentAttendanceRecord::where('attendance_date', $date)
-                ->where('sbfp_participant_id', $participant->id)
-                ->exists();
-            if ($hasAttendance) {
-                return true;
-            }
-
-            if (!$encoderScope) {
-                return $participant->parent_consent === 'approved';
-            }
-
-            if ($participant->parent_consent === 'disapproved') {
-                return false;
-            }
-            return $participant->parent_consent === 'approved';
+                    $participantQuery->where(function ($consentQuery) use ($date) {
+                        $consentQuery->where('parent_consent', 'approved')
+                            ->orWhereHas('attendanceRecords', function ($attendanceQuery) use ($date) {
+                                $attendanceQuery->whereDate('attendance_date', $date);
+                            });
+                    });
+                });
         });
+
+        $sbfpStudents = $studentQuery
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->paginate(25)
+            ->withQueryString();
 
         // Get attendance logs for the date keyed by sbfp_participant_id
         $participantIds = $sbfpStudents->pluck('enrollments')->flatten()->pluck('sbfpParticipant.id')->filter();

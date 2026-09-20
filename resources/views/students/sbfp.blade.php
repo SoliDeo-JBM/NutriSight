@@ -223,7 +223,7 @@
             <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
                 <h3 class="text-lg font-bold mb-1">Parent's Approval</h3>
                 <p class="text-sm text-gray-500 mb-4">Update approval answers for the advisory SBFP participants.</p>
-                <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" @submit.prevent="requestConfirmation($event, 'approval')">
+                <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" data-loading-form data-loading-message="Updating student approvals..." @submit.prevent="requestConfirmation($event, 'approval')">
                     @csrf
                     @method('PATCH')
                     <div class="overflow-x-auto mb-6">
@@ -274,7 +274,7 @@
                 <h3 class="text-lg font-bold mb-1">Add Period</h3>
                 <p class="text-sm text-gray-500 mb-4">Existing measurements are locked. Enter complete measurements only for students missing the selected period.</p>
                 
-                <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" @submit.prevent="requestConfirmation($event, 'add')">
+                <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" data-loading-form data-loading-message="Saving student assessments..." @submit.prevent="requestConfirmation($event, 'add')">
                     @csrf
                     
                     <div class="mb-4">
@@ -324,7 +324,7 @@
                 <h3 class="text-lg font-bold mb-1">Edit Period</h3>
                 <p class="text-sm text-gray-500 mb-4">Edit measurements for multiple students in an existing period.</p>
 
-                <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" @submit.prevent="requestConfirmation($event, 'edit')">
+                <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" data-loading-form data-loading-message="Updating student assessments..." @submit.prevent="requestConfirmation($event, 'edit')">
                     @csrf
                     @method('PATCH')
                     <div class="mb-4">
@@ -514,6 +514,7 @@
                 confirmSubmission() {
                     this.showConfirmation = false;
                     if (this.pendingForm) {
+                        showLoadingModal(this.pendingForm.dataset.loadingMessage || 'Processing, please wait...');
                         this.pendingForm.submit();
                     }
                 },

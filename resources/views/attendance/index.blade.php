@@ -89,6 +89,9 @@
             </tbody>
         </table>
     </div>
+    <div class="flex justify-center">
+        {{ $sbfpStudents->links() }}
+    </div>
 </div>
 <script>
     (() => {

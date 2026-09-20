@@ -11,6 +11,8 @@
     <script src="https://unpkg.com/html5-qrcode"></script>
     <script>
         function onScanSuccess(decodedText, decodedResult) {
+            showLoadingModal('Recording attendance, please wait...');
+
             fetch('{{ route('encoder.attendance.scan') }}', {
                 method: 'POST',
                 headers: {
@@ -23,6 +25,12 @@
             .then(data => {
                 document.getElementById('result').innerText = data.success || data.error;
                 setTimeout(() => { document.getElementById('result').innerText = ''; }, 3000);
+            })
+            .catch(() => {
+                document.getElementById('result').innerText = 'Unable to record attendance. Please try again.';
+            })
+            .finally(() => {
+                hideLoadingModal();
             });
         }
 

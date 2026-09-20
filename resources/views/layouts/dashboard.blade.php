@@ -219,6 +219,13 @@
         </div>
     </div>
 
+    <div id="global-loading-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50" role="status" aria-live="polite" aria-label="Loading">
+        <div class="mx-4 w-full max-w-sm rounded-lg bg-white px-8 py-6 text-center shadow-xl">
+            <i class="fas fa-spinner fa-spin mb-3 text-3xl text-blue-600" aria-hidden="true"></i>
+            <p id="global-loading-message" class="text-sm font-semibold text-gray-700">Processing, please wait...</p>
+        </div>
+    </div>
+
     <script>
         function toggleSidebar() {
             const sidebar = document.getElementById('appSidebar');
@@ -242,6 +249,45 @@
         function closeMealRequiredModal() {
             document.getElementById('mealRequiredModal').classList.add('hidden');
         }
+
+        function showLoadingModal(message = 'Processing, please wait...') {
+            const modal = document.getElementById('global-loading-modal');
+            const label = document.getElementById('global-loading-message');
+
+            if (!modal) return;
+
+            label.textContent = message;
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function hideLoadingModal() {
+            const modal = document.getElementById('global-loading-modal');
+
+            if (!modal) return;
+
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        document.addEventListener('click', (event) => {
+            const link = event.target.closest('[data-loading-link], a[href*="/excel"], a[href*="/docx"], a[href*="/pdf"], a[href*="/sql"]');
+
+            if (!link) return;
+
+            showLoadingModal(link.dataset.loadingMessage || 'Preparing download, please wait...');
+            window.setTimeout(hideLoadingModal, 1500);
+        });
+
+        document.addEventListener('submit', (event) => {
+            const form = event.target;
+
+            if (form.matches('[data-loading-form]')) {
+                showLoadingModal(form.dataset.loadingMessage || 'Processing, please wait...');
+            }
+        });
+
+        window.addEventListener('pageshow', hideLoadingModal);
 
         window.addEventListener('meal-required', openMealRequiredModal);
     </script>
