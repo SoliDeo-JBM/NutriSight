@@ -99,7 +99,7 @@
             <!-- Pagination -->
             @if($auditLogs->hasPages())
             <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                {{ $auditLogs->render() }}
+                <x-pagination :paginator="$auditLogs" />
             </div>
             @endif
         </div>

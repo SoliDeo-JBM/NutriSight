@@ -746,8 +746,9 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $user = Auth::user();
         $updated = 0;
+        $approvalChanges = [];
 
-        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated) {
+        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated, &$approvalChanges) {
             foreach ($validated['approvals'] as $entry) {
                 $student = Student::find($entry['student_id']);
                 $enrollment = $student?->enrollments()

@@ -103,7 +103,7 @@
         </table>
     </div>
     <div class="flex justify-center">
-        {{ $sbfpStudents->links() }}
+        <x-pagination :paginator="$sbfpStudents" />
     </div>
 </div>
 <script>

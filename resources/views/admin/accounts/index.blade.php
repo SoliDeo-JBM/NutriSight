@@ -155,7 +155,7 @@
         <!-- Pagination -->
         @if($advisers->hasPages())
         <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
-            {{ $advisers->render() }}
+            <x-pagination :paginator="$advisers" />
         </div>
         @endif
     </div>
