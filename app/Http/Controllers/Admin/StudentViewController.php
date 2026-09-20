@@ -155,6 +155,29 @@ class StudentViewController extends Controller
             $query->where('sex', $request->input('sex'));
         }
 
+        $sort = $request->input('sort', 'latest');
+        switch ($sort) {
+            case 'name_az':
+                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                break;
+            case 'name_za':
+                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                break;
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'lrn_asc':
+                $query->orderBy('lrn', 'asc');
+                break;
+            case 'lrn_desc':
+                $query->orderBy('lrn', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
+        }
+
         $students = $query->paginate(15)->withQueryString();
 
         $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');

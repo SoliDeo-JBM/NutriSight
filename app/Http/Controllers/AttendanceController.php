@@ -241,7 +241,12 @@ class AttendanceController extends Controller
             $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal);
         }
 
-        AuditLogger::log('Updated', 'Attendance', 'Updated attendance status for participant ID ' . $validated['sbfp_participant_id'] . ' on ' . $validated['date']);
+        $studentName = trim($participant->enrollment->student->first_name . ' ' . $participant->enrollment->student->last_name);
+        AuditLogger::log(
+            'Updated',
+            'Attendance',
+            'Updated attendance for ' . $studentName . ' on ' . $validated['date'] . ' to ' . $validated['status'] . '.'
+        );
 
         return back()->with('success', 'Attendance updated.');
     }

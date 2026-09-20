@@ -37,7 +37,7 @@ class SchoolLogoController extends Controller
         ]);
 
         SchoolLogoService::upload($validated['school_logo']);
-        AuditLogger::log('Updated', 'System Settings', 'Updated the school logo used in downloadable SBFP reports');
+        AuditLogger::log('Updated', 'System Settings', 'Updated the school logo used in downloadable SBFP reports with file ' . $validated['school_logo']->getClientOriginalName());
 
         return back()->with('success', 'School logo updated successfully.');
     }
@@ -49,7 +49,7 @@ class SchoolLogoController extends Controller
         ]);
 
         SchoolLogoService::uploadDepEd($validated['deped_logo']);
-        AuditLogger::log('Updated', 'System Settings', 'Updated the DepEd logo used in downloadable SBFP reports');
+        AuditLogger::log('Updated', 'System Settings', 'Updated the DepEd logo used in downloadable SBFP reports with file ' . $validated['deped_logo']->getClientOriginalName());
 
         return back()->with('success', 'DepEd logo updated successfully.');
     }

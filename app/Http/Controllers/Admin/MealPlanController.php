@@ -52,7 +52,7 @@ class MealPlanController extends Controller
         ]);
 
         $mealPlan->update($validated);
-        AuditLogger::log('Updated', 'Meal Plan', 'Updated meal plan ID ' . $mealPlan->id);
+        AuditLogger::log('Updated', 'Meal Plan', 'Updated meal for ' . $mealPlan->meal_date->toDateString() . ' to: ' . $mealPlan->meal_name);
 
         return redirect()->route('admin.meal-plans.index', ['date' => $mealPlan->meal_date->toDateString()])->with('success', 'Meal updated.');
     }
@@ -61,7 +61,7 @@ class MealPlanController extends Controller
     {
         $date = $mealPlan->meal_date->toDateString();
         $mealPlan->delete();
-        AuditLogger::log('Deleted', 'Meal Plan', 'Deleted meal plan ID ' . $mealPlan->id);
+        AuditLogger::log('Deleted', 'Meal Plan', 'Deleted meal for ' . $date . ': ' . $mealPlan->meal_name);
 
         return redirect()->route('admin.meal-plans.index', ['date' => $date])->with('success', 'Meal deleted.');
     }

@@ -242,6 +242,29 @@ class StudentController extends Controller
             });
         }
 
+        $sort = $request->input('sort', 'latest');
+        switch ($sort) {
+            case 'name_az':
+                $query->orderBy('last_name', 'asc')->orderBy('first_name', 'asc');
+                break;
+            case 'name_za':
+                $query->orderBy('last_name', 'desc')->orderBy('first_name', 'desc');
+                break;
+            case 'oldest':
+                $query->orderBy('created_at', 'asc');
+                break;
+            case 'lrn_asc':
+                $query->orderBy('lrn', 'asc');
+                break;
+            case 'lrn_desc':
+                $query->orderBy('lrn', 'desc');
+                break;
+            case 'latest':
+            default:
+                $query->orderBy('created_at', 'desc');
+                break;
+        }
+
         $students = $query->paginate(15)->withQueryString();
         $sexes = ['Male', 'Female'];
         $approvalStatuses = [
@@ -571,8 +594,9 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $user = Auth::user();
         $updated = 0;
+        $approvalChanges = [];
 
-        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated) {
+        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated, &$approvalChanges) {
             foreach ($validated['measurements'] as $entry) {
                 if (($entry['weight'] ?? null) === null && ($entry['height'] ?? null) === null) {
                     continue;
@@ -755,15 +779,23 @@ class StudentController extends Controller
 
                 $participant = $enrollment->sbfpParticipant;
                 if ($participant->parent_consent !== $normalizedStatus || $participant->disapproval_reason !== $reason) {
+                    $studentName = trim($student->first_name . ' ' . $student->last_name);
+                    $oldStatus = $participant->parent_consent ?? 'pending';
+                    $newStatus = $normalizedStatus ?? 'pending';
                     $this->parentApprovalService->closePending($participant, 'manual_staff_decision', $user->id);
                     $participant->update([
                         'parent_consent' => $normalizedStatus,
                         'disapproval_reason' => $reason,
                     ]);
+                    $approvalChanges[] = "{$studentName}: {$oldStatus} to {$newStatus}";
                     $updated++;
                 }
             }
         });
+
+        if ($approvalChanges !== []) {
+            AuditLogger::log('Updated', 'SBFP Approval', 'Bulk parent consent changes: ' . implode('; ', $approvalChanges));
+        }
 
         return back()->with('success', $updated > 0
             ? $updated . ' parent approval record(s) updated successfully.'
@@ -868,14 +900,15 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $updated = 0;
         $skipped = 0;
+        $uploadedStudents = [];
 
-        DB::transaction(function () use ($request, $user, $activeSyId, &$updated, &$skipped) {
+        DB::transaction(function () use ($request, $user, $activeSyId, &$updated, &$skipped, &$uploadedStudents) {
             foreach ($request->file('profiles', []) as $participantId => $file) {
                 if (!$file) {
                     continue;
                 }
 
-                $participant = SbfpParticipant::with('enrollment')->find($participantId);
+                $participant = SbfpParticipant::with('enrollment.student')->find($participantId);
                 if (!$participant || !$participant->enrollment || $participant->enrollment->school_year_id != $activeSyId) {
                     $skipped++;
                     continue;
@@ -913,6 +946,7 @@ class StudentController extends Controller
                 $url = $publicUrl . '/' . ltrim($path, '/');
 
                 $participant->update(['profile_image_url' => $url]);
+                $uploadedStudents[] = trim($participant->enrollment->student->first_name . ' ' . $participant->enrollment->student->last_name);
                 $updated++;
             }
         });
@@ -925,7 +959,7 @@ class StudentController extends Controller
             throw ValidationException::withMessages(['profiles' => $message]);
         }
 
-        AuditLogger::log('Updated', 'SBFP Participants', "Uploaded {$updated} profile image(s) for advisory SBFP participants.");
+        AuditLogger::log('Updated', 'SBFP Participants', 'Uploaded profile images for: ' . implode(', ', $uploadedStudents) . '.');
 
         return back()
             ->with('success', "Uploaded {$updated} profile image(s).");
