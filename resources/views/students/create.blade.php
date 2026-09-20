@@ -140,8 +140,7 @@
 <script>
     (() => {
         const form = document.getElementById('student-form');
-        const fields = [
-            {
+        const fields = [{
                 input: document.getElementById('student-lrn'),
                 error: document.getElementById('student-lrn-error'),
                 validate: (value) => /^[0-9]+$/.test(value) ? '' : 'LRN must contain numbers only. Remove the other characters before submitting.'
