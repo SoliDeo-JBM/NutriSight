@@ -270,13 +270,60 @@
             modal.classList.remove('flex');
         }
 
-        document.addEventListener('click', (event) => {
+        function exportFilename(response, url) {
+            const disposition = response.headers.get('Content-Disposition') || '';
+            const encodedFilename = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+            const plainFilename = disposition.match(/filename="?([^";]+)"?/i);
+
+            if (encodedFilename) {
+                return decodeURIComponent(encodedFilename[1]);
+            }
+
+            if (plainFilename) {
+                return plainFilename[1];
+            }
+
+            return new URL(url, window.location.href).pathname.split('/').pop() || 'report-download';
+        }
+
+        async function downloadExport(link) {
+            const response = await fetch(link.href, {
+                credentials: 'same-origin',
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('The report could not be generated.');
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = URL.createObjectURL(blob);
+            const downloadLink = document.createElement('a');
+            downloadLink.href = downloadUrl;
+            downloadLink.download = exportFilename(response, link.href);
+            document.body.appendChild(downloadLink);
+            downloadLink.click();
+            downloadLink.remove();
+            URL.revokeObjectURL(downloadUrl);
+        }
+
+        document.addEventListener('click', async (event) => {
             const link = event.target.closest('[data-loading-link], a[href*="/excel"], a[href*="/docx"], a[href*="/pdf"], a[href*="/sql"]');
 
             if (!link) return;
 
+            event.preventDefault();
             showLoadingModal(link.dataset.loadingMessage || 'Preparing download, please wait...');
-            window.setTimeout(hideLoadingModal, 1500);
+
+            try {
+                await downloadExport(link);
+            } catch (error) {
+                window.alert(error.message || 'The report download failed. Please try again.');
+            } finally {
+                hideLoadingModal();
+            }
         });
 
         document.addEventListener('submit', (event) => {

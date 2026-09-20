@@ -314,7 +314,7 @@ class StudentController extends Controller
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
         $validated = $request->validate([
-            'lrn' => 'required|unique:students,lrn',
+            'lrn' => ['required', 'regex:/^[0-9]+$/', 'unique:students,lrn'],
             'last_name' => 'required',
             'first_name' => 'required',
             'name_extension' => 'nullable',
@@ -396,7 +396,7 @@ class StudentController extends Controller
         }
 
         $validated = $request->validate([
-            'lrn' => 'required|unique:students,lrn,' . $student->id,
+            'lrn' => ['required', 'regex:/^[0-9]+$/', 'unique:students,lrn,' . $student->id],
             'last_name' => 'required',
             'first_name' => 'required',
             'name_extension' => 'nullable',

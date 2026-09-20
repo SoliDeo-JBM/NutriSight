@@ -24,13 +24,14 @@
             </div>
         @endif
 
-        <form action="{{ isset($student) ? route('encoder.students.update', $student) : route('encoder.students.store') }}" method="POST" class="space-y-4">
+        <form id="student-form" action="{{ isset($student) ? route('encoder.students.update', $student) : route('encoder.students.store') }}" method="POST" class="space-y-4">
             @csrf
             @if(isset($student)) @method('PUT') @endif
 
             <div>
                 <label class="block text-sm font-semibold mb-1">LRN / Student Number <span class="text-red-500">*</span></label>
-                <input type="text" name="lrn" value="{{ old('lrn', $student->lrn ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. 136542100012">
+                <input id="student-lrn" type="text" name="lrn" value="{{ old('lrn', $student->lrn ?? '') }}" required inputmode="numeric" pattern="[0-9]+" autocomplete="off" class="w-full border rounded p-2 text-sm" placeholder="e.g. 136542100012" aria-describedby="student-lrn-error">
+                <p id="student-lrn-error" class="mt-1 hidden text-sm text-red-600" role="alert">LRN must contain numbers only. Remove the other characters before submitting.</p>
             </div>
 
             <div class="grid grid-cols-2 gap-4">
@@ -129,4 +130,52 @@
             </div>
         </form>
     </div>
+    <script>
+        (() => {
+            const form = document.getElementById('student-form');
+            const lrnInput = document.getElementById('student-lrn');
+            const lrnError = document.getElementById('student-lrn-error');
+            let invalidLrnAttempt = false;
+
+            if (!form || !lrnInput || !lrnError) return;
+
+            const showLrnError = () => {
+                lrnError.classList.remove('hidden');
+                lrnInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
+            };
+
+            const clearLrnError = () => {
+                lrnError.classList.add('hidden');
+                lrnInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
+            };
+
+            lrnInput.addEventListener('keydown', (event) => {
+                if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
+                if (!/[0-9]/.test(event.key)) {
+                    event.preventDefault();
+                    invalidLrnAttempt = true;
+                    showLrnError();
+                }
+            });
+
+            lrnInput.addEventListener('input', () => {
+                if (/^[0-9]*$/.test(lrnInput.value)) {
+                    if (!invalidLrnAttempt) clearLrnError();
+                    return;
+                }
+
+                invalidLrnAttempt = true;
+                lrnInput.value = lrnInput.value.replace(/[^0-9]/g, '');
+                showLrnError();
+            });
+
+            form.addEventListener('submit', (event) => {
+                if (invalidLrnAttempt || !/^[0-9]+$/.test(lrnInput.value)) {
+                    event.preventDefault();
+                    showLrnError();
+                    lrnInput.focus();
+                }
+            });
+        })();
+    </script>
 @endsection
