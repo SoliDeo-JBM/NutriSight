@@ -25,6 +25,12 @@
     </div>
     @endif
 
+    @if($errors->any() && !$errors->has('delete_error'))
+    <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm" role="alert">
+        Please correct {{ $errors->count() }} highlighted account field{{ $errors->count() === 1 ? '' : 's' }} below and try again.
+    </div>
+    @endif
+
     <!-- Filters & Search Card -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
         <form method="GET" action="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index') : route('admin.accounts.index') }}" class="space-y-4" x-data>
@@ -172,61 +178,75 @@
         <form id="editAccountForm" method="POST" class="space-y-4">
             @csrf
             @method('PATCH')
+            <input type="hidden" id="edit_action" name="_edit_action" value="{{ old('_edit_action') }}">
 
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label for="edit_first_name" class="block text-sm font-semibold text-gray-700 mb-2">First Name</label>
-                    <input id="edit_first_name" type="text" name="first_name" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_first_name" type="text" name="first_name" required aria-invalid="{{ $errors->has('first_name') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('first_name') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('first_name')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_middle_name" class="block text-sm font-semibold text-gray-700 mb-2">Middle Name</label>
-                    <input id="edit_middle_name" type="text" name="middle_name" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_middle_name" type="text" name="middle_name" aria-invalid="{{ $errors->has('middle_name') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('middle_name') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('middle_name')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_last_name" class="block text-sm font-semibold text-gray-700 mb-2">Last Name</label>
-                    <input id="edit_last_name" type="text" name="last_name" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_last_name" type="text" name="last_name" required aria-invalid="{{ $errors->has('last_name') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('last_name') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('last_name')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_name_extension" class="block text-sm font-semibold text-gray-700 mb-2">Name Extension</label>
-                    <input id="edit_name_extension" type="text" name="name_extension" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_name_extension" type="text" name="name_extension" aria-invalid="{{ $errors->has('name_extension') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('name_extension') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('name_extension')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_sex" class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
-                    <select id="edit_sex" name="sex" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <select id="edit_sex" name="sex" aria-invalid="{{ $errors->has('sex') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('sex') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">Select Sex</option>
                         <option value="Male">Male</option>
                         <option value="Female">Female</option>
                     </select>
+                    @error('sex')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_birthdate" class="block text-sm font-semibold text-gray-700 mb-2">Birthdate</label>
-                    <input id="edit_birthdate" type="date" name="birthdate" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_birthdate" type="date" name="birthdate" aria-invalid="{{ $errors->has('birthdate') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('birthdate') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('birthdate')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_email" class="block text-sm font-semibold text-gray-700 mb-2">Email Address</label>
-                    <input id="edit_email" type="email" name="email" required class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_email" type="email" name="email" required aria-invalid="{{ $errors->has('email') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('email') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('email')
+                    <p class="text-rose-600 text-xs mt-1">{{ $message }}</p>
+                    @enderror
                 </div>
                 <div>
                     <label for="edit_deped_id" class="block text-sm font-semibold text-gray-700 mb-2">DepEd ID / Employee ID</label>
-                    <input id="edit_deped_id" type="text" name="deped_id" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_deped_id" type="text" name="deped_id" aria-invalid="{{ $errors->has('deped_id') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('deped_id') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('deped_id')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_position" class="block text-sm font-semibold text-gray-700 mb-2">Position / Title</label>
-                    <input id="edit_position" type="text" name="position" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_position" type="text" name="position" aria-invalid="{{ $errors->has('position') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('position') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('position')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 @if(!auth()->user()->isSuperAdmin())
                 <div>
                     <label for="edit_grade_level" class="block text-sm font-semibold text-gray-700 mb-2">Advisory Grade Level</label>
-                    <select id="edit_grade_level" name="advisory_grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <select id="edit_grade_level" name="advisory_grade_level" aria-invalid="{{ $errors->has('advisory_grade_level') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('advisory_grade_level') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">Select Grade Level</option>
                         @foreach([0, 1, 2, 3, 4, 5, 6, 7] as $grade)
                         <option value="{{ $grade }}">{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>
                         @endforeach
                     </select>
+                    @error('advisory_grade_level')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>
                     <label for="edit_section" class="block text-sm font-semibold text-gray-700 mb-2">Advisory Section</label>
-                    <input id="edit_section" type="text" name="advisory_section" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_section" type="text" name="advisory_section" aria-invalid="{{ $errors->has('advisory_section') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('advisory_section') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    @error('advisory_section')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 @endif
             </div>
@@ -309,6 +329,7 @@
         const data = button.dataset;
 
         form.action = data.action;
+        document.getElementById('edit_action').value = data.action;
         document.getElementById('edit_first_name').value = data.firstName || '';
         document.getElementById('edit_middle_name').value = data.middleName || '';
         document.getElementById('edit_last_name').value = data.lastName || '';
@@ -330,5 +351,32 @@
     function closeEditModal() {
         document.getElementById('editAccountModal').classList.add('hidden');
     }
+
+    @if($errors - > any() && old('_edit_action'))
+    const validationEditForm = document.getElementById('editAccountForm');
+    validationEditForm.action = @json(old('_edit_action'));
+    document.getElementById('edit_action').value = @json(old('_edit_action'));
+    document.getElementById('edit_first_name').value = @json(old('first_name', ''));
+    document.getElementById('edit_middle_name').value = @json(old('middle_name', ''));
+    document.getElementById('edit_last_name').value = @json(old('last_name', ''));
+    document.getElementById('edit_name_extension').value = @json(old('name_extension', ''));
+    document.getElementById('edit_sex').value = @json(old('sex', ''));
+    document.getElementById('edit_birthdate').value = @json(old('birthdate', ''));
+    document.getElementById('edit_email').value = @json(old('email', ''));
+    document.getElementById('edit_deped_id').value = @json(old('deped_id', ''));
+    document.getElementById('edit_position').value = @json(old('position', ''));
+    const validationGradeLevel = document.getElementById('edit_grade_level');
+    const validationSection = document.getElementById('edit_section');
+    if (validationGradeLevel) validationGradeLevel.value = @json(old('advisory_grade_level', ''));
+    if (validationSection) validationSection.value = @json(old('advisory_section', ''));
+    document.getElementById('editAccountModal').classList.remove('hidden');
+    const firstInvalidField = document.querySelector('#editAccountForm [aria-invalid="true"]');
+    if (firstInvalidField) {
+        firstInvalidField.focus();
+        firstInvalidField.scrollIntoView({
+            block: 'center'
+        });
+    }
+    @endif
 </script>
 @endsection

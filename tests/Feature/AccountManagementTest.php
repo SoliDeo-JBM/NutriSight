@@ -86,6 +86,30 @@ class AccountManagementTest extends TestCase
         ]);
     }
 
+    public function test_admin_cannot_update_encoder_to_an_existing_email(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $encoder = User::factory()->create(['role' => User::ROLE_ENCODER, 'email' => 'encoder@example.com']);
+        $existingUser = User::factory()->create(['email' => 'already-used@example.com']);
+
+        $response = $this->actingAs($admin)->from(route('admin.accounts.index'))->patch(
+            route('admin.accounts.update', $encoder),
+            [
+                'first_name' => 'Updated',
+                'last_name' => 'Encoder',
+                'email' => $existingUser->email,
+                '_edit_action' => route('admin.accounts.update', $encoder),
+            ]
+        );
+
+        $response->assertRedirect(route('admin.accounts.index'));
+        $response->assertSessionHasErrors('email');
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'email' => 'encoder@example.com',
+        ]);
+    }
+
     public function test_managed_account_update_rejects_wrong_target_role(): void
     {
         $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
