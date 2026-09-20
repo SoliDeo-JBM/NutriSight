@@ -20,9 +20,7 @@ use Throwable;
 
 class AttendanceController extends Controller
 {
-    public function __construct(private AttendanceService $attendanceService)
-    {
-    }
+    public function __construct(private AttendanceService $attendanceService) {}
 
     public function index(Request $request)
     {

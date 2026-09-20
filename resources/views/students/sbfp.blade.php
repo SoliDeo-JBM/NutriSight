@@ -1,554 +1,568 @@
 @extends('layouts.dashboard')
 
 @section('content')
-    <div x-data="sbfpManager()" x-init="if (@js($hasPendingApproval ?? false)) showApprovalModal = true" x-cloak class="flex flex-col gap-6">
-        @php
-            $approvedStudents = collect(isset($students) ? $students->items() : [])->filter(function ($student) {
-                return $student->enrollments->first()?->sbfpParticipant?->parent_consent === 'approved';
-            })->values();
+<div x-data="sbfpManager()" x-init="if (@js($hasPendingApproval ?? false)) showApprovalModal = true" x-cloak class="flex flex-col gap-6">
+    @php
+    $approvedStudents = collect(isset($students) ? $students->items() : [])->filter(function ($student) {
+    return $student->enrollments->first()?->sbfpParticipant?->parent_consent === 'approved';
+    })->values();
 
-            $profileImageParticipants = $approvedStudents->map(function ($student) {
-                $participant = $student->enrollments->first()?->sbfpParticipant;
-                return $participant ? [
-                    'id' => $participant->id,
-                    'name' => trim($student->last_name . ', ' . $student->first_name),
-                    'image' => $participant->profile_image_url,
-                ] : null;
-            })->filter()->values();
-        @endphp
-        <!-- Header -->
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div>
-                <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
-                <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
-                <div class="mt-4 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
-                    <button type="button" @click="openEditPeriodModal()" class="shrink-0 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
-                        <i class="fas fa-pen"></i> Edit Period
-                    </button>
-                    <button type="button" @click="openPeriodModal()" class="shrink-0 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 whitespace-nowrap inline-flex items-center gap-2">
-                        <i class="fas fa-plus"></i> Add Period
-                    </button>
-                    <button type="button" @click="openApprovalModal()" class="shrink-0 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 whitespace-nowrap inline-flex items-center gap-2">
-                        <i class="fas fa-clipboard-check"></i> Parent's Approval
-                    </button>
-                    <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route('encoder.students.sbfp.profile-images')" />
-                    <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
-                        <i class="fas fa-print"></i> Print Landscape ID QR Sheet
-                    </a>
-                </div>
+    $profileImageParticipants = $approvedStudents->map(function ($student) {
+    $participant = $student->enrollments->first()?->sbfpParticipant;
+    return $participant ? [
+    'id' => $participant->id,
+    'name' => trim($student->last_name . ', ' . $student->first_name),
+    'image' => $participant->profile_image_url,
+    ] : null;
+    })->filter()->values();
+    @endphp
+    <!-- Header -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
+            <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
+            <div class="mt-4 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
+                <button type="button" @click="openEditPeriodModal()" class="shrink-0 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
+                    <i class="fas fa-pen"></i> Edit Period
+                </button>
+                <button type="button" @click="openPeriodModal()" class="shrink-0 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 whitespace-nowrap inline-flex items-center gap-2">
+                    <i class="fas fa-plus"></i> Add Period
+                </button>
+                <button type="button" @click="openApprovalModal()" class="shrink-0 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 whitespace-nowrap inline-flex items-center gap-2">
+                    <i class="fas fa-clipboard-check"></i> Parent's Approval
+                </button>
+                <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route('encoder.students.sbfp.profile-images')" />
+                <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
+                    <i class="fas fa-print"></i> Print Landscape ID QR Sheet
+                </a>
             </div>
         </div>
+    </div>
 
-        <!-- Filters & Search Card -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-            <form method="GET" action="{{ route('encoder.students.sbfp') }}" class="space-y-4" x-data>
-                <!-- Search Bar -->
+    <!-- Filters & Search Card -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+        <form method="GET" action="{{ route('encoder.students.sbfp') }}" class="space-y-4" x-data>
+            <!-- Search Bar -->
+            <div>
+                <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+            </div>
+
+            <!-- Filters Row -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Sex Filter -->
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
-                    <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
+                    <select name="sex" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <option value="">All</option>
+                        @foreach($sexes as $sex)
+                        <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
+                        @endforeach
+                    </select>
                 </div>
 
-                <!-- Filters Row -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    <!-- Sex Filter -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sex</label>
-                        <select name="sex" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <option value="">All</option>
-                            @foreach($sexes as $sex)
-                                <option value="{{ $sex }}" {{ request('sex') == $sex ? 'selected' : '' }}>{{ $sex }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Approval Status Filter -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Parent Approval</label>
-                        <select name="approval_status" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            <option value="">All Statuses</option>
-                            @foreach($approvalStatuses as $key => $label)
-                                <option value="{{ $key }}" {{ request('approval_status') == $key ? 'selected' : '' }}>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
-
-                    <!-- Sort By -->
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
-                        <select name="sort" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
-                            @foreach($sortOptions as $key => $label)
-                                <option value="{{ $key }}" {{ request('sort', 'latest') == $key ? 'selected' : '' }}>{{ $label }}</option>
-                            @endforeach
-                        </select>
-                    </div>
+                <!-- Approval Status Filter -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Parent Approval</label>
+                    <select name="approval_status" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        <option value="">All Statuses</option>
+                        @foreach($approvalStatuses as $key => $label)
+                        <option value="{{ $key }}" {{ request('approval_status') == $key ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
                 </div>
 
-                <div class="flex justify-end pt-1">
-                    <a href="{{ route('encoder.students.sbfp') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
-                        <i class="fas fa-rotate-left"></i> Reset filters
-                    </a>
+                <!-- Sort By -->
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Sort By</label>
+                    <select name="sort" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                        @foreach($sortOptions as $key => $label)
+                        <option value="{{ $key }}" {{ request('sort', 'latest') == $key ? 'selected' : '' }}>{{ $label }}</option>
+                        @endforeach
+                    </select>
                 </div>
+            </div>
 
-            </form>
-        </div>
+            <div class="flex justify-end pt-1">
+                <a href="{{ route('encoder.students.sbfp') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
+                    <i class="fas fa-rotate-left"></i> Reset filters
+                </a>
+            </div>
 
-        <!-- SBFP Table -->
-        <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full border-collapse bg-white text-left text-sm text-gray-500">
-                    <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
-                        <tr>
-                            <th class="px-4 py-3 border">No.</th>
-                            <th class="px-4 py-3 border">LRN</th>
-                            <th class="px-4 py-3 border">Learner's Name</th>
-                            <th class="px-4 py-3 border">Birthdate</th>
-                            <th class="px-4 py-3 border">Age</th>
-                            <th class="px-4 py-3 border">Sex</th>
-                            <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
-                            <th class="px-4 py-3 border">Parent's Approval</th>
-                            <th class="px-4 py-3 border text-center">Student QR Code</th>
-                        </tr>
-                        <tr>
-                            <th colspan="6" class="px-4 py-2 border"></th>
-                            <th class="px-4 py-2 border text-center text-xs bg-blue-50">Baseline</th>
-                            <th class="px-4 py-2 border text-center text-xs bg-blue-50">Midline</th>
-                            <th class="px-4 py-2 border text-center text-xs bg-blue-50">Endline</th>
-                            <th colspan="2" class="px-4 py-2 border"></th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-gray-200">
-                        @forelse($students ?? [] as $index => $student)
-                        @php
-                            $enrollment = $student->enrollments->first();
-                            $periodData = [
-                                'Baseline' => $student->periodProgress['Baseline'][0] ?? null,
-                                'Midline' => $student->periodProgress['Midline'][0] ?? null,
-                                'Endline' => $student->periodProgress['Endline'][0] ?? null,
-                            ];
-                            $profileData = [
-                                'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . $student->name_extension . ' ' . $student->middle_name),
-                                'lrn' => $student->student_number,
-                                'profile_image_url' => $enrollment?->sbfpParticipant?->profile_image_url,
-                                'birthdate' => optional($student->birth_date)->format('Y-m-d') ?? '-',
-                                'age' => $student->birth_date?->age ?? '-',
-                                'sex' => $student->sex ?? '-',
-                                'grade' => $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')),
-                                'section' => $enrollment?->section ?? '-',
-                                'guardian' => $student->guardian_name ?? '-',
-                                'guardian_contact' => $student->guardian_contact ?? '-',
-                                'guardian_email' => $student->guardian_email ?? '-',
-                                'approval' => ucfirst($student->parent_approval_status ?: 'Pending'),
-                                'reason' => $student->disapproval_reason ? ucfirst(str_replace('_', ' ', $student->disapproval_reason)) : '-',
-                                'periods' => collect($periodData)->map(fn ($measurement) => $measurement ? [
-                                    'weight' => $measurement->weight,
-                                    'height' => $measurement->height,
-                                    'bmi' => $measurement->bmi,
-                                ] : null)->all(),
-                            ];
-                        @endphp
-                        <tr class="hover:bg-gray-50 cursor-pointer" data-profile="{{ base64_encode(json_encode($profileData)) }}" @click="$dispatch('student-profile-open', JSON.parse(atob($el.dataset.profile)))">
-                            <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
-                            <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                            <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
-                            <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
-                            <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
-                            <!-- Period Data Columns -->
-                            @foreach(['Baseline', 'Midline', 'Endline'] as $period)
-                            <td class="px-4 py-3 border text-center">
-                                @if($periodData[$period])
-                                    @php $data = $periodData[$period]; @endphp
-                                    <div class="text-xs space-y-1 bg-gray-50 p-2 rounded">
-                                        <div><strong>W:</strong> {{ $data->weight }}kg</div>
-                                        <div><strong>H:</strong> {{ $data->height }}cm</div>
-                                        <div><strong>BMI:</strong> {{ $data->bmi }}</div>
-                                        <div class="text-xs font-semibold
+        </form>
+    </div>
+
+    <!-- SBFP Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+        <div class="overflow-x-auto">
+            <table class="w-full border-collapse bg-white text-left text-sm text-gray-500">
+                <thead class="bg-gray-100 text-gray-700 uppercase text-xs">
+                    <tr>
+                        <th class="px-4 py-3 border">No.</th>
+                        <th class="px-4 py-3 border">LRN</th>
+                        <th class="px-4 py-3 border">Learner's Name</th>
+                        <th class="px-4 py-3 border">Birthdate</th>
+                        <th class="px-4 py-3 border">Age</th>
+                        <th class="px-4 py-3 border">Sex</th>
+                        <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
+                        <th class="px-4 py-3 border">Parent's Approval</th>
+                        <th class="px-4 py-3 border text-center">Student QR Code</th>
+                    </tr>
+                    <tr>
+                        <th colspan="6" class="px-4 py-2 border"></th>
+                        <th class="px-4 py-2 border text-center text-xs bg-blue-50">Baseline</th>
+                        <th class="px-4 py-2 border text-center text-xs bg-blue-50">Midline</th>
+                        <th class="px-4 py-2 border text-center text-xs bg-blue-50">Endline</th>
+                        <th colspan="2" class="px-4 py-2 border"></th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-200">
+                    @forelse($students ?? [] as $index => $student)
+                    @php
+                    $enrollment = $student->enrollments->first();
+                    $periodData = [
+                    'Baseline' => $student->periodProgress['Baseline'][0] ?? null,
+                    'Midline' => $student->periodProgress['Midline'][0] ?? null,
+                    'Endline' => $student->periodProgress['Endline'][0] ?? null,
+                    ];
+                    $profileData = [
+                    'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . $student->name_extension . ' ' . $student->middle_name),
+                    'lrn' => $student->student_number,
+                    'profile_image_url' => $enrollment?->sbfpParticipant?->profile_image_url,
+                    'birthdate' => optional($student->birth_date)->format('Y-m-d') ?? '-',
+                    'age' => $student->birth_date?->age ?? '-',
+                    'sex' => $student->sex ?? '-',
+                    'grade' => $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')),
+                    'section' => $enrollment?->section ?? '-',
+                    'guardian' => $student->guardian_name ?? '-',
+                    'guardian_contact' => $student->guardian_contact ?? '-',
+                    'guardian_email' => $student->guardian_email ?? '-',
+                    'approval' => ucfirst($student->parent_approval_status ?: 'Pending'),
+                    'reason' => $student->disapproval_reason ? ucfirst(str_replace('_', ' ', $student->disapproval_reason)) : '-',
+                    'periods' => collect($periodData)->map(fn ($measurement) => $measurement ? [
+                    'weight' => $measurement->weight,
+                    'height' => $measurement->height,
+                    'bmi' => $measurement->bmi,
+                    ] : null)->all(),
+                    ];
+                    @endphp
+                    <tr class="hover:bg-gray-50 cursor-pointer" data-profile="{{ base64_encode(json_encode($profileData)) }}" @click="$dispatch('student-profile-open', JSON.parse(atob($el.dataset.profile)))">
+                        <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
+                        <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
+                        <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
+                        <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
+                        <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
+                        <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
+                        <!-- Period Data Columns -->
+                        @foreach(['Baseline', 'Midline', 'Endline'] as $period)
+                        <td class="px-4 py-3 border text-center">
+                            @if($periodData[$period])
+                            @php $data = $periodData[$period]; @endphp
+                            <div class="text-xs space-y-1 bg-gray-50 p-2 rounded">
+                                <div><strong>W:</strong> {{ $data->weight }}kg</div>
+                                <div><strong>H:</strong> {{ $data->height }}cm</div>
+                                <div><strong>BMI:</strong> {{ $data->bmi }}</div>
+                                <div class="text-xs font-semibold
                                             @if($data->bmi_category == 'Normal') text-green-700
                                             @elseif(in_array($data->bmi_category, ['Wasted', 'Severely Wasted'])) text-red-700
                                             @else text-yellow-700 @endif">
-                                            {{ $data->bmi_category }}
-                                        </div>
-                                    </div>
-                                @endif
-                            </td>
-                            @endforeach
+                                    {{ $data->bmi_category }}
+                                </div>
+                            </div>
+                            @endif
+                        </td>
+                        @endforeach
 
-                            <td class="px-4 py-3 border min-w-[220px] text-xs">
-                                @if($student->parent_approval_status === 'approved')
-                                    <span class="font-semibold text-green-700">Approved</span>
-                                @elseif($student->parent_approval_status === 'disapproved')
-                                    <span class="font-semibold text-red-700">Disapproved</span>
-                                    @if($student->disapproval_reason)
-                                        <span class="block text-gray-500">{{ $student->disapproval_reason }}</span>
-                                    @endif
-                                @else
-                                    <span class="font-semibold text-amber-700">Pending</span>
-                                @endif
-                            </td>
+                        <td class="px-4 py-3 border min-w-[220px] text-xs">
+                            @if($student->parent_approval_status === 'approved')
+                            <span class="font-semibold text-green-700">Approved</span>
+                            @elseif($student->parent_approval_status === 'disapproved')
+                            <span class="font-semibold text-red-700">Disapproved</span>
+                            @if($student->disapproval_reason)
+                            <span class="block text-gray-500">{{ $student->disapproval_reason }}</span>
+                            @endif
+                            @else
+                            <span class="font-semibold text-amber-700">Pending</span>
+                            @endif
+                        </td>
 
-                            <td class="px-4 py-3 border text-center whitespace-nowrap">
-                                @if($student->parent_approval_status === 'disapproved')
-                                    <span class="text-red-500 text-xs font-semibold">Disapproved (No QR)</span>
-                                @elseif($student->is_permitted)
-                                    <div class="flex flex-col items-center justify-center">
-                                        <div class="p-1 bg-white border inline-block shadow-sm rounded">
-                                             {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
-                                        </div>
-                                        <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" @click.stop class="text-[11px] text-blue-600 hover:underline mt-1">Print Landscape ID</a>
-                                    </div>
-                                @else
-                                    <span class="text-gray-400 text-xs italic">Requires Approval</span>
-                                @endif
-                            </td>
-                        </tr>
-                        @empty
-                        <tr>
-                            <td colspan="11" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
-                        </tr>
-                        @endforelse
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Pagination -->
-            @if($students->hasPages())
-            <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
-                {{ $students->render() }}
-            </div>
-            @endif
+                        <td class="px-4 py-3 border text-center whitespace-nowrap">
+                            @if($student->parent_approval_status === 'disapproved')
+                            <span class="text-red-500 text-xs font-semibold">Disapproved (No QR)</span>
+                            @elseif($student->is_permitted)
+                            <div class="flex flex-col items-center justify-center">
+                                <div class="p-1 bg-white border inline-block shadow-sm rounded">
+                                    {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
+                                </div>
+                                <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" @click.stop class="text-[11px] text-blue-600 hover:underline mt-1">Print Landscape ID</a>
+                            </div>
+                            @else
+                            <span class="text-gray-400 text-xs italic">Requires Approval</span>
+                            @endif
+                        </td>
+                    </tr>
+                    @empty
+                    <tr>
+                        <td colspan="11" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
+                    </tr>
+                    @endforelse
+                </tbody>
+            </table>
         </div>
 
-        <!-- Parent Approval Modal -->
-        <div x-show="showApprovalModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
-            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
-                <h3 class="text-lg font-bold mb-1">Parent's Approval</h3>
-                <p class="text-sm text-gray-500 mb-4">Update approval answers for the advisory SBFP participants.</p>
-                <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" data-loading-form data-loading-message="Updating student approvals..." @submit.prevent="requestConfirmation($event, 'approval')">
-                    @csrf
-                    @method('PATCH')
-                    <div class="overflow-x-auto mb-6">
-                        <table class="w-full text-sm border-collapse">
-                            <thead class="bg-gray-100 text-gray-700">
-                                <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Parent's Approval</th><th class="px-3 py-2 border">Reason if Disapproved</th></tr>
-                            </thead>
-                            <tbody>
-                                @foreach($students ?? [] as $student)
-                                    @php $approval = $student->parent_approval_status ?: 'pending'; @endphp
-                                    @php
-                                        $storedReason = $student->disapproval_reason;
-                                        $reasonChoice = in_array($storedReason, ['unwilling', 'medical_condition'], true) ? $storedReason : ($storedReason ? 'custom' : '');
-                                    @endphp
-                                    <tr data-approval-row data-current="{{ $approval }}" data-current-reason="{{ $storedReason }}">
-                                        <td class="px-3 py-2 border whitespace-nowrap"><input type="hidden" name="approvals[{{ $student->id }}][student_id]" value="{{ $student->id }}">{{ $student->last_name }}, {{ $student->first_name }}</td>
-                                        <td class="px-3 py-2 border">
-                                            <div class="flex flex-nowrap gap-4 whitespace-nowrap">
-                                                @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'disapproved' => 'Disapproved'] as $value => $label)
-                                                    <label><input type="radio" name="approvals[{{ $student->id }}][parent_consent]" value="{{ $value }}" {{ $approval === $value ? 'checked' : '' }} data-approval-status> {{ $label }}</label>
-                                                @endforeach
-                                            </div>
-                                        </td>
-                                        <td class="px-3 py-2 border">
-                                            <div class="flex flex-wrap items-center gap-3">
-                                                <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="unwilling" {{ $reasonChoice === 'unwilling' ? 'checked' : '' }}> Unwilling</label>
-                                                <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="medical_condition" {{ $reasonChoice === 'medical_condition' ? 'checked' : '' }}> Medical condition</label>
-                                                <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="custom" {{ $reasonChoice === 'custom' ? 'checked' : '' }}> Specify</label>
-                                                <input type="text" name="approvals[{{ $student->id }}][reason_details]" value="{{ $reasonChoice === 'custom' ? $student->disapproval_reason : '' }}" placeholder="Specify reason" class="border rounded px-2 py-1 text-xs">
-                                            </div>
-                                        </td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex-1 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 font-semibold">Update</button>
-                        <button type="button" @click="closeApprovalModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
-                    </div>
-                </form>
-            </div>
+        <!-- Pagination -->
+        @if($students->hasPages())
+        <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
+            {{ $students->render() }}
         </div>
-
-        <!-- Add Period Modal -->
-        <div x-show="showModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
-            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
-                <h3 class="text-lg font-bold mb-1">Add Period</h3>
-                <p class="text-sm text-gray-500 mb-4">Existing measurements are locked. Enter complete measurements only for students missing the selected period.</p>
-                
-                <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" data-loading-form data-loading-message="Saving student assessments..." @submit.prevent="requestConfirmation($event, 'add')">
-                    @csrf
-                    
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
-                        <select name="measurement_period" x-model="addPeriod" @change="refreshAddValues()" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
-                            <option value="">Select Period</option>
-                            <option value="baseline">Baseline</option>
-                            <option value="midline">Midline</option>
-                            <option value="endline">Endline</option>
-                        </select>
-                    </div>
-
-                    <div class="overflow-x-auto mb-6">
-                        <table class="w-full text-sm border-collapse">
-                            <thead class="bg-gray-100 text-gray-700">
-                                <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Weight (kg)</th><th class="px-3 py-2 border">Height (cm)</th></tr>
-                            </thead>
-                            <tbody>
-                                @foreach($approvedStudents as $student)
-                                    @php
-                                        $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
-                                            $record = $student->periodProgress[ucfirst($period)][0] ?? null;
-                                            return [$period => $record ? ['weight' => $record->weight, 'height' => $record->height] : null];
-                                        });
-                                    @endphp
-                                    <tr data-add-row data-values='@json($measurements)'>
-                                        <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
-                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" data-add-weight step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
-                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" data-add-height step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex-1 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 font-semibold">Add</button>
-                        <button type="button" @click="closeModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Edit Period Modal -->
-        <div x-show="showEditModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
-            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
-                <h3 class="text-lg font-bold mb-1">Edit Period</h3>
-                <p class="text-sm text-gray-500 mb-4">Edit measurements for multiple students in an existing period.</p>
-
-                <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" data-loading-form data-loading-message="Updating student assessments..." @submit.prevent="requestConfirmation($event, 'edit')">
-                    @csrf
-                    @method('PATCH')
-                    <div class="mb-4">
-                        <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
-                        <select name="measurement_period" x-model="editPeriod" @change="refreshEditValues()" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
-                            <option value="">Select Period</option>
-                            <option value="baseline">Baseline</option>
-                            <option value="midline">Midline</option>
-                            <option value="endline">Endline</option>
-                        </select>
-                    </div>
-
-                    <div class="overflow-x-auto mb-6">
-                        <table class="w-full text-sm border-collapse">
-                            <thead class="bg-gray-100 text-gray-700">
-                                <tr><th class="px-3 py-2 border text-left">Learner</th><th class="px-3 py-2 border">Weight (kg)</th><th class="px-3 py-2 border">Height (cm)</th></tr>
-                            </thead>
-                            <tbody>
-                                @foreach($approvedStudents as $student)
-                                    @php
-                                        $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
-                                            $record = $student->periodProgress[ucfirst($period)][0] ?? null;
-                                            return [$period => $record ? ['weight' => $record->weight, 'height' => $record->height] : null];
-                                        });
-                                    @endphp
-                                    <tr data-edit-row data-values='@json($measurements)'>
-                                        <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
-                                        <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" data-edit-weight step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
-                                        <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" data-edit-height step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
-                                    </tr>
-                                @endforeach
-                            </tbody>
-                        </table>
-                    </div>
-
-                    <div class="flex gap-2">
-                        <button type="submit" class="flex-1 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 font-semibold">Update</button>
-                        <button type="button" @click="closeEditModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <!-- Period Confirmation Modal -->
-        <div x-show="showConfirmation" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" style="display: none;">
-            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
-                <h3 class="text-lg font-bold mb-2">Confirm Period Changes</h3>
-                <p class="text-sm text-gray-600 mb-6" x-text="confirmationMessage"></p>
-                <div class="flex gap-2">
-                    <button type="button" @click="confirmSubmission()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Confirm</button>
-                    <button type="button" @click="showConfirmation = false" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Email Notice Modal -->
-        <div x-show="showEmailModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
-            <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
-                <h3 class="text-lg font-bold mb-2">Send Feeding Day Notice</h3>
-                <p class="text-xs text-gray-500 mb-4">Recipient: <span class="font-semibold text-gray-800" x-text="currentGuardianEmail"></span></p>
-                
-                <form :action="'/encoder/students/' + currentStudentId + '/email-feeding'" method="POST" class="space-y-4">
-                    @csrf
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Meal to be Served <span class="text-red-500">*</span></label>
-                        <input type="text" name="meal" required placeholder="e.g. Rice porridge with egg" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Feeding Date <span class="text-red-500">*</span></label>
-                        <input type="date" name="date" required value="{{ date('Y-m-d') }}" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-semibold text-gray-700 mb-1">Teacher's Notes (Optional)</label>
-                        <textarea name="notes" rows="3" placeholder="Additional instructions or notes for the parent..." class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
-                    </div>
-                    <div class="flex gap-2 pt-2">
-                        <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Send Email</button>
-                        <button type="button" @click="closeEmailModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
-                    </div>
-                </form>
-            </div>
-        </div>
-
-        <x-student-profile-modal />
+        @endif
     </div>
 
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script>
-        function sbfpManager() {
-            return {
-                showModal: false,
-                showEditModal: false,
-                showApprovalModal: false,
-                showConfirmation: false,
-                showEmailModal: false,
-                currentStudentId: null,
-                currentGuardianEmail: '',
-                addPeriod: '',
-                editPeriod: '',
-                pendingForm: null,
-                confirmationMessage: '',
-                openPeriodModal() {
-                    this.showModal = true;
-                },
-                closeModal() {
-                    this.showModal = false;
-                    this.addPeriod = '';
-                    document.querySelectorAll('[data-add-row] input[type="number"]').forEach((input) => {
-                        input.value = '';
-                        input.readOnly = false;
-                        input.required = false;
-                    });
-                },
-                refreshAddValues() {
-                    document.querySelectorAll('[data-add-row]').forEach((row) => {
-                        const values = JSON.parse(row.dataset.values || '{}');
-                        const measurement = values[this.addPeriod] || null;
-                        const weight = row.querySelector('[data-add-weight]');
-                        const height = row.querySelector('[data-add-height]');
-                        const hasMeasurement = measurement !== null;
+    <!-- Parent Approval Modal -->
+    <div x-show="showApprovalModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold mb-1">Parent's Approval</h3>
+            <p class="text-sm text-gray-500 mb-4">Update approval answers for the advisory SBFP participants.</p>
+            <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" data-loading-message="Updating student approvals..." @submit.prevent="requestConfirmation($event, 'approval')">
+                @csrf
+                @method('PATCH')
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-sm border-collapse">
+                        <thead class="bg-gray-100 text-gray-700">
+                            <tr>
+                                <th class="px-3 py-2 border text-left">Learner</th>
+                                <th class="px-3 py-2 border">Parent's Approval</th>
+                                <th class="px-3 py-2 border">Reason if Disapproved</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($students ?? [] as $student)
+                            @php $approval = $student->parent_approval_status ?: 'pending'; @endphp
+                            @php
+                            $storedReason = $student->disapproval_reason;
+                            $reasonChoice = in_array($storedReason, ['unwilling', 'medical_condition'], true) ? $storedReason : ($storedReason ? 'custom' : '');
+                            @endphp
+                            <tr data-approval-row data-current="{{ $approval }}" data-current-reason="{{ $storedReason }}">
+                                <td class="px-3 py-2 border whitespace-nowrap"><input type="hidden" name="approvals[{{ $student->id }}][student_id]" value="{{ $student->id }}">{{ $student->last_name }}, {{ $student->first_name }}</td>
+                                <td class="px-3 py-2 border">
+                                    <div class="flex flex-nowrap gap-4 whitespace-nowrap">
+                                        @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'disapproved' => 'Disapproved'] as $value => $label)
+                                        <label><input type="radio" name="approvals[{{ $student->id }}][parent_consent]" value="{{ $value }}" {{ $approval === $value ? 'checked' : '' }} data-approval-status> {{ $label }}</label>
+                                        @endforeach
+                                    </div>
+                                </td>
+                                <td class="px-3 py-2 border">
+                                    <div class="flex flex-wrap items-center gap-3">
+                                        <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="unwilling" {{ $reasonChoice === 'unwilling' ? 'checked' : '' }}> Unwilling</label>
+                                        <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="medical_condition" {{ $reasonChoice === 'medical_condition' ? 'checked' : '' }}> Medical condition</label>
+                                        <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="custom" {{ $reasonChoice === 'custom' ? 'checked' : '' }}> Specify</label>
+                                        <input type="text" name="approvals[{{ $student->id }}][reason_details]" value="{{ $reasonChoice === 'custom' ? $student->disapproval_reason : '' }}" placeholder="Specify reason" class="border rounded px-2 py-1 text-xs">
+                                    </div>
+                                </td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 font-semibold">Update</button>
+                    <button type="button" @click="closeApprovalModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
 
-                        weight.value = measurement?.weight || '';
-                        height.value = measurement?.height || '';
-                        weight.readOnly = hasMeasurement;
-                        height.readOnly = hasMeasurement;
-                        weight.required = !hasMeasurement;
-                        height.required = !hasMeasurement;
-                    });
-                },
-                openEditPeriodModal() {
-                    this.showEditModal = true;
-                },
-                openApprovalModal() {
-                    this.showApprovalModal = true;
-                },
-                closeApprovalModal() {
-                    this.showApprovalModal = false;
-                },
-                refreshEditValues() {
-                    document.querySelectorAll('[data-edit-row]').forEach((row) => {
-                        const values = JSON.parse(row.dataset.values || '{}');
-                        const measurement = values[this.editPeriod] || {};
-                        row.querySelector('[data-edit-weight]').value = measurement.weight || '';
-                        row.querySelector('[data-edit-height]').value = measurement.height || '';
-                    });
-                },
-                requestConfirmation(event, action) {
-                    const form = event.target;
-                    let count = 0;
-                    let subject = 'student approval';
-                    let periodName = '';
-                    if (action === 'approval') {
-                        count = Array.from(form.querySelectorAll('[data-approval-row]')).filter((row) => {
-                            const selected = row.querySelector('[data-approval-status]:checked');
-                            const reason = row.querySelector('input[name$="[disapproval_reason]"]:checked')?.value || '';
-                            const details = row.querySelector('input[name$="[reason_details]"]')?.value || '';
-                            const currentReason = row.dataset.currentReason || '';
-                            const nextReason = selected?.value === 'disapproved'
-                                ? (reason === 'custom' ? details : reason)
-                                : '';
-                            return selected && (selected.value !== row.dataset.current || nextReason !== currentReason);
+    <!-- Add Period Modal -->
+    <div x-show="showModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold mb-1">Add Period</h3>
+            <p class="text-sm text-gray-500 mb-4">Existing measurements are locked. Enter complete measurements only for students missing the selected period.</p>
+
+            <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" data-loading-message="Saving student assessments..." @submit.prevent="requestConfirmation($event, 'add')">
+                @csrf
+
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
+                    <select name="measurement_period" x-model="addPeriod" @change="refreshAddValues()" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500">
+                        <option value="">Select Period</option>
+                        <option value="baseline">Baseline</option>
+                        <option value="midline">Midline</option>
+                        <option value="endline">Endline</option>
+                    </select>
+                </div>
+
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-sm border-collapse">
+                        <thead class="bg-gray-100 text-gray-700">
+                            <tr>
+                                <th class="px-3 py-2 border text-left">Learner</th>
+                                <th class="px-3 py-2 border">Weight (kg)</th>
+                                <th class="px-3 py-2 border">Height (cm)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($approvedStudents as $student)
+                            @php
+                            $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
+                            $record = $student->periodProgress[ucfirst($period)][0] ?? null;
+                            return [$period => $record ? ['weight' => $record->weight, 'height' => $record->height] : null];
+                            });
+                            @endphp
+                            <tr data-add-row data-values='@json($measurements)'>
+                                <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
+                                <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" data-add-weight step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" data-add-height step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-green-600 text-white px-4 py-2 rounded text-sm hover:bg-green-700 font-semibold">Add</button>
+                    <button type="button" @click="closeModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Edit Period Modal -->
+    <div x-show="showEditModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h3 class="text-lg font-bold mb-1">Edit Period</h3>
+            <p class="text-sm text-gray-500 mb-4">Edit measurements for multiple students in an existing period.</p>
+
+            <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" data-loading-message="Updating student assessments..." @submit.prevent="requestConfirmation($event, 'edit')">
+                @csrf
+                @method('PATCH')
+                <div class="mb-4">
+                    <label class="block text-sm font-semibold text-gray-700 mb-2">Period</label>
+                    <select name="measurement_period" x-model="editPeriod" @change="refreshEditValues()" required class="w-full border border-gray-300 rounded px-3 py-2 text-sm">
+                        <option value="">Select Period</option>
+                        <option value="baseline">Baseline</option>
+                        <option value="midline">Midline</option>
+                        <option value="endline">Endline</option>
+                    </select>
+                </div>
+
+                <div class="overflow-x-auto mb-6">
+                    <table class="w-full text-sm border-collapse">
+                        <thead class="bg-gray-100 text-gray-700">
+                            <tr>
+                                <th class="px-3 py-2 border text-left">Learner</th>
+                                <th class="px-3 py-2 border">Weight (kg)</th>
+                                <th class="px-3 py-2 border">Height (cm)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach($approvedStudents as $student)
+                            @php
+                            $measurements = collect(['baseline', 'midline', 'endline'])->mapWithKeys(function ($period) use ($student) {
+                            $record = $student->periodProgress[ucfirst($period)][0] ?? null;
+                            return [$period => $record ? ['weight' => $record->weight, 'height' => $record->height] : null];
+                            });
+                            @endphp
+                            <tr data-edit-row data-values='@json($measurements)'>
+                                <td class="px-3 py-2 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }}</td>
+                                <td class="px-3 py-2 border"><input type="hidden" name="measurements[{{ $student->id }}][student_id]" value="{{ $student->id }}"><input type="number" name="measurements[{{ $student->id }}][weight]" data-edit-weight step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                                <td class="px-3 py-2 border"><input type="number" name="measurements[{{ $student->id }}][height]" data-edit-height step="0.1" min="0.1" class="w-full border border-gray-300 rounded px-2 py-1"></td>
+                            </tr>
+                            @endforeach
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="flex gap-2">
+                    <button type="submit" class="flex-1 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 font-semibold">Update</button>
+                    <button type="button" @click="closeEditModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Period Confirmation Modal -->
+    <div x-show="showConfirmation" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60]" style="display: none;">
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
+            <h3 class="text-lg font-bold mb-2">Confirm Period Changes</h3>
+            <p class="text-sm text-gray-600 mb-6" x-text="confirmationMessage"></p>
+            <div class="flex gap-2">
+                <button type="button" @click="confirmSubmission()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Confirm</button>
+                <button type="button" @click="showConfirmation = false" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Email Notice Modal -->
+    <div x-show="showEmailModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-md mx-4">
+            <h3 class="text-lg font-bold mb-2">Send Feeding Day Notice</h3>
+            <p class="text-xs text-gray-500 mb-4">Recipient: <span class="font-semibold text-gray-800" x-text="currentGuardianEmail"></span></p>
+
+            <form :action="'/encoder/students/' + currentStudentId + '/email-feeding'" method="POST" class="space-y-4">
+                @csrf
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Meal to be Served <span class="text-red-500">*</span></label>
+                    <input type="text" name="meal" required placeholder="e.g. Rice porridge with egg" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Feeding Date <span class="text-red-500">*</span></label>
+                    <input type="date" name="date" required value="{{ date('Y-m-d') }}" class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Teacher's Notes (Optional)</label>
+                    <textarea name="notes" rows="3" placeholder="Additional instructions or notes for the parent..." class="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"></textarea>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button type="submit" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Send Email</button>
+                    <button type="button" @click="closeEmailModal()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <x-student-profile-modal />
+</div>
+
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+<script>
+    function sbfpManager() {
+        return {
+            showModal: false,
+            showEditModal: false,
+            showApprovalModal: false,
+            showConfirmation: false,
+            showEmailModal: false,
+            currentStudentId: null,
+            currentGuardianEmail: '',
+            addPeriod: '',
+            editPeriod: '',
+            pendingForm: null,
+            confirmationMessage: '',
+            openPeriodModal() {
+                this.showModal = true;
+            },
+            closeModal() {
+                this.showModal = false;
+                this.addPeriod = '';
+                document.querySelectorAll('[data-add-row] input[type="number"]').forEach((input) => {
+                    input.value = '';
+                    input.readOnly = false;
+                    input.required = false;
+                });
+            },
+            refreshAddValues() {
+                document.querySelectorAll('[data-add-row]').forEach((row) => {
+                    const values = JSON.parse(row.dataset.values || '{}');
+                    const measurement = values[this.addPeriod] || null;
+                    const weight = row.querySelector('[data-add-weight]');
+                    const height = row.querySelector('[data-add-height]');
+                    const hasMeasurement = measurement !== null;
+
+                    weight.value = measurement?.weight || '';
+                    height.value = measurement?.height || '';
+                    weight.readOnly = hasMeasurement;
+                    height.readOnly = hasMeasurement;
+                    weight.required = !hasMeasurement;
+                    height.required = !hasMeasurement;
+                });
+            },
+            openEditPeriodModal() {
+                this.showEditModal = true;
+            },
+            openApprovalModal() {
+                this.showApprovalModal = true;
+            },
+            closeApprovalModal() {
+                this.showApprovalModal = false;
+            },
+            refreshEditValues() {
+                document.querySelectorAll('[data-edit-row]').forEach((row) => {
+                    const values = JSON.parse(row.dataset.values || '{}');
+                    const measurement = values[this.editPeriod] || {};
+                    row.querySelector('[data-edit-weight]').value = measurement.weight || '';
+                    row.querySelector('[data-edit-height]').value = measurement.height || '';
+                });
+            },
+            requestConfirmation(event, action) {
+                const form = event.target;
+                let count = 0;
+                let subject = 'student approval';
+                let periodName = '';
+                if (action === 'approval') {
+                    count = Array.from(form.querySelectorAll('[data-approval-row]')).filter((row) => {
+                        const selected = row.querySelector('[data-approval-status]:checked');
+                        const reason = row.querySelector('input[name$="[disapproval_reason]"]:checked')?.value || '';
+                        const details = row.querySelector('input[name$="[reason_details]"]')?.value || '';
+                        const currentReason = row.dataset.currentReason || '';
+                        const nextReason = selected?.value === 'disapproved' ?
+                            (reason === 'custom' ? details : reason) :
+                            '';
+                        return selected && (selected.value !== row.dataset.current || nextReason !== currentReason);
+                    }).length;
+                } else {
+                    const period = form.querySelector('[name="measurement_period"]');
+                    periodName = period.options[period.selectedIndex]?.text || 'the selected period';
+                    subject = 'student weight and height';
+                    if (action === 'add') {
+                        count = Array.from(form.querySelectorAll('[data-add-row]')).filter((row) => {
+                            const weight = row.querySelector('[data-add-weight]');
+                            const height = row.querySelector('[data-add-height]');
+                            return weight && height && !weight.readOnly && weight.value !== '' && height.value !== '';
                         }).length;
                     } else {
-                        const period = form.querySelector('[name="measurement_period"]');
-                        periodName = period.options[period.selectedIndex]?.text || 'the selected period';
-                        subject = 'student weight and height';
-                        if (action === 'add') {
-                            count = Array.from(form.querySelectorAll('[data-add-row]')).filter((row) => {
-                                const weight = row.querySelector('[data-add-weight]');
-                                const height = row.querySelector('[data-add-height]');
-                                return weight && height && !weight.readOnly && weight.value !== '' && height.value !== '';
-                            }).length;
-                        } else {
-                            count = Array.from(form.querySelectorAll('[data-edit-row]')).filter((row) => {
-                                const values = JSON.parse(row.dataset.values || '{}')[this.editPeriod] || {};
-                                const weight = row.querySelector('[data-edit-weight]')?.value || '';
-                                const height = row.querySelector('[data-edit-height]')?.value || '';
-                                return weight !== '' && height !== '' && (String(values.weight || '') !== weight || String(values.height || '') !== height);
-                            }).length;
-                        }
+                        count = Array.from(form.querySelectorAll('[data-edit-row]')).filter((row) => {
+                            const values = JSON.parse(row.dataset.values || '{}')[this.editPeriod] || {};
+                            const weight = row.querySelector('[data-edit-weight]')?.value || '';
+                            const height = row.querySelector('[data-edit-height]')?.value || '';
+                            return weight !== '' && height !== '' && (String(values.weight || '') !== weight || String(values.height || '') !== height);
+                        }).length;
                     }
-                    const verb = action === 'edit' ? 'editing' : action === 'add' ? 'adding' : 'updating';
-                    this.pendingForm = form;
-                    this.confirmationMessage = `${verb} ${count} ${subject}${count === 1 ? '' : 's'}${periodName ? ` in ${periodName}` : ''}. Please confirm.`;
-                    this.showConfirmation = true;
-                },
-                confirmSubmission() {
-                    this.showConfirmation = false;
-                    if (this.pendingForm) {
-                        showLoadingModal(this.pendingForm.dataset.loadingMessage || 'Processing, please wait...');
-                        this.pendingForm.submit();
-                    }
-                },
-                closeEditModal() {
-                    this.showEditModal = false;
-                    this.editPeriod = '';
-                    document.querySelectorAll('[data-edit-row] input[type="number"]').forEach((input) => input.value = '');
-                },
-                openEmailModal(studentId, studentName, guardianEmail) {
-                    this.currentStudentId = studentId;
-                    this.currentGuardianEmail = guardianEmail;
-                    this.showEmailModal = true;
-                },
-                closeEmailModal() {
-                    this.showEmailModal = false;
-                    this.currentStudentId = null;
-                    this.currentGuardianEmail = '';
                 }
+                const verb = action === 'edit' ? 'editing' : action === 'add' ? 'adding' : 'updating';
+                this.pendingForm = form;
+                this.confirmationMessage = `${verb} ${count} ${subject}${count === 1 ? '' : 's'}${periodName ? ` in ${periodName}` : ''}. Please confirm.`;
+                this.showConfirmation = true;
+            },
+            confirmSubmission() {
+                this.showConfirmation = false;
+                if (this.pendingForm) {
+                    showLoadingModal(this.pendingForm.dataset.loadingMessage || 'Processing, please wait...');
+                    this.pendingForm.submit();
+                }
+            },
+            closeEditModal() {
+                this.showEditModal = false;
+                this.editPeriod = '';
+                document.querySelectorAll('[data-edit-row] input[type="number"]').forEach((input) => input.value = '');
+            },
+            openEmailModal(studentId, studentName, guardianEmail) {
+                this.currentStudentId = studentId;
+                this.currentGuardianEmail = guardianEmail;
+                this.showEmailModal = true;
+            },
+            closeEmailModal() {
+                this.showEmailModal = false;
+                this.currentStudentId = null;
+                this.currentGuardianEmail = '';
             }
         }
+    }
 
-        let searchTimeout;
-        const searchInput = document.querySelector('input[name="search"]');
-        if (searchInput) {
-            searchInput.addEventListener('input', function() {
-                clearTimeout(searchTimeout);
-                searchTimeout = setTimeout(() => {
-                    this.form.submit();
-                }, 300);
-            });
-        }
-    </script>
+    let searchTimeout;
+    const searchInput = document.querySelector('input[name="search"]');
+    if (searchInput) {
+        searchInput.addEventListener('input', function() {
+            clearTimeout(searchTimeout);
+            searchTimeout = setTimeout(() => {
+                this.form.submit();
+            }, 300);
+        });
+    }
+</script>
 
-    <style>
-        [x-cloak] { display: none !important; }
-    </style>
+<style>
+    [x-cloak] {
+        display: none !important;
+    }
+</style>
 @endsection
