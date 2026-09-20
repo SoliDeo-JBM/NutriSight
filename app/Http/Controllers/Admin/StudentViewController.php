@@ -14,11 +14,11 @@ class StudentViewController extends Controller
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)
+            $q->where('school_year_id', $activeSyId)->active()
                 ->with('sbfpParticipant.nutritionMeasurements');
         }])
             ->whereHas('enrollments', function ($q) use ($activeSyId) {
-                $q->where('school_year_id', $activeSyId);
+                $q->where('school_year_id', $activeSyId)->active();
             });
 
         if ($request->filled('search')) {
@@ -35,14 +35,14 @@ class StudentViewController extends Controller
         if ($request->filled('grade_level')) {
             $gradeLevel = $request->input('grade_level');
             $query->whereHas('enrollments', function ($q) use ($activeSyId, $gradeLevel) {
-                $q->where('school_year_id', $activeSyId)->where('grade_level', $gradeLevel);
+                $q->where('school_year_id', $activeSyId)->active()->where('grade_level', $gradeLevel);
             });
         }
 
         if ($request->filled('section')) {
             $section = $request->input('section');
             $query->whereHas('enrollments', function ($q) use ($activeSyId, $section) {
-                $q->where('school_year_id', $activeSyId)->where('section', $section);
+                $q->where('school_year_id', $activeSyId)->active()->where('section', $section);
             });
         }
 
@@ -52,7 +52,7 @@ class StudentViewController extends Controller
 
         if ($request->filled('bmi_category')) {
             $query->whereHas('enrollments', function ($enrollmentQuery) use ($activeSyId, $request) {
-                $enrollmentQuery->where('school_year_id', $activeSyId)
+                $enrollmentQuery->where('school_year_id', $activeSyId)->active()
                     ->whereHas('sbfpParticipant.nutritionMeasurements', function ($measurementQuery) use ($request) {
                         $measurementQuery->where('measurement_period', 'baseline')
                             ->where('bmi_category', $request->input('bmi_category'));
@@ -85,8 +85,8 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
-        $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->active()->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
+        $sections = Enrollment::where('school_year_id', $activeSyId)->active()->whereNotNull('section')->distinct()->pluck('section');
         $sexes = ['Male', 'Female'];
         $bmiCategories = ['Severely Wasted', 'Wasted', 'Normal', 'Overweight', 'Obese'];
         $sortOptions = [
@@ -107,14 +107,14 @@ class StudentViewController extends Controller
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)
+            $q->where('school_year_id', $activeSyId)->active()
                 ->with('sbfpParticipant.nutritionMeasurements');
         }])
             ->whereHas('enrollments', function ($q) use ($activeSyId) {
-                $q->where('school_year_id', $activeSyId);
+                $q->where('school_year_id', $activeSyId)->active();
             })
             ->whereHas('enrollments', function ($q) use ($activeSyId) {
-                $q->where('school_year_id', $activeSyId)
+                $q->where('school_year_id', $activeSyId)->active()
                     ->where(function ($eligibilityQuery) {
                         $eligibilityQuery->where('grade_level', 0)
                             ->orWhereHas('sbfpParticipant', function ($participantQuery) {
@@ -140,14 +140,14 @@ class StudentViewController extends Controller
         if ($request->filled('grade_level')) {
             $gradeLevel = $request->input('grade_level');
             $query->whereHas('enrollments', function ($q) use ($activeSyId, $gradeLevel) {
-                $q->where('school_year_id', $activeSyId)->where('grade_level', $gradeLevel);
+                $q->where('school_year_id', $activeSyId)->active()->where('grade_level', $gradeLevel);
             });
         }
 
         if ($request->filled('section')) {
             $section = $request->input('section');
             $query->whereHas('enrollments', function ($q) use ($activeSyId, $section) {
-                $q->where('school_year_id', $activeSyId)->where('section', $section);
+                $q->where('school_year_id', $activeSyId)->active()->where('section', $section);
             });
         }
 
@@ -180,8 +180,8 @@ class StudentViewController extends Controller
 
         $students = $query->paginate(15)->withQueryString();
 
-        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
-        $sections = Enrollment::where('school_year_id', $activeSyId)->whereNotNull('section')->distinct()->pluck('section');
+        $gradeLevels = Enrollment::where('school_year_id', $activeSyId)->active()->whereNotNull('grade_level')->where('grade_level', '<=', 6)->distinct()->orderBy('grade_level')->pluck('grade_level');
+        $sections = Enrollment::where('school_year_id', $activeSyId)->active()->whereNotNull('section')->distinct()->orderBy('section')->pluck('section');
         $sexes = ['Male', 'Female'];
         $sortOptions = [
             'latest' => 'Latest to Oldest',

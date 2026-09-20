@@ -180,6 +180,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/students', [App\Http\Controllers\StudentController::class, 'store'])->name('students.store');
         Route::put('/students/{student}', [App\Http\Controllers\StudentController::class, 'update'])->name('students.update');
         Route::delete('/students/{student}', [App\Http\Controllers\StudentController::class, 'destroy'])->name('students.destroy');
+        Route::post('/students/{student}/restore', [App\Http\Controllers\StudentController::class, 'restore'])->name('students.restore');
         Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
         Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
         Route::post('/students/{student}/assessment', [App\Http\Controllers\StudentController::class, 'storeAssessment'])->name('students.assessment');

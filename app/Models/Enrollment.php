@@ -9,6 +9,10 @@ class Enrollment extends Model
 {
     use HasFactory;
 
+    public const STATUS_ENROLLED = 'enrolled';
+
+    public const STATUS_WITHDRAWN = 'withdrawn';
+
     protected $fillable = [
         'student_id',
         'school_year_id',
@@ -16,6 +20,11 @@ class Enrollment extends Model
         'section',
         'status',
     ];
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', self::STATUS_ENROLLED);
+    }
 
     public function student()
     {

@@ -39,10 +39,10 @@ class StudentController extends Controller
 
         $query = Student::with([
             'enrollments' => function ($q) use ($activeSyId) {
-                $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements']);
+                $q->where('school_year_id', $activeSyId)->active()->with(['sbfpParticipant.nutritionMeasurements']);
             }
         ])->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-            $q->where('school_year_id', $activeSyId);
+            $q->where('school_year_id', $activeSyId)->active();
             if ($user && $user->isEncoder()) {
                 if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                     $q->whereRaw('1 = 0');
@@ -74,7 +74,7 @@ class StudentController extends Controller
         if ($request->filled('bmi_category')) {
             $bmiCategory = $request->input('bmi_category');
             $query->whereHas('enrollments', function ($q) use ($activeSyId, $bmiCategory) {
-                $q->where('school_year_id', $activeSyId)
+                $q->where('school_year_id', $activeSyId)->active()
                     ->whereHas('sbfpParticipant.nutritionMeasurements', function ($measurementQuery) use ($bmiCategory) {
                         $measurementQuery->where('measurement_period', 'baseline')
                             ->where('bmi_category', $bmiCategory);
@@ -172,11 +172,11 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)
+            $q->where('school_year_id', $activeSyId)->active()
                 ->with('sbfpParticipant.nutritionMeasurements');
         }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-                $q->where('school_year_id', $activeSyId);
+                $q->where('school_year_id', $activeSyId)->active();
                 if ($user && $user->isEncoder()) {
                     if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                         $q->whereRaw('1 = 0');
@@ -187,7 +187,7 @@ class StudentController extends Controller
                 }
             })
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-                $q->where('school_year_id', $activeSyId);
+                $q->where('school_year_id', $activeSyId)->active();
                 if ($user && $user->isEncoder()) {
                     $q->where('grade_level', $user->advisory_grade_level)
                         ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
@@ -296,6 +296,7 @@ class StudentController extends Controller
         $user = Auth::user();
         $enrollment = $student->enrollments()
             ->where('school_year_id', SchoolYearManager::activeSchoolYearId())
+            ->active()
             ->with('sbfpParticipant.nutritionMeasurements')
             ->first();
 
@@ -356,7 +357,7 @@ class StudentController extends Controller
             'school_year_id' => SchoolYearManager::activeSchoolYearId(),
             'grade_level' => (int) $validated['grade_level'],
             'section' => ucfirst(strtolower($validated['section'])),
-            'status' => 'enrolled',
+            'status' => Enrollment::STATUS_ENROLLED,
         ]);
 
         $participant = SbfpParticipant::create([
@@ -386,6 +387,7 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $student->enrollments()
             ->where('school_year_id', $activeSyId)
+            ->active()
             ->with('sbfpParticipant')
             ->first();
 
@@ -476,7 +478,7 @@ class StudentController extends Controller
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->active()->first();
         if (!$enrollment || !$enrollment->sbfpParticipant) {
             return back()->withErrors(['error' => 'Student is not an SBFP participant for the active school year.']);
         }
@@ -668,6 +670,7 @@ class StudentController extends Controller
         $user = Auth::user();
         $enrollment = $student->enrollments()
             ->where('school_year_id', $activeSyId)
+            ->active()
             ->with('sbfpParticipant')
             ->first();
 
@@ -716,7 +719,7 @@ class StudentController extends Controller
         }
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
-        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->active()->first();
 
         if ($enrollment && $enrollment->sbfpParticipant) {
             $this->parentApprovalService->closePending($enrollment->sbfpParticipant, 'manual_staff_decision', Auth::id());
@@ -806,19 +809,52 @@ class StudentController extends Controller
     public function destroy(Student $student)
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
         /** @var Enrollment|null $enrollment */
         $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
-        if ($enrollment) {
-            $enrollment->delete();
+        if (!$enrollment || ($user?->isEncoder() && !$this->encoderOwnsEnrollment($user, $enrollment))) {
+            abort(404);
         }
-        AuditLogger::log('Archived', 'Students', 'Archived student enrollment for ' . $student->first_name . ' ' . $student->last_name);
-        return back()->with('success', 'Student enrollment archived.');
+
+        if ($enrollment->status === Enrollment::STATUS_WITHDRAWN) {
+            return back()->with('success', 'Student is already withdrawn.');
+        }
+
+        $enrollment->update(['status' => Enrollment::STATUS_WITHDRAWN]);
+        AuditLogger::log('Updated', 'Students', 'Marked student as withdrawn: ' . $student->first_name . ' ' . $student->last_name);
+
+        return back()->with('success', 'Student marked as withdrawn. Existing records were preserved.');
+    }
+
+    public function restore(Student $student)
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        /** @var \App\Models\User|null $user */
+        $user = Auth::user();
+        $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
+
+        if (!$enrollment || ($user?->isEncoder() && !$this->encoderOwnsEnrollment($user, $enrollment))) {
+            abort(404);
+        }
+
+        $enrollment->update(['status' => Enrollment::STATUS_ENROLLED]);
+        AuditLogger::log('Updated', 'Students', 'Restored student enrollment: ' . $student->first_name . ' ' . $student->last_name);
+
+        return back()->with('success', 'Student enrollment restored.');
+    }
+
+    private function encoderOwnsEnrollment(\App\Models\User $user, Enrollment $enrollment): bool
+    {
+        return $enrollment->grade_level == $user->advisory_grade_level
+            && strtolower(trim($enrollment->section)) === strtolower(trim((string) $user->advisory_section));
     }
 
     public function generateIdCard(Student $student)
     {
         $enrollment = $student->enrollments()
             ->where('school_year_id', SchoolYearManager::activeSchoolYearId())
+            ->active()
             ->with('sbfpParticipant')
             ->firstOrFail();
 
@@ -834,10 +870,10 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments' => function ($enrollmentQuery) use ($activeSyId) {
-            $enrollmentQuery->where('school_year_id', $activeSyId)->with('sbfpParticipant.nutritionMeasurements');
+            $enrollmentQuery->where('school_year_id', $activeSyId)->active()->with('sbfpParticipant.nutritionMeasurements');
         }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-                $q->where('school_year_id', $activeSyId);
+                $q->where('school_year_id', $activeSyId)->active();
                 if ($user && $user->isEncoder()) {
                     $q->where('grade_level', $user->advisory_grade_level)
                         ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
@@ -845,7 +881,7 @@ class StudentController extends Controller
             });
 
         $students = $query->get()->filter(function ($student) use ($activeSyId) {
-            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
+            $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->where('status', Enrollment::STATUS_ENROLLED)->first();
             if (!$enrollment || !$enrollment->sbfpParticipant) {
                 return false;
             }

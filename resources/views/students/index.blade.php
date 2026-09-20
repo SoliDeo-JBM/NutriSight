@@ -147,11 +147,12 @@
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">
                             <a href="{{ route('encoder.students.edit', $student->id) }}" class="text-blue-600 hover:underline text-xs font-medium">Edit</a>
+                            <button type="button" onclick="openWithdrawModal('{{ route('encoder.students.destroy', $student->id) }}', @js($student->first_name . ' ' . $student->last_name))" class="ml-3 text-rose-600 hover:underline text-xs font-medium">Remove</button>
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="13" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
+                        <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -167,7 +168,38 @@
     </div>
 </div>
 
+<div id="withdraw-student-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/40 p-4" onclick="if(event.target===this)closeWithdrawModal()">
+    <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="withdraw-student-title" onclick="event.stopPropagation()">
+        <div class="mb-4 flex items-start justify-between gap-4">
+            <div>
+                <h2 id="withdraw-student-title" class="font-bold text-gray-900">Remove Student</h2>
+                <p class="mt-1 text-sm text-gray-600">Are you sure you want to mark <span id="withdraw-student-name" class="font-semibold text-gray-900"></span> as withdrawn?</p>
+            </div>
+            <button type="button" onclick="closeWithdrawModal()" aria-label="Close" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>
+        </div>
+        <p class="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">The student’s existing measurements, attendance, feeding, and approval records will be preserved.</p>
+        <form id="withdraw-student-form" method="POST" class="mt-5 flex justify-end gap-3">
+            @csrf
+            @method('DELETE')
+            <button type="button" onclick="closeWithdrawModal()" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300">Cancel</button>
+            <button type="submit" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Confirm Remove</button>
+        </form>
+    </div>
+</div>
+
 <script>
+    function openWithdrawModal(action, studentName) {
+        document.getElementById('withdraw-student-form').action = action;
+        document.getElementById('withdraw-student-name').textContent = studentName;
+        document.getElementById('withdraw-student-modal').classList.remove('hidden');
+        document.getElementById('withdraw-student-modal').classList.add('flex');
+    }
+
+    function closeWithdrawModal() {
+        document.getElementById('withdraw-student-modal').classList.add('hidden');
+        document.getElementById('withdraw-student-modal').classList.remove('flex');
+    }
+
     let searchTimeout;
     const searchInput = document.querySelector('input[name="search"]');
     if (searchInput) {
