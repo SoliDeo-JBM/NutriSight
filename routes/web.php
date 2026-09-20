@@ -62,6 +62,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     // Shared Student Print/ID & School Year Switch
     Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
     Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
+    Route::get('/school-logo/file', [App\Http\Controllers\SchoolLogoController::class, 'file'])->name('school-logo.file');
+    Route::get('/school-logo/deped-file', [App\Http\Controllers\SchoolLogoController::class, 'depedFile'])->name('school-logo.deped-file');
     Route::post('/school-years/switch', [App\Http\Controllers\Admin\SchoolYearController::class, 'switch'])->name('school-years.switch');
 
 
@@ -85,8 +87,6 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
         Route::get('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'edit'])->name('school-logo.edit');
-        Route::get('/school-logo/file', [App\Http\Controllers\SchoolLogoController::class, 'file'])->name('school-logo.file');
-        Route::get('/school-logo/deped-file', [App\Http\Controllers\SchoolLogoController::class, 'depedFile'])->name('school-logo.deped-file');
         Route::put('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'update'])->name('school-logo.update');
         Route::put('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'updateDepEd'])->name('school-logo.deped.update');
         Route::delete('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'reset'])->name('school-logo.reset');

@@ -22,7 +22,7 @@ class SchoolLogoService
 
     public static function url(): string
     {
-        return '/super-admin/school-logo/file?v=' . self::version(self::FILE_PREFIX);
+        return route('school-logo.file', ['v' => self::version(self::FILE_PREFIX)]);
     }
 
     public static function depedPath(): string
@@ -34,7 +34,7 @@ class SchoolLogoService
 
     public static function depedUrl(): string
     {
-        return '/super-admin/school-logo/deped-file?v=' . self::version(self::DEPED_FILE_PREFIX);
+        return route('school-logo.deped-file', ['v' => self::version(self::DEPED_FILE_PREFIX)]);
     }
 
     public static function upload(UploadedFile $file): void
