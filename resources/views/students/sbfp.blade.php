@@ -125,6 +125,8 @@
                     'Midline' => $student->periodProgress['Midline'][0] ?? null,
                     'Endline' => $student->periodProgress['Endline'][0] ?? null,
                     ];
+                    $normalBmiMin = 18.5;
+                    $normalBmiMax = 25.0;
                     $profileData = [
                     'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . $student->name_extension . ' ' . $student->middle_name),
                     'lrn' => $student->student_number,
@@ -139,73 +141,91 @@
                     'guardian_email' => $student->guardian_email ?? '-',
                     'approval' => ucfirst($student->parent_approval_status ?: 'Pending'),
                     'reason' => $student->disapproval_reason ? ucfirst(str_replace('_', ' ', $student->disapproval_reason)) : '-',
-                    'periods' => collect($periodData)->map(fn ($measurement) => $measurement ? [
-                    'weight' => $measurement->weight,
-                    'height' => $measurement->height,
-                    'bmi' => $measurement->bmi,
-                    ] : null)->all(),
-                    ];
-                    @endphp
-                    <tr class="hover:bg-gray-50 cursor-pointer" data-profile="{{ base64_encode(json_encode($profileData)) }}" @click="$dispatch('student-profile-open', JSON.parse(atob($el.dataset.profile)))">
-                        <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
-                        <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
-                        <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
-                        <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
-                        <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
-                        <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
-                        <!-- Period Data Columns -->
-                        @foreach(['Baseline', 'Midline', 'Endline'] as $period)
-                        <td class="px-4 py-3 border text-center">
-                            @if($periodData[$period])
-                            @php $data = $periodData[$period]; @endphp
-                            <div class="text-xs space-y-1 bg-gray-50 p-2 rounded">
-                                <div><strong>W:</strong> {{ $data->weight }}kg</div>
-                                <div><strong>H:</strong> {{ $data->height }}cm</div>
-                                <div><strong>BMI:</strong> {{ $data->bmi }}</div>
-                                <div class="text-xs font-semibold
+                    'periods' => collect($periodData)->map(function ($measurement) use ($normalBmiMin, $normalBmiMax) {
+                    if (!$measurement) {
+                    return null;
+                    }
+
+                    $weight = (float) $measurement->weight;
+                    $height = (float) $measurement->height;
+                    $target = null;
+
+                    if ($weight > 0 && $height > 0) {
+                    $heightM = $height / 100;
+                    $target = [
+                    'bmi' => number_format($normalBmiMin, 1) . ' - <' . number_format($normalBmiMax, 1), 'weight'=> number_format($normalBmiMin * ($heightM ** 2), 1) . ' - <' . number_format($normalBmiMax * ($heightM ** 2), 1) . ' kg' , 'height'=> number_format(sqrt($weight / $normalBmiMax) * 100, 1) . ' - ' . number_format(sqrt($weight / $normalBmiMin) * 100, 1) . ' cm',
+                            ];
+                            }
+
+                            return [
+                            'weight' => $measurement->weight,
+                            'height' => $measurement->height,
+                            'bmi' => $measurement->bmi,
+                            'target' => $target,
+                            ];
+                            })->all(),
+                            ];
+                            @endphp
+                            <tr class="hover:bg-gray-50 cursor-pointer" data-profile="{{ base64_encode(json_encode($profileData)) }}" @click="$dispatch('student-profile-open', JSON.parse(atob($el.dataset.profile)))">
+                                <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
+                                <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
+                                <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
+                                <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
+                                <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
+                                <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
+                                <!-- Period Data Columns -->
+                                @foreach(['Baseline', 'Midline', 'Endline'] as $period)
+                                <td class="px-4 py-3 border text-center">
+                                    @if($periodData[$period])
+                                    @php $data = $periodData[$period]; @endphp
+                                    <div class="text-xs space-y-1 bg-gray-50 p-2 rounded">
+                                        <div><strong>W:</strong> {{ $data->weight }}kg</div>
+                                        <div><strong>H:</strong> {{ $data->height }}cm</div>
+                                        <div><strong>BMI:</strong> {{ $data->bmi }}</div>
+                                        <div class="text-xs font-semibold
                                             @if($data->bmi_category == 'Normal') text-green-700
                                             @elseif(in_array($data->bmi_category, ['Wasted', 'Severely Wasted'])) text-red-700
                                             @else text-yellow-700 @endif">
-                                    {{ $data->bmi_category }}
-                                </div>
-                            </div>
-                            @endif
-                        </td>
-                        @endforeach
+                                            {{ $data->bmi_category }}
+                                        </div>
+                                    </div>
+                                    @endif
+                                </td>
+                                @endforeach
 
-                        <td class="px-4 py-3 border min-w-[220px] text-xs">
-                            @if($student->parent_approval_status === 'approved')
-                            <span class="font-semibold text-green-700">Approved</span>
-                            @elseif($student->parent_approval_status === 'disapproved')
-                            <span class="font-semibold text-red-700">Disapproved</span>
-                            @if($student->disapproval_reason)
-                            <span class="block text-gray-500">{{ $student->disapproval_reason }}</span>
-                            @endif
-                            @else
-                            <span class="font-semibold text-amber-700">Pending</span>
-                            @endif
-                        </td>
+                                <td class="px-4 py-3 border min-w-[220px] text-xs">
+                                    @if($student->parent_approval_status === 'approved')
+                                    <span class="font-semibold text-green-700">Approved</span>
+                                    @elseif($student->parent_approval_status === 'disapproved')
+                                    <span class="font-semibold text-red-700">Disapproved</span>
+                                    @if($student->disapproval_reason)
+                                    <span class="block text-gray-500">{{ $student->disapproval_reason }}</span>
+                                    @endif
+                                    @else
+                                    <span class="font-semibold text-amber-700">Pending</span>
+                                    @endif
+                                </td>
 
-                        <td class="px-4 py-3 border text-center whitespace-nowrap">
-                            @if($student->parent_approval_status === 'disapproved')
-                            <span class="text-red-500 text-xs font-semibold">Disapproved (No QR)</span>
-                            @elseif($student->is_permitted)
-                            <div class="flex flex-col items-center justify-center">
-                                <div class="p-1 bg-white border inline-block shadow-sm rounded">
-                                    {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
-                                </div>
-                                <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" @click.stop class="text-[11px] text-blue-600 hover:underline mt-1">Print Landscape ID</a>
-                            </div>
-                            @else
-                            <span class="text-gray-400 text-xs italic">Requires Approval</span>
-                            @endif
-                        </td>
-                    </tr>
-                    @empty
-                    <tr>
-                        <td colspan="11" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
-                    </tr>
-                    @endforelse
+                                <td class="px-4 py-3 border text-center whitespace-nowrap">
+                                    @if($student->parent_approval_status === 'disapproved')
+                                    <span class="text-red-500 text-xs font-semibold">Disapproved (No QR)</span>
+                                    @elseif($student->is_permitted)
+                                    <div class="flex flex-col items-center justify-center">
+                                        <div class="p-1 bg-white border inline-block shadow-sm rounded">
+                                            {!! \SimpleSoftwareIO\QrCode\Facades\QrCode::size(60)->generate($student->student_number) !!}
+                                        </div>
+                                        <a href="{{ route('encoder.students.id-card', $student->id) }}" target="_blank" @click.stop class="text-[11px] text-blue-600 hover:underline mt-1">Print Landscape ID</a>
+                                    </div>
+                                    @else
+                                    <span class="text-gray-400 text-xs italic">Requires Approval</span>
+                                    @endif
+                                </td>
+                            </tr>
+                            @empty
+                            <tr>
+                                <td colspan="11" class="px-4 py-8 border text-center text-gray-500">No SBFP records found matching your criteria.</td>
+                            </tr>
+                            @endforelse
                 </tbody>
             </table>
         </div>
