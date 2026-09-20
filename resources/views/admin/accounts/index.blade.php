@@ -220,7 +220,7 @@
                     <select id="edit_grade_level" name="advisory_grade_level" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">Select Grade Level</option>
                         @foreach([0, 1, 2, 3, 4, 5, 6, 7] as $grade)
-                            <option value="{{ $grade }}">{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>
+                        <option value="{{ $grade }}">{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -291,9 +291,9 @@
         document.getElementById('statusModalTitle').textContent = isActive ? 'Confirm Account Removal' : 'Confirm Account Restoration';
         document.getElementById('statusActionText').textContent = isActive ? 'remove' : 'restore';
         document.getElementById('statusSubmitButton').textContent = isActive ? 'Confirm Removal' : 'Confirm Restoration';
-        document.getElementById('statusSubmitButton').className = isActive
-            ? 'px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700'
-            : 'px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700';
+        document.getElementById('statusSubmitButton').className = isActive ?
+            'px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700' :
+            'px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700';
         nameSpan.textContent = button.dataset.userName;
         modal.classList.remove('hidden');
     }

@@ -196,5 +196,4 @@ class StudentViewController extends Controller
 
         return view('admin.students.sbfp', compact('students', 'gradeLevels', 'sections', 'sexes', 'sortOptions', 'routePrefix'));
     }
-
 }
