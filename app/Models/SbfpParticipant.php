@@ -40,6 +40,11 @@ class SbfpParticipant extends Model
         return $this->hasMany(NutritionMeasurement::class);
     }
 
+    public function approvalRequests()
+    {
+        return $this->hasMany(SbfpParentApprovalRequest::class);
+    }
+
     // Has many daily attendance logs
     public function attendanceRecords()
     {

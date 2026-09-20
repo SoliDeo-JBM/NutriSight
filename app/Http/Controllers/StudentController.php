@@ -10,6 +10,7 @@ use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
 use App\Services\ReportPeriodManager;
+use App\Services\SbfpParentApprovalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -21,11 +22,13 @@ class StudentController extends Controller
 {
     protected NutriCalculationService $nutriService;
     protected ReportPeriodManager $reportPeriodManager;
+    protected SbfpParentApprovalService $parentApprovalService;
 
-    public function __construct(NutriCalculationService $nutriService, ReportPeriodManager $reportPeriodManager)
+    public function __construct(NutriCalculationService $nutriService, ReportPeriodManager $reportPeriodManager, SbfpParentApprovalService $parentApprovalService)
     {
         $this->nutriService = $nutriService;
         $this->reportPeriodManager = $reportPeriodManager;
+        $this->parentApprovalService = $parentApprovalService;
     }
 
     public function index(Request $request)
@@ -45,7 +48,7 @@ class StudentController extends Controller
                     $q->whereRaw('1 = 0');
                 } else {
                     $q->where('grade_level', $user->advisory_grade_level)
-                      ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                 }
             }
         });
@@ -56,9 +59,9 @@ class StudentController extends Controller
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
                 $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
+                    ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
+                    ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
+                    ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -171,7 +174,7 @@ class StudentController extends Controller
         $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
             $q->where('school_year_id', $activeSyId)
                 ->with('sbfpParticipant.nutritionMeasurements');
-            }])
+        }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
@@ -206,9 +209,9 @@ class StudentController extends Controller
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
             $query->where(function ($q) use ($searchTerm) {
                 $q->whereRaw('LOWER(CAST(lrn AS TEXT)) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
-                  ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
+                    ->orWhereRaw('LOWER(first_name) LIKE ?', [$searchTerm])
+                    ->orWhereRaw('LOWER(last_name) LIKE ?', [$searchTerm])
+                    ->orWhereRaw('LOWER(middle_name) LIKE ?', [$searchTerm]);
             });
         }
 
@@ -217,7 +220,7 @@ class StudentController extends Controller
         }
 
         $hasPendingApproval = (clone $query)
-            ->whereHas('enrollments.sbfpParticipant', fn ($q) => $q->where(function ($pendingQuery) {
+            ->whereHas('enrollments.sbfpParticipant', fn($q) => $q->where(function ($pendingQuery) {
                 $pendingQuery->whereNull('parent_consent')
                     ->orWhere('parent_consent', '')
                     ->orWhere('parent_consent', 'pending');
@@ -278,7 +281,7 @@ class StudentController extends Controller
         }
 
         $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements
-            ->first(fn ($item) => strtolower($item->measurement_period) === 'baseline');
+            ->first(fn($item) => strtolower($item->measurement_period) === 'baseline');
 
         return view('students.create', compact('user', 'student', 'enrollment', 'measurement'));
     }
@@ -338,7 +341,7 @@ class StudentController extends Controller
             'parent_consent' => null,
         ]);
 
-        NutritionMeasurement::create([
+        $measurement = NutritionMeasurement::create([
             'sbfp_participant_id' => $participant->id,
             'height' => $validated['height'],
             'weight' => $validated['weight'],
@@ -347,6 +350,7 @@ class StudentController extends Controller
             'hfa' => 'Normal',
             'measurement_period' => 'baseline',
         ]);
+        $this->parentApprovalService->syncBaseline($participant, $measurement);
         $this->reportPeriodManager->ensure(SchoolYearManager::activeSchoolYearId(), 'baseline');
 
         AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
@@ -388,6 +392,11 @@ class StudentController extends Controller
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
 
+        $existingMeasurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
+            ->where('measurement_period', 'baseline')
+            ->first();
+        $wasEligible = $existingMeasurement && $this->parentApprovalService->isEligible($existingMeasurement);
+
         DB::transaction(function () use ($student, $enrollment, $validated, $metrics) {
             $student->update([
                 'lrn' => $validated['lrn'],
@@ -409,7 +418,7 @@ class StudentController extends Controller
             ]);
 
             $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
-                    ->where('measurement_period', 'baseline')
+                ->where('measurement_period', 'baseline')
                 ->first();
 
             if ($measurement) {
@@ -422,6 +431,13 @@ class StudentController extends Controller
                 ]);
             }
         });
+
+        $updatedMeasurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
+            ->where('measurement_period', 'baseline')
+            ->first();
+        if (!$wasEligible && $updatedMeasurement && $this->parentApprovalService->isEligible($updatedMeasurement)) {
+            $this->parentApprovalService->syncBaseline($enrollment->sbfpParticipant, $updatedMeasurement);
+        }
 
         AuditLogger::log('Updated', 'Students', 'Updated student ' . $student->first_name . ' ' . $student->last_name);
 
@@ -679,6 +695,7 @@ class StudentController extends Controller
         $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->first();
 
         if ($enrollment && $enrollment->sbfpParticipant) {
+            $this->parentApprovalService->closePending($enrollment->sbfpParticipant, 'manual_staff_decision', Auth::id());
             $enrollment->sbfpParticipant->update([
                 'parent_consent' => $validated['parent_consent'] === 'pending' ? null : ($validated['parent_consent'] ?? null),
                 'disapproval_reason' => $validated['parent_consent'] === 'disapproved'
@@ -738,6 +755,7 @@ class StudentController extends Controller
 
                 $participant = $enrollment->sbfpParticipant;
                 if ($participant->parent_consent !== $normalizedStatus || $participant->disapproval_reason !== $reason) {
+                    $this->parentApprovalService->closePending($participant, 'manual_staff_decision', $user->id);
                     $participant->update([
                         'parent_consent' => $normalizedStatus,
                         'disapproval_reason' => $reason,
@@ -783,8 +801,8 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments' => function ($enrollmentQuery) use ($activeSyId) {
-                $enrollmentQuery->where('school_year_id', $activeSyId)->with('sbfpParticipant.nutritionMeasurements');
-            }])
+            $enrollmentQuery->where('school_year_id', $activeSyId)->with('sbfpParticipant.nutritionMeasurements');
+        }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId);
                 if ($user && $user->isEncoder()) {
