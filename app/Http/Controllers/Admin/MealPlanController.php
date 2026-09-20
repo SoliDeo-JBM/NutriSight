@@ -13,6 +13,12 @@ class MealPlanController extends Controller
 {
     public function index(Request $request)
     {
+        $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'year' => ['nullable', 'integer', 'between:1900,2200'],
+            'month' => ['nullable', 'integer', 'between:1,12'],
+        ]);
+
         $requestedDate = $request->input('date');
         $requestedYear = $request->integer('year');
         $requestedMonth = $request->integer('month');

@@ -82,7 +82,7 @@ class AccountController extends Controller
         $advisers = $query->paginate(15)->withQueryString();
 
         $gradeLevels = User::where('users.role', $targetRole)
-            ->whereHas('schoolYearUserRecords', fn ($recordQuery) => $recordQuery
+            ->whereHas('schoolYearUserRecords', fn($recordQuery) => $recordQuery
                 ->where('school_year_id', $activeSchoolYearId)
                 ->whereNotNull('advisory_grade_level'))
             ->distinct()
@@ -129,19 +129,19 @@ class AccountController extends Controller
         $redirectRoute = $isSuperAdmin ? 'super-admin.accounts.index' : 'admin.accounts.index';
 
         $validated = $request->validate([
-            'deped_id' => 'required|string|unique:users,deped_id',
-            'first_name' => 'required_without:name|nullable|string|max:255',
-            'middle_name' => 'nullable|string|max:255',
-            'last_name' => 'required_without:name|nullable|string|max:255',
-            'name_extension' => 'nullable|string|max:50',
-            'name' => 'nullable|string|max:255',
+            'deped_id' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', 'unique:users,deped_id'],
+            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name_extension' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::defaults()],
             'sex' => 'required|in:Male,Female',
             'birthdate' => 'required|date|before:today',
-            'position' => 'required|string',
+            'position' => ['required', 'string', 'max:255', 'regex:/^[\pL\pN\s.\'\/-]+$/u'],
             'advisory_grade_level' => $isSuperAdmin ? 'nullable' : 'required|integer',
-            'advisory_section' => $isSuperAdmin ? 'nullable|string|max:255' : 'required|string|max:255',
+            'advisory_section' => $isSuperAdmin ? ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'] : ['required', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
         ]);
 
         $user = User::create([
@@ -177,22 +177,22 @@ class AccountController extends Controller
         abort_unless($user->role === $expectedRole, 403);
 
         $validated = $request->validate([
-            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
-            'middle_name' => ['nullable', 'string', 'max:255'],
-            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
-            'name_extension' => ['nullable', 'string', 'max:50'],
-            'name' => ['nullable', 'string', 'max:255'],
+            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name_extension' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'sex' => ['nullable', 'in:Male,Female'],
-            'birthdate' => ['nullable', 'date'],
+            'birthdate' => ['nullable', 'date', 'before:today'],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
-            'deped_id' => ['nullable', 'string', 'max:255', Rule::unique('users', 'deped_id')->ignore($user->id)],
-            'position' => ['nullable', 'string', 'max:255'],
+            'deped_id' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', Rule::unique('users', 'deped_id')->ignore($user->id)],
+            'position' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\pN\s.\'\/-]+$/u'],
         ]);
 
         if ($user->isEncoder()) {
             $validated = array_merge($validated, $request->validate([
                 'advisory_grade_level' => ['nullable', 'integer', 'between:0,7'],
-                'advisory_section' => ['nullable', 'string', 'max:255'],
+                'advisory_section' => ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
             ]));
 
             if (array_key_exists('advisory_section', $validated) && $validated['advisory_section'] !== null) {

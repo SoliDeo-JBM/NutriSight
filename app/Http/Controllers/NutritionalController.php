@@ -24,8 +24,8 @@ class NutritionalController extends Controller
     {
         $validated = $request->validate([
             'measurement_period' => 'required|in:baseline,midline,endline',
-            'weight' => 'required|numeric',
-            'height' => 'required|numeric',
+            'weight' => 'required|numeric|min:0.1|max:500',
+            'height' => 'required|numeric|min:0.1|max:300',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();

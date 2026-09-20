@@ -314,21 +314,21 @@ class StudentController extends Controller
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
         $validated = $request->validate([
-            'lrn' => ['required', 'regex:/^[0-9]+$/', 'unique:students,lrn'],
-            'last_name' => 'required',
-            'first_name' => 'required',
-            'name_extension' => 'nullable',
-            'middle_name' => 'nullable',
-            'birth_date' => 'required|date',
-            'sex' => 'required',
+            'lrn' => ['required', 'regex:/^[0-9]+$/', 'max:20', 'unique:students,lrn'],
+            'last_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'first_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name_extension' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s.\'-]+$/u'],
+            'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'birth_date' => ['required', 'date', 'before:today'],
+            'sex' => 'required|in:Male,Female',
             'grade_level' => 'required|integer|between:0,7',
-            'section' => 'required|string',
-            'weight' => 'required|numeric',
-            'height' => 'required|numeric',
-            'guardian_name' => 'required',
-            'guardian_contact' => 'required',
-            'guardian_email' => 'nullable|email',
-            'address' => 'required',
+            'section' => ['required', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
+            'weight' => 'required|numeric|min:0.1|max:500',
+            'height' => 'required|numeric|min:0.1|max:300',
+            'guardian_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'guardian_contact' => ['required', 'string', 'regex:/^(?:\+?[0-9][0-9\s-]{6,14})$/', 'max:20'],
+            'guardian_email' => 'nullable|email|max:255',
+            'address' => 'required|string|max:500',
         ]);
 
         if ($user?->isEncoder()) {
@@ -396,21 +396,21 @@ class StudentController extends Controller
         }
 
         $validated = $request->validate([
-            'lrn' => ['required', 'regex:/^[0-9]+$/', 'unique:students,lrn,' . $student->id],
-            'last_name' => 'required',
-            'first_name' => 'required',
-            'name_extension' => 'nullable',
-            'middle_name' => 'nullable',
-            'birth_date' => 'required|date',
-            'sex' => 'required',
+            'lrn' => ['required', 'regex:/^[0-9]+$/', 'max:20', 'unique:students,lrn,' . $student->id],
+            'last_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'first_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name_extension' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s.\'-]+$/u'],
+            'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'birth_date' => ['required', 'date', 'before:today'],
+            'sex' => 'required|in:Male,Female',
             'grade_level' => 'required|integer|between:0,7',
-            'section' => 'required|string',
-            'weight' => 'required|numeric',
-            'height' => 'required|numeric',
-            'guardian_name' => 'required',
-            'guardian_contact' => 'required',
-            'guardian_email' => 'nullable|email',
-            'address' => 'required',
+            'section' => ['required', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
+            'weight' => 'required|numeric|min:0.1|max:500',
+            'height' => 'required|numeric|min:0.1|max:300',
+            'guardian_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'guardian_contact' => ['required', 'string', 'regex:/^(?:\+?[0-9][0-9\s-]{6,14})$/', 'max:20'],
+            'guardian_email' => 'nullable|email|max:255',
+            'address' => 'required|string|max:500',
         ]);
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
@@ -471,8 +471,8 @@ class StudentController extends Controller
     {
         $validated = $request->validate([
             'measurement_period' => 'required|in:midline,endline',
-            'weight' => 'required|numeric|min:0',
-            'height' => 'required|numeric|min:0',
+            'weight' => 'required|numeric|min:0.1|max:500',
+            'height' => 'required|numeric|min:0.1|max:300',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -522,8 +522,8 @@ class StudentController extends Controller
             'measurement_period' => 'required|in:baseline,midline,endline',
             'measurements' => 'required|array',
             'measurements.*.student_id' => 'required|integer',
-            'measurements.*.weight' => 'nullable|numeric|min:0.1',
-            'measurements.*.height' => 'nullable|numeric|min:0.1',
+            'measurements.*.weight' => 'nullable|numeric|min:0.1|max:500',
+            'measurements.*.height' => 'nullable|numeric|min:0.1|max:300',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -587,8 +587,8 @@ class StudentController extends Controller
             'measurement_period' => 'required|in:baseline,midline,endline',
             'measurements' => 'required|array',
             'measurements.*.student_id' => 'required|integer',
-            'measurements.*.weight' => 'nullable|numeric|min:0.1',
-            'measurements.*.height' => 'nullable|numeric|min:0.1',
+            'measurements.*.weight' => 'nullable|numeric|min:0.1|max:500',
+            'measurements.*.height' => 'nullable|numeric|min:0.1|max:300',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
@@ -660,8 +660,8 @@ class StudentController extends Controller
     {
         $validated = $request->validate([
             'measurement_period' => 'required|in:baseline,midline,endline',
-            'weight' => 'required|numeric|min:0.1',
-            'height' => 'required|numeric|min:0.1',
+            'weight' => 'required|numeric|min:0.1|max:500',
+            'height' => 'required|numeric|min:0.1|max:300',
         ]);
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();

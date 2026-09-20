@@ -36,6 +36,12 @@ class AttendanceController extends Controller
 
     private function attendanceIndex(Request $request, bool $encoderScope, string $routePrefix)
     {
+        $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'grade_level' => ['nullable', 'integer', 'between:0,7'],
+            'section' => ['nullable', 'string', 'max:100'],
+        ]);
+
         $date = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();

@@ -37,22 +37,22 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-semibold mb-1">Last Name <span class="text-red-500">*</span></label>
-                <input type="text" name="last_name" value="{{ old('last_name', $student->last_name ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Dela Cruz">
+                <input type="text" name="last_name" value="{{ old('last_name', $student->last_name ?? '') }}" required maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Dela Cruz">
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">First Name <span class="text-red-500">*</span></label>
-                <input type="text" name="first_name" value="{{ old('first_name', $student->first_name ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Juan">
+                <input type="text" name="first_name" value="{{ old('first_name', $student->first_name ?? '') }}" required maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Juan">
             </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-semibold mb-1">Name Extension (Optional)</label>
-                <input type="text" name="name_extension" value="{{ old('name_extension', $student->name_extension ?? '') }}" placeholder="e.g. Jr., III" class="w-full border rounded p-2 text-sm">
+                <input type="text" name="name_extension" value="{{ old('name_extension', $student->name_extension ?? '') }}" maxlength="50" pattern="[A-Za-zÀ-ÿ .'-]+" placeholder="e.g. Jr., III" class="w-full border rounded p-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">Middle Name (Optional)</label>
-                <input type="text" name="middle_name" value="{{ old('middle_name', $student->middle_name ?? '') }}" placeholder="e.g. Santos" class="w-full border rounded p-2 text-sm">
+                <input type="text" name="middle_name" value="{{ old('middle_name', $student->middle_name ?? '') }}" maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" placeholder="e.g. Santos" class="w-full border rounded p-2 text-sm">
             </div>
         </div>
 
@@ -84,7 +84,7 @@
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">Section <span class="text-red-500">*</span></label>
-                <input type="text" name="section" value="{{ old('section', $enrollment->section ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Mabini">
+                <input type="text" name="section" value="{{ old('section', $enrollment->section ?? '') }}" required maxlength="100" pattern="[A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 .'-]*" class="w-full border rounded p-2 text-sm" placeholder="e.g. Mabini">
             </div>
         </div>
         @else
@@ -95,33 +95,33 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-semibold mb-1">Weight (kg) <span class="text-red-500">*</span></label>
-                <input type="number" step="0.1" name="weight" value="{{ old('weight', $measurement->weight ?? '') }}" required placeholder="e.g. 18.5" class="w-full border rounded p-2 text-sm">
+                <input type="number" step="0.1" min="0.1" max="500" name="weight" value="{{ old('weight', $measurement->weight ?? '') }}" required placeholder="e.g. 18.5" class="w-full border rounded p-2 text-sm">
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">Height (cm) <span class="text-red-500">*</span></label>
-                <input type="number" step="0.1" name="height" value="{{ old('height', $measurement->height ?? '') }}" required placeholder="e.g. 115" class="w-full border rounded p-2 text-sm">
+                <input type="number" step="0.1" min="0.1" max="300" name="height" value="{{ old('height', $measurement->height ?? '') }}" required placeholder="e.g. 115" class="w-full border rounded p-2 text-sm">
             </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-semibold mb-1">Guardian's Name <span class="text-red-500">*</span></label>
-                <input type="text" name="guardian_name" value="{{ old('guardian_name', $student->guardian_name ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. Maria Dela Cruz">
+                <input type="text" name="guardian_name" value="{{ old('guardian_name', $student->guardian_name ?? '') }}" required maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Maria Dela Cruz">
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">Guardian's Phone Number <span class="text-red-500">*</span></label>
-                <input type="text" name="guardian_contact" value="{{ old('guardian_contact', $student->guardian_contact ?? '') }}" required class="w-full border rounded p-2 text-sm" placeholder="e.g. 09171234567">
+                <input type="tel" name="guardian_contact" value="{{ old('guardian_contact', $student->guardian_contact ?? '') }}" required maxlength="20" pattern="\+?[0-9][0-9 -]{6,14}" class="w-full border rounded p-2 text-sm" placeholder="e.g. 09171234567">
             </div>
         </div>
 
         <div>
             <label class="block text-sm font-semibold mb-1">Guardian's Email (Optional - for daily meal/nutrition updates)</label>
-            <input type="email" name="guardian_email" value="{{ old('guardian_email', $student->guardian_email ?? '') }}" placeholder="guardian@example.com" class="w-full border rounded p-2 text-sm">
+            <input type="email" name="guardian_email" value="{{ old('guardian_email', $student->guardian_email ?? '') }}" maxlength="255" placeholder="guardian@example.com" class="w-full border rounded p-2 text-sm">
         </div>
 
         <div>
             <label class="block text-sm font-semibold mb-1">Complete Address <span class="text-red-500">*</span></label>
-            <textarea name="address" required rows="2" class="w-full border rounded p-2 text-sm" placeholder="House number, street, barangay, municipality">{{ old('address', $student->address ?? '') }}</textarea>
+            <textarea name="address" required maxlength="500" rows="2" class="w-full border rounded p-2 text-sm" placeholder="House number, street, barangay, municipality">{{ old('address', $student->address ?? '') }}</textarea>
         </div>
 
         <div class="flex justify-end gap-3 pt-4">

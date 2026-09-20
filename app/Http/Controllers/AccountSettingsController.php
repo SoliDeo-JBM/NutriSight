@@ -21,20 +21,20 @@ class AccountSettingsController extends Controller
         $user = $request->user();
 
         $validated = $request->validate([
-            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
-            'middle_name' => ['nullable', 'string', 'max:255'],
-            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255'],
-            'name_extension' => ['nullable', 'string', 'max:50'],
+            'first_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'last_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
+            'name_extension' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s.\'-]+$/u'],
             'name' => ['nullable', 'string', 'max:255'],
             'sex' => ['nullable', 'in:Male,Female'],
-            'birthdate' => ['nullable', 'date'],
+            'birthdate' => ['nullable', 'date', 'before:today'],
         ]);
 
         if ($user->role === 'super_admin') {
             $validated = array_merge($validated, $request->validate([
-                    'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
-                'deped_id' => ['nullable', 'string', 'max:255', 'unique:users,deped_id,' . $user->id],
-                'position' => ['nullable', 'string', 'max:255'],
+                'email' => ['required', 'email', 'max:255', 'unique:users,email,' . $user->id],
+                'deped_id' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', 'unique:users,deped_id,' . $user->id],
+                'position' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\pN\s.\'\/-]+$/u'],
             ]));
         }
 
