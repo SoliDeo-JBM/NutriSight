@@ -1,9 +1,9 @@
 @props(['participants', 'action'])
 @php
-    $profileUploadError = collect($errors->getMessages())
-        ->filter(fn ($messages, $key) => $key === 'profiles' || str_starts_with($key, 'profiles.'))
-        ->flatten()
-        ->first();
+$profileUploadError = collect($errors->getMessages())
+->filter(fn ($messages, $key) => $key === 'profiles' || str_starts_with($key, 'profiles.'))
+->flatten()
+->first();
 @endphp
 <div x-data="{
     showProfileImages: false,
@@ -11,9 +11,11 @@
     uploadForm: null,
     selectedImages: 0,
     uploadError: '',
-    validateFile(event) {
+    previews: {},
+    validateFile(event, participantId) {
         const file = event.target.files[0];
         if (!file) {
+            this.clearPreview(participantId);
             return;
         }
         const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
@@ -22,6 +24,20 @@
             : file.size > 5 * 1024 * 1024
                 ? 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.'
                 : '';
+        this.clearPreview(participantId);
+        if (!this.uploadError) {
+            this.previews[participantId] = URL.createObjectURL(file);
+        }
+    },
+    clearPreview(participantId) {
+        if (this.previews[participantId]) {
+            URL.revokeObjectURL(this.previews[participantId]);
+            delete this.previews[participantId];
+        }
+    },
+    closeProfileImages() {
+        Object.keys(this.previews).forEach((participantId) => this.clearPreview(participantId));
+        this.showProfileImages = false;
     }
 }">
     <button type="button" @click="showProfileImages = true" class="shrink-0 bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700 whitespace-nowrap inline-flex items-center gap-2">
@@ -29,7 +45,7 @@
     </button>
 
     <div x-show="showProfileImages" x-transition x-cloak class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto" @click.outside="showProfileImages = false">
+        <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto" @click.outside="closeProfileImages()">
             <h3 class="text-lg font-bold mb-1">Add Profile Images</h3>
             <p class="text-sm text-gray-500 mb-4">Upload or replace profile images for SBFP participants. Accepted: JPG, PNG, WEBP (max 5 MB each). Leave blank to keep the current image.</p>
 
@@ -52,7 +68,17 @@
                                 </td>
                                 <td class="px-3 py-2 border whitespace-nowrap">{{ $row['name'] }}</td>
                                 <td class="px-3 py-2 border">
-                                    <input type="file" name="profiles[{{ $row['id'] }}]" accept="image/png,image/jpeg,image/webp" @change="validateFile($event)" class="text-xs">
+                                    <div class="flex items-center gap-3">
+                                        <div class="shrink-0 text-center">
+                                            <img
+                                                x-show="previews['{{ $row['id'] }}']"
+                                                :src="previews['{{ $row['id'] }}']"
+                                                alt="Selected profile image preview"
+                                                class="h-12 w-12 rounded-full object-cover border-2 border-indigo-300">
+                                            <span x-show="!previews['{{ $row['id'] }}']" class="inline-flex h-12 w-12 items-center justify-center rounded-full border border-dashed border-gray-300 text-xs text-gray-400">New</span>
+                                        </div>
+                                        <input type="file" name="profiles[{{ $row['id'] }}]" accept="image/png,image/jpeg,image/webp" @change="validateFile($event, '{{ $row['id'] }}')" class="min-w-0 text-xs">
+                                    </div>
                                 </td>
                             </tr>
                             @empty
@@ -66,7 +92,7 @@
                 <p x-show="uploadError" x-text="uploadError" class="mb-4 text-sm font-semibold text-red-600" role="alert"></p>
                 <div class="flex gap-2">
                     <button type="submit" class="flex-1 bg-indigo-600 text-white px-4 py-2 rounded text-sm hover:bg-indigo-700 font-semibold">Upload</button>
-                    <button type="button" @click="showProfileImages = false" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
+                    <button type="button" @click="closeProfileImages()" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
                 </div>
             </form>
         </div>
@@ -79,7 +105,7 @@
             <p class="text-sm text-gray-600 mb-6">Upload <span x-text="selectedImages"></span> profile image<span x-show="selectedImages !== 1">s</span> now?</p>
             <div class="flex gap-2">
                 <button type="button" @click="showUploadConfirmation = false" class="flex-1 bg-gray-400 text-white px-4 py-2 rounded text-sm hover:bg-gray-500 font-semibold">Cancel</button>
-                <button type="button" @click="showUploadConfirmation = false; showProfileImages = false; uploadForm?.submit()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Confirm</button>
+                <button type="button" @click="showUploadConfirmation = false; closeProfileImages(); showLoadingModal('Uploading profile images, please wait...'); uploadForm?.submit()" class="flex-1 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold">Confirm</button>
             </div>
         </div>
     </div>
