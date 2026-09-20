@@ -326,7 +326,7 @@ class StudentController extends Controller
             'weight' => 'required|numeric|min:0.1|max:500',
             'height' => 'required|numeric|min:0.1|max:300',
             'guardian_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
-            'guardian_contact' => ['required', 'string', 'regex:/^(?:\+?[0-9][0-9\s-]{6,14})$/', 'max:20'],
+            'guardian_contact' => ['required', 'string', 'regex:/^\+?[0-9]{11,12}$/', 'max:13'],
             'guardian_email' => 'nullable|email|max:255',
             'address' => 'required|string|max:500',
         ]);
@@ -408,7 +408,7 @@ class StudentController extends Controller
             'weight' => 'required|numeric|min:0.1|max:500',
             'height' => 'required|numeric|min:0.1|max:300',
             'guardian_name' => ['required', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
-            'guardian_contact' => ['required', 'string', 'regex:/^(?:\+?[0-9][0-9\s-]{6,14})$/', 'max:20'],
+            'guardian_contact' => ['required', 'string', 'regex:/^\+?[0-9]{11,12}$/', 'max:13'],
             'guardian_email' => 'nullable|email|max:255',
             'address' => 'required|string|max:500',
         ]);

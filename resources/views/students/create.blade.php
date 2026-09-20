@@ -30,8 +30,9 @@
 
         <div>
             <label class="block text-sm font-semibold mb-1">LRN / Student Number <span class="text-red-500">*</span></label>
-            <input id="student-lrn" type="text" name="lrn" value="{{ old('lrn', $student->lrn ?? '') }}" required inputmode="numeric" pattern="[0-9]+" autocomplete="off" class="w-full border rounded p-2 text-sm" placeholder="e.g. 136542100012" aria-describedby="student-lrn-error">
+            <input id="student-lrn" type="text" name="lrn" value="{{ old('lrn', $student->lrn ?? '') }}" required inputmode="numeric" pattern="[0-9]+" autocomplete="off" class="w-full border rounded p-2 text-sm @error('lrn') border-red-500 @enderror" placeholder="e.g. 136542100012" aria-describedby="student-lrn-error">
             <p id="student-lrn-error" class="mt-1 hidden text-sm text-red-600" role="alert">LRN must contain numbers only. Remove the other characters before submitting.</p>
+            @error('lrn')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
         </div>
 
         <div class="grid grid-cols-2 gap-4">
@@ -95,11 +96,15 @@
         <div class="grid grid-cols-2 gap-4">
             <div>
                 <label class="block text-sm font-semibold mb-1">Weight (kg) <span class="text-red-500">*</span></label>
-                <input type="number" step="0.1" min="0.1" max="500" name="weight" value="{{ old('weight', $measurement->weight ?? '') }}" required placeholder="e.g. 18.5" class="w-full border rounded p-2 text-sm">
+                <input id="student-weight" type="text" inputmode="decimal" name="weight" value="{{ old('weight', $measurement->weight ?? '') }}" required maxlength="6" data-min="0.1" data-max="500" placeholder="e.g. 18.5" class="w-full border rounded p-2 text-sm @error('weight') border-red-500 @enderror" aria-describedby="student-weight-error">
+                <p id="student-weight-error" class="mt-1 hidden text-sm text-red-600" role="alert"></p>
+                @error('weight')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">Height (cm) <span class="text-red-500">*</span></label>
-                <input type="number" step="0.1" min="0.1" max="300" name="height" value="{{ old('height', $measurement->height ?? '') }}" required placeholder="e.g. 115" class="w-full border rounded p-2 text-sm">
+                <input id="student-height" type="text" inputmode="decimal" name="height" value="{{ old('height', $measurement->height ?? '') }}" required maxlength="6" data-min="0.1" data-max="300" placeholder="e.g. 115" class="w-full border rounded p-2 text-sm @error('height') border-red-500 @enderror" aria-describedby="student-height-error">
+                <p id="student-height-error" class="mt-1 hidden text-sm text-red-600" role="alert"></p>
+                @error('height')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
 
@@ -110,7 +115,9 @@
             </div>
             <div>
                 <label class="block text-sm font-semibold mb-1">Guardian's Phone Number <span class="text-red-500">*</span></label>
-                <input type="tel" name="guardian_contact" value="{{ old('guardian_contact', $student->guardian_contact ?? '') }}" required maxlength="20" pattern="\+?[0-9][0-9 -]{6,14}" class="w-full border rounded p-2 text-sm" placeholder="e.g. 09171234567">
+                <input id="guardian-contact" type="tel" name="guardian_contact" value="{{ old('guardian_contact', $student->guardian_contact ?? '') }}" required maxlength="13" pattern="\+?[0-9]{11,12}" inputmode="tel" class="w-full border rounded p-2 text-sm @error('guardian_contact') border-red-500 @enderror" placeholder="e.g. 09171234567" aria-describedby="guardian-contact-error">
+                <p id="guardian-contact-error" class="mt-1 hidden text-sm text-red-600" role="alert"></p>
+                @error('guardian_contact')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
         </div>
 
@@ -133,47 +140,65 @@
 <script>
     (() => {
         const form = document.getElementById('student-form');
-        const lrnInput = document.getElementById('student-lrn');
-        const lrnError = document.getElementById('student-lrn-error');
-        let invalidLrnAttempt = false;
-
-        if (!form || !lrnInput || !lrnError) return;
-
-        const showLrnError = () => {
-            lrnError.classList.remove('hidden');
-            lrnInput.classList.add('border-red-500', 'ring-1', 'ring-red-500');
-        };
-
-        const clearLrnError = () => {
-            lrnError.classList.add('hidden');
-            lrnInput.classList.remove('border-red-500', 'ring-1', 'ring-red-500');
-        };
-
-        lrnInput.addEventListener('keydown', (event) => {
-            if (event.ctrlKey || event.metaKey || event.altKey || event.key.length !== 1) return;
-            if (!/[0-9]/.test(event.key)) {
-                event.preventDefault();
-                invalidLrnAttempt = true;
-                showLrnError();
+        const fields = [
+            {
+                input: document.getElementById('student-lrn'),
+                error: document.getElementById('student-lrn-error'),
+                validate: (value) => /^[0-9]+$/.test(value) ? '' : 'LRN must contain numbers only. Remove the other characters before submitting.'
+            },
+            {
+                input: document.getElementById('student-weight'),
+                error: document.getElementById('student-weight-error'),
+                validate: (value, input) => validateMeasurement(value, input, 'Weight', 'kg')
+            },
+            {
+                input: document.getElementById('student-height'),
+                error: document.getElementById('student-height-error'),
+                validate: (value, input) => validateMeasurement(value, input, 'Height', 'cm')
+            },
+            {
+                input: document.getElementById('guardian-contact'),
+                error: document.getElementById('guardian-contact-error'),
+                validate: (value) => /^\+?[0-9]{11,12}$/.test(value) ? '' : 'Guardian phone number must contain 11 or 12 digits. Use an optional leading + only.'
             }
-        });
+        ];
 
-        lrnInput.addEventListener('input', () => {
-            if (/^[0-9]*$/.test(lrnInput.value)) {
-                if (!invalidLrnAttempt) clearLrnError();
-                return;
+        if (!form) return;
+
+        function validateMeasurement(value, input, label, unit) {
+            if (!value) return `${label} is required.`;
+            if (!/^\d+(\.\d+)?$/.test(value)) return `${label} must be a number in ${unit}.`;
+            const numericValue = Number(value);
+            if (numericValue < Number(input.dataset.min) || numericValue > Number(input.dataset.max)) {
+                return `${label} must be between ${input.dataset.min} and ${input.dataset.max} ${unit}.`;
             }
+            return '';
+        }
 
-            invalidLrnAttempt = true;
-            lrnInput.value = lrnInput.value.replace(/[^0-9]/g, '');
-            showLrnError();
+        function updateField(field) {
+            if (!field.input || !field.error) return true;
+            const message = field.validate(field.input.value.trim(), field.input);
+            const valid = message === '';
+            field.error.textContent = message;
+            field.error.classList.toggle('hidden', valid);
+            field.input.classList.toggle('border-red-500', !valid);
+            field.input.classList.toggle('ring-1', !valid);
+            field.input.classList.toggle('ring-red-500', !valid);
+            field.input.setAttribute('aria-invalid', valid ? 'false' : 'true');
+            return valid;
+        }
+
+        fields.forEach((field) => {
+            if (!field.input) return;
+            field.input.addEventListener('input', () => updateField(field));
+            field.input.addEventListener('blur', () => updateField(field));
         });
 
         form.addEventListener('submit', (event) => {
-            if (invalidLrnAttempt || !/^[0-9]+$/.test(lrnInput.value)) {
+            const invalidField = fields.find((field) => !updateField(field));
+            if (invalidField) {
                 event.preventDefault();
-                showLrnError();
-                lrnInput.focus();
+                invalidField.input.focus();
             }
         });
     })();
