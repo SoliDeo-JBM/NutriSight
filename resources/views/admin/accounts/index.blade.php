@@ -352,7 +352,7 @@
         document.getElementById('editAccountModal').classList.add('hidden');
     }
 
-    @if($errors->any() && old('_edit_action'))
+    @if($errors - > any() && old('_edit_action'))
     const validationEditForm = document.getElementById('editAccountForm');
     validationEditForm.action = @json(old('_edit_action'));
     document.getElementById('edit_action').value = @json(old('_edit_action'));
