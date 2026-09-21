@@ -9,6 +9,8 @@ use Illuminate\Mail\Mailable;
 use Illuminate\Mail\Mailables\Content;
 use Illuminate\Mail\Mailables\Envelope;
 use Illuminate\Queue\SerializesModels;
+use Symfony\Component\Mime\Part\DataPart;
+use Symfony\Component\Mime\Part\File;
 
 class SbfpParentApprovalRequest extends Mailable implements ShouldQueue
 {
@@ -43,5 +45,16 @@ class SbfpParentApprovalRequest extends Mailable implements ShouldQueue
                 ]),
             ],
         );
+    }
+
+    public function build(): static
+    {
+        return $this->withSymfonyMessage(function ($message) {
+            $message->addPart(
+                (new DataPart(new File(public_path('images/nutrisight-logo.png')), 'nutrisight-logo.png', 'image/png'))
+                    ->asInline()
+                    ->setContentId('nutrisight-logo@nutrisight')
+            );
+        });
     }
 }

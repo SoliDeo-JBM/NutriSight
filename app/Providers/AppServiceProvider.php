@@ -9,6 +9,8 @@ use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Symfony\Component\Mime\Part\DataPart;
+use Symfony\Component\Mime\Part\File;
 
 class AppServiceProvider extends ServiceProvider
 {
@@ -42,7 +44,14 @@ class AppServiceProvider extends ServiceProvider
                         'email' => $notifiable->getEmailForPasswordReset(),
                     ], false)),
                     'expireMinutes' => config('auth.passwords.' . config('auth.defaults.passwords') . '.expire'),
-                ]);
+                ])
+                ->withSymfonyMessage(function ($message) {
+                    $message->addPart(
+                        (new DataPart(new File(public_path('images/nutrisight-logo.png')), 'nutrisight-logo.png', 'image/png'))
+                            ->asInline()
+                            ->setContentId('nutrisight-logo@nutrisight')
+                    );
+                });
         });
     }
 }
