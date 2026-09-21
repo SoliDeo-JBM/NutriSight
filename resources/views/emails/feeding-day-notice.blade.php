@@ -6,7 +6,10 @@
 </head>
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; padding: 20px;">
     <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
-        <h2 style="color: #0f172a; border-bottom: 2px solid #22c55e; padding-bottom: 8px; margin-top: 0;">NutriSight SBFP Notice</h2>
+        <div style="border-bottom: 2px solid #22c55e; padding-bottom: 12px; margin-bottom: 20px;">
+            <img src="{{ url('images/nutrisight-logo.png') }}" alt="NutriSight" width="56" height="56" style="display: block; border: 0; margin-bottom: 10px;">
+            <h2 style="color: #0f172a; margin: 0;">NutriSight SBFP Notice</h2>
+        </div>
         
         <p>Dear Parent / Guardian of <strong>{{ $student->first_name }} {{ $student->last_name }}</strong>,</p>
 

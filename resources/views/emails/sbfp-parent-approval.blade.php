@@ -9,7 +9,10 @@
 <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #334155; padding: 20px;">
     @php($student = $approvalRequest->participant->enrollment->student)
     <div style="max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px; padding: 24px;">
-        <h2 style="color: #0f172a; border-bottom: 2px solid #2563eb; padding-bottom: 8px; margin-top: 0;">NutriSight SBFP Parent Approval</h2>
+        <div style="border-bottom: 2px solid #2563eb; padding-bottom: 12px; margin-bottom: 20px;">
+            <img src="{{ url('images/nutrisight-logo.png') }}" alt="NutriSight" width="56" height="56" style="display: block; border: 0; margin-bottom: 10px;">
+            <h2 style="color: #0f172a; margin: 0;">NutriSight SBFP Parent Approval</h2>
+        </div>
         <p>Dear Parent / Guardian of <strong>{{ $student->first_name }} {{ $student->last_name }}</strong>,</p>
         <p>Your child may be eligible for the School-Based Feeding Program based on the baseline nutrition assessment below.</p>
         <div style="background: #f8fafc; border-left: 4px solid #2563eb; padding: 12px 16px; margin: 16px 0;">
