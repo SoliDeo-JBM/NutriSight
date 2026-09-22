@@ -82,7 +82,7 @@ $startOfMonth = $currentDate->copy()->startOfMonth();
                     </form>
                     <div x-show="!editing" class="flex items-center gap-2 shrink-0">
                         <button type="button" @click="editing = true" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-semibold">Edit</button>
-                        <form action="{{ route('admin.meal-plans.destroy', $mealPlan) }}" method="POST" onsubmit="return confirm('Delete this meal?')">
+                        <form action="{{ route('admin.meal-plans.destroy', $mealPlan) }}" method="POST" data-confirm-message="Delete this meal plan permanently? This action cannot be undone.">
                             @csrf @method('DELETE')
                             <button class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-semibold">Delete</button>
                         </form>

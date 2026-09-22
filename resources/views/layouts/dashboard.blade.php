@@ -219,6 +219,18 @@
         </div>
     </div>
 
+    <div id="confirmationModal" class="fixed inset-0 z-[90] hidden items-center justify-center bg-black/50" role="alertdialog" aria-modal="true" aria-labelledby="confirmationModalTitle" aria-describedby="confirmationModalMessage">
+        <div class="mx-4 w-full max-w-sm rounded-lg bg-white p-6 text-center shadow-xl">
+            <div class="mb-4 text-amber-500 text-4xl"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i></div>
+            <h3 id="confirmationModalTitle" class="mb-2 text-lg font-bold text-gray-900">Confirm Action</h3>
+            <p id="confirmationModalMessage" class="mb-6 text-sm text-gray-600"></p>
+            <div class="flex justify-center gap-3">
+                <button type="button" onclick="closeConfirmationModal()" class="rounded bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-800 hover:bg-gray-300">Cancel</button>
+                <button type="button" onclick="confirmPendingAction()" class="rounded bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700">Confirm</button>
+            </div>
+        </div>
+    </div>
+
     <div id="global-loading-modal" class="fixed inset-0 z-[100] hidden items-center justify-center bg-black/50" role="status" aria-live="polite" aria-label="Loading">
         <div class="mx-4 w-full max-w-sm rounded-lg bg-white px-8 py-6 text-center shadow-xl">
             <i class="fas fa-spinner fa-spin mb-3 text-3xl text-blue-600" aria-hidden="true"></i>
@@ -240,6 +252,32 @@
 
         function closeLogoutModal() {
             document.getElementById('logoutModal').classList.add('hidden');
+        }
+
+        let pendingConfirmationForm = null;
+
+        function openConfirmationModal(form, message) {
+            pendingConfirmationForm = form;
+            document.getElementById('confirmationModalMessage').textContent = message;
+            const modal = document.getElementById('confirmationModal');
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+
+        function closeConfirmationModal() {
+            pendingConfirmationForm = null;
+            const modal = document.getElementById('confirmationModal');
+            modal.classList.add('hidden');
+            modal.classList.remove('flex');
+        }
+
+        function confirmPendingAction() {
+            const form = pendingConfirmationForm;
+            closeConfirmationModal();
+            if (form) {
+                form.dataset.confirmed = 'true';
+                form.requestSubmit();
+            }
         }
 
         function openMealRequiredModal() {
@@ -328,10 +366,33 @@
 
         document.addEventListener('submit', (event) => {
             const form = event.target;
+            const submitter = event.submitter;
+            const confirmationMessage = submitter?.dataset.confirmMessage || form.dataset.confirmMessage;
+
+            if (confirmationMessage && form.dataset.confirmed !== 'true') {
+                event.preventDefault();
+                openConfirmationModal(form, confirmationMessage);
+                return;
+            }
+
+            delete form.dataset.confirmed;
 
             if (form.matches('[data-loading-form]')) {
                 showLoadingModal(form.dataset.loadingMessage || 'Processing, please wait...');
             }
+        });
+
+        document.querySelectorAll('form[onsubmit*="confirm("]').forEach((form) => {
+            const action = form.getAttribute('action') || '';
+            const message = action.includes('/meal-plans/')
+                ? 'Delete this meal plan permanently? This action cannot be undone.'
+                : action.includes('/attendance/month/')
+                    ? 'Delete this attendance month and its records permanently? This action cannot be undone.'
+                    : action.includes('/annual-consolidated/period/')
+                        ? 'Delete this report period and all entered data permanently? This action cannot be undone.'
+                        : 'Delete this school year and all related records permanently? This action cannot be undone.';
+            form.removeAttribute('onsubmit');
+            form.dataset.confirmMessage = message;
         });
 
         window.addEventListener('pageshow', hideLoadingModal);

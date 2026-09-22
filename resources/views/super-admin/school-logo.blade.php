@@ -49,7 +49,7 @@
                     <button type="submit" form="reset-school-logo" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"><i class="fas fa-rotate-left"></i> Reset default</button>
                 </div>
             </form>
-            <form id="reset-school-logo" method="POST" action="{{ route('super-admin.school-logo.reset') }}">@csrf @method('DELETE')</form>
+            <form id="reset-school-logo" method="POST" action="{{ route('super-admin.school-logo.reset') }}" data-confirm-message="Reset the school logo to the default? The currently uploaded logo will be replaced.">@csrf @method('DELETE')</form>
         </section>
 
         <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
@@ -66,7 +66,7 @@
                     <button type="submit" form="reset-deped-logo" class="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-4 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50"><i class="fas fa-rotate-left"></i> Reset default</button>
                 </div>
             </form>
-            <form id="reset-deped-logo" method="POST" action="{{ route('super-admin.school-logo.deped.reset') }}">@csrf @method('DELETE')</form>
+            <form id="reset-deped-logo" method="POST" action="{{ route('super-admin.school-logo.deped.reset') }}" data-confirm-message="Reset the DepEd logo to the default? The currently uploaded logo will be replaced.">@csrf @method('DELETE')</form>
         </section>
     </div>
 
