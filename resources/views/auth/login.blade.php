@@ -120,8 +120,13 @@
                                 id="togglePassword"
                                 aria-label="Show password"
                                 class="absolute inset-y-0 right-0 pr-3 flex items-center text-gray-400 hover:text-orange-600 transition-colors focus:outline-none">
-                                <i id="eyeIcon" class="fas fa-eye"></i>
-                                <i id="eyeSlashIcon" class="fas fa-eye-slash hidden"></i>
+                                <svg id="eyeIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="h-5 w-5" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.644C3.423 7.51 7.36 4.5 12 4.5c4.64 0 8.577 3.01 9.964 7.178.07.21.07.434 0 .644C20.577 16.49 16.64 19.5 12 19.5c-4.64 0-8.577-3.01-9.964-7.178Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                                </svg>
+                                <svg id="eyeSlashIcon" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8" stroke="currentColor" class="hidden h-5 w-5" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 2.036 12.322a1.012 1.012 0 0 0 0 .644C3.423 17.49 7.36 20.5 12 20.5c1.856 0 3.608-.507 5.117-1.39M6.228 6.228A10.45 10.45 0 0 1 12 4.5c4.64 0 8.577 3.01 9.964 7.178.07.21.07.434 0 .644a10.523 10.523 0 0 1-4.122 5.094M6.228 6.228 3 3m3.228 3.228 3.294 3.294m8.32 8.32L21 21m-3.158-3.158-3.294-3.294m0 0a3 3 0 1 1-4.243-4.243m4.243 4.243L9.9 9.9" />
+                                </svg>
                             </button>
                         </div>
                         <x-input-error :messages="$errors->get('password')" class="mt-2" />
