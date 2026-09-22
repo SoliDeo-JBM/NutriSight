@@ -102,9 +102,11 @@
             </tbody>
         </table>
     </div>
-    <div class="flex justify-center">
+    @if($sbfpStudents->hasPages())
+    <div class="border-t border-gray-200 bg-gray-50 px-6 py-4">
         <x-pagination :paginator="$sbfpStudents" />
     </div>
+    @endif
 </div>
 <script>
     (() => {

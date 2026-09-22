@@ -65,6 +65,22 @@ class SbfpParentApprovalService
         return $request;
     }
 
+    public function resendForGuardianEmailChange(SbfpParticipant $participant, NutritionMeasurement $measurement, ?int $userId = null): ?SbfpParentApprovalRequest
+    {
+        if (!$this->isEligible($measurement) || $participant->parent_consent !== null) {
+            return null;
+        }
+
+        $email = $participant->enrollment?->student?->guardian_email;
+        if (blank($email)) {
+            return null;
+        }
+
+        $this->closePending($participant, 'guardian_email_changed', $userId);
+
+        return $this->syncBaseline($participant, $measurement);
+    }
+
     public function closePending(SbfpParticipant $participant, string $reason, ?int $userId = null): int
     {
         return $participant->approvalRequests()

@@ -421,6 +421,9 @@ class StudentController extends Controller
             ->where('measurement_period', 'baseline')
             ->first();
         $wasEligible = $existingMeasurement && $this->parentApprovalService->isEligible($existingMeasurement);
+        $previousGuardianEmail = strtolower(trim((string) $student->guardian_email));
+        $updatedGuardianEmail = strtolower(trim((string) ($validated['guardian_email'] ?? '')));
+        $guardianEmailChanged = $previousGuardianEmail !== $updatedGuardianEmail;
 
         DB::transaction(function () use ($student, $enrollment, $validated, $metrics) {
             $student->update([
@@ -460,13 +463,21 @@ class StudentController extends Controller
         $updatedMeasurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
             ->where('measurement_period', 'baseline')
             ->first();
+        $approvalRequest = null;
         if (!$wasEligible && $updatedMeasurement && $this->parentApprovalService->isEligible($updatedMeasurement)) {
-            $this->parentApprovalService->syncBaseline($enrollment->sbfpParticipant, $updatedMeasurement);
+            $approvalRequest = $this->parentApprovalService->syncBaseline($enrollment->sbfpParticipant, $updatedMeasurement);
+        } elseif ($guardianEmailChanged && $updatedMeasurement && $this->parentApprovalService->isEligible($updatedMeasurement)) {
+            $approvalRequest = $this->parentApprovalService->resendForGuardianEmailChange($enrollment->sbfpParticipant, $updatedMeasurement, $user?->id);
         }
 
         AuditLogger::log('Updated', 'Students', 'Updated student ' . $student->first_name . ' ' . $student->last_name);
 
-        return redirect()->route('encoder.students.index')->with('success', 'Student updated successfully.');
+        $message = 'Student updated successfully.';
+        if ($approvalRequest) {
+            $message .= ' A new parent approval request was sent to the updated guardian email.';
+        }
+
+        return redirect()->route('encoder.students.index')->with('success', $message);
     }
 
     public function storeAssessment(Request $request, Student $student)
