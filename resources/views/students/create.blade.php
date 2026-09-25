@@ -143,9 +143,52 @@
             </div>
         </div>
 
-        <div>
-            <label class="block text-sm font-semibold mb-1">Complete Address <span class="text-red-500">*</span></label>
-            <textarea name="address" required maxlength="500" rows="2" class="w-full border rounded p-2 text-sm" placeholder="House number, street, barangay, municipality">{{ old('address', $student->address ?? '') }}</textarea>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-semibold mb-1">Structured Address</label>
+                <p class="text-xs text-gray-500">Use the location fields for new records. Existing complete addresses remain preserved.</p>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">House Number</label>
+                    <input type="text" name="house_number" value="{{ old('house_number', $student->house_number ?? '') }}" maxlength="100" class="w-full border rounded p-2 text-sm" placeholder="e.g. 12-A">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Street</label>
+                    <input type="text" name="street" value="{{ old('street', $student->street ?? '') }}" maxlength="255" class="w-full border rounded p-2 text-sm" placeholder="e.g. Rizal Street">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Purok</label>
+                    <input type="text" name="purok" value="{{ old('purok', $student->purok ?? '') }}" maxlength="100" class="w-full border rounded p-2 text-sm" placeholder="e.g. Purok 3">
+                </div>
+            </div>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Province</label>
+                    <select id="province-code" name="province_code" class="w-full border rounded p-2 text-sm">
+                        <option value="">Select province</option>
+                        @foreach($provinces as $province)
+                        <option value="{{ $province->code }}" {{ old('province_code', $student->province_code ?? '035400000') === $province->code ? 'selected' : '' }}>{{ $province->name }}</option>
+                        @endforeach
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">City/Municipality</label>
+                    <select id="municipality-code" name="municipality_code" class="w-full border rounded p-2 text-sm" disabled>
+                        <option value="">Select province first</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Barangay</label>
+                    <select id="barangay-code" name="barangay_code" class="w-full border rounded p-2 text-sm" disabled>
+                        <option value="">Select city/municipality first</option>
+                    </select>
+                </div>
+            </div>
+            @if($provinces->isEmpty())
+            <p class="text-xs text-amber-700">Location choices are not loaded yet. Run <code>php artisan locations:sync</code> to populate them.</p>
+            @endif
+            <input id="complete-address" type="hidden" name="address" value="{{ old('address', $student->address ?? '') }}">
         </div>
 
         <div class="flex justify-end gap-3 pt-4">
@@ -157,6 +200,12 @@
 <script>
     (() => {
         const form = document.getElementById('student-form');
+        const provinceSelect = document.getElementById('province-code');
+        const municipalitySelect = document.getElementById('municipality-code');
+        const barangaySelect = document.getElementById('barangay-code');
+        const completeAddress = document.getElementById('complete-address');
+        const initialMunicipality = @js(old('municipality_code', $student->municipality_code ?? ''));
+        const initialBarangay = @js(old('barangay_code', $student->barangay_code ?? ''));
         const fields = [{
                 input: document.getElementById('student-lrn'),
                 error: document.getElementById('student-lrn-error'),
@@ -180,6 +229,68 @@
         ];
 
         if (!form) return;
+
+        function populateSelect(select, items, placeholder, selectedValue = '') {
+            select.innerHTML = `<option value="">${placeholder}</option>`;
+            items.forEach((item) => {
+                const option = new Option(item.name, item.code, false, item.code === selectedValue);
+                select.add(option);
+            });
+            select.disabled = items.length === 0;
+        }
+
+        async function loadBarangays(municipalityCode, selectedValue = '') {
+            if (!municipalityCode) {
+                populateSelect(barangaySelect, [], 'Select city/municipality first');
+                return;
+            }
+
+            populateSelect(barangaySelect, [], 'Loading barangays...');
+
+            try {
+                const response = await fetch(`{{ route('locations.barangays') }}?municipality_code=${encodeURIComponent(municipalityCode)}`);
+                if (!response.ok) throw new Error(`Barangay lookup failed with status ${response.status}`);
+
+                const barangays = await response.json();
+                populateSelect(barangaySelect, barangays, barangays.length ? 'Select barangay' : 'No barangays found', selectedValue);
+            } catch (error) {
+                console.error(error);
+                populateSelect(barangaySelect, [], 'Unable to load barangays');
+            }
+        }
+
+        async function loadMunicipalities(provinceCode, selectedValue = '') {
+            if (!provinceCode) {
+                populateSelect(municipalitySelect, [], 'Select province first');
+                populateSelect(barangaySelect, [], 'Select city/municipality first');
+                return;
+            }
+
+            const response = await fetch(`{{ route('locations.municipalities') }}?province_code=${encodeURIComponent(provinceCode)}`);
+            const municipalities = await response.json();
+            populateSelect(municipalitySelect, municipalities, 'Select city/municipality', selectedValue);
+            await loadBarangays(selectedValue, initialBarangay);
+        }
+
+        function syncCompleteAddress() {
+            const selectedNames = [
+                document.querySelector('[name="house_number"]').value.trim(),
+                document.querySelector('[name="street"]').value.trim(),
+                document.querySelector('[name="purok"]').value.trim(),
+                provinceSelect.selectedOptions[0]?.textContent,
+                municipalitySelect.selectedOptions[0]?.textContent,
+                barangaySelect.selectedOptions[0]?.textContent,
+            ].filter((value) => value && !value.startsWith('Select '));
+
+            if (selectedNames.length > 0) {
+                completeAddress.value = selectedNames.join(', ');
+            }
+        }
+
+        provinceSelect?.addEventListener('change', () => loadMunicipalities(provinceSelect.value));
+        municipalitySelect?.addEventListener('change', () => loadBarangays(municipalitySelect.value));
+        form.addEventListener('submit', syncCompleteAddress);
+        if (provinceSelect?.value) loadMunicipalities(provinceSelect.value, initialMunicipality);
 
         function validateMeasurement(value, input, label, unit) {
             if (!value) return `${label} is required.`;

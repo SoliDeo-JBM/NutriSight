@@ -6,6 +6,9 @@ use App\Models\Student;
 use App\Models\Enrollment;
 use App\Models\SbfpParticipant;
 use App\Models\NutritionMeasurement;
+use App\Models\PhilippineBarangay;
+use App\Models\PhilippineMunicipality;
+use App\Models\PhilippineProvince;
 use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
@@ -16,6 +19,7 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
+use Illuminate\Validation\Rule;
 use Carbon\Carbon;
 
 class StudentController extends Controller
@@ -287,7 +291,9 @@ class StudentController extends Controller
     {
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
-        return view('students.create', compact('user'));
+        $provinces = PhilippineProvince::query()->orderBy('name')->get(['code', 'name']);
+
+        return view('students.create', compact('user', 'provinces'));
     }
 
     public function edit(Student $student)
@@ -306,8 +312,9 @@ class StudentController extends Controller
 
         $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements
             ->first(fn($item) => strtolower($item->measurement_period) === 'baseline');
+        $provinces = PhilippineProvince::query()->orderBy('name')->get(['code', 'name']);
 
-        return view('students.create', compact('user', 'student', 'enrollment', 'measurement'));
+        return view('students.create', compact('user', 'student', 'enrollment', 'measurement', 'provinces'));
     }
 
     public function store(Request $request)
@@ -331,8 +338,16 @@ class StudentController extends Controller
             'guardian_name' => ['nullable', 'required_without_all:father_name,mother_name', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'guardian_contact' => ['required', 'string', 'regex:/^\+?[0-9]{11,12}$/', 'max:13'],
             'guardian_email' => 'nullable|email|max:255',
-            'address' => 'required|string|max:500',
+            'address' => 'nullable|string|max:500',
+            'house_number' => ['nullable', 'string', 'max:100'],
+            'street' => ['nullable', 'string', 'max:255'],
+            'purok' => ['nullable', 'string', 'max:100'],
+            'province_code' => ['nullable', 'string', 'exists:ph_provinces,code'],
+            'municipality_code' => ['nullable', 'string', Rule::exists('ph_municipalities', 'code')->where(fn($query) => $query->where('province_code', $request->input('province_code')))],
+            'barangay_code' => ['nullable', 'string', Rule::exists('ph_barangays', 'code')->where(fn($query) => $query->where('municipality_code', $request->input('municipality_code')))],
         ]);
+
+        $validated = $this->normalizeAddress($validated);
 
         if ($user?->isEncoder()) {
             $validated['grade_level'] = $user->advisory_grade_level;
@@ -354,6 +369,12 @@ class StudentController extends Controller
             'guardian_contact' => $validated['guardian_contact'],
             'guardian_email' => $validated['guardian_email'] ?? null,
             'address' => $validated['address'],
+            'house_number' => $validated['house_number'] ?? null,
+            'street' => $validated['street'] ?? null,
+            'purok' => $validated['purok'] ?? null,
+            'province_code' => $validated['province_code'] ?? null,
+            'municipality_code' => $validated['municipality_code'] ?? null,
+            'barangay_code' => $validated['barangay_code'] ?? null,
         ]);
 
         $enrollment = Enrollment::create([
@@ -418,8 +439,16 @@ class StudentController extends Controller
             'guardian_name' => ['nullable', 'required_without_all:father_name,mother_name', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'guardian_contact' => ['required', 'string', 'regex:/^\+?[0-9]{11,12}$/', 'max:13'],
             'guardian_email' => 'nullable|email|max:255',
-            'address' => 'required|string|max:500',
+            'address' => 'nullable|string|max:500',
+            'house_number' => ['nullable', 'string', 'max:100'],
+            'street' => ['nullable', 'string', 'max:255'],
+            'purok' => ['nullable', 'string', 'max:100'],
+            'province_code' => ['nullable', 'string', 'exists:ph_provinces,code'],
+            'municipality_code' => ['nullable', 'string', Rule::exists('ph_municipalities', 'code')->where(fn($query) => $query->where('province_code', $request->input('province_code')))],
+            'barangay_code' => ['nullable', 'string', Rule::exists('ph_barangays', 'code')->where(fn($query) => $query->where('municipality_code', $request->input('municipality_code')))],
         ]);
+
+        $validated = $this->normalizeAddress($validated);
 
         $metrics = $this->nutriService->calculateBMI($validated['weight'], $validated['height']);
 
@@ -446,6 +475,12 @@ class StudentController extends Controller
                 'guardian_contact' => $validated['guardian_contact'],
                 'guardian_email' => $validated['guardian_email'] ?? null,
                 'address' => $validated['address'],
+                'house_number' => $validated['house_number'] ?? null,
+                'street' => $validated['street'] ?? null,
+                'purok' => $validated['purok'] ?? null,
+                'province_code' => $validated['province_code'] ?? null,
+                'municipality_code' => $validated['municipality_code'] ?? null,
+                'barangay_code' => $validated['barangay_code'] ?? null,
             ]);
 
             $enrollment->update([
@@ -1065,5 +1100,25 @@ class StudentController extends Controller
             'Content-Type' => $contentType,
             'Cache-Control' => 'private, max-age=3600',
         ]);
+    }
+
+    private function normalizeAddress(array $validated): array
+    {
+        if (!empty($validated['address'])) {
+            return $validated;
+        }
+
+        $locationParts = collect([
+            $validated['house_number'] ?? null,
+            $validated['street'] ?? null,
+            !empty($validated['purok']) ? 'Purok ' . $validated['purok'] : null,
+            PhilippineBarangay::find($validated['barangay_code'] ?? null)?->name,
+            PhilippineMunicipality::find($validated['municipality_code'] ?? null)?->name,
+            PhilippineProvince::find($validated['province_code'] ?? null)?->name,
+        ])->filter()->values()->all();
+
+        $validated['address'] = implode(', ', $locationParts);
+
+        return $validated;
     }
 }

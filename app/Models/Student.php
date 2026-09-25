@@ -29,6 +29,12 @@ class Student extends Model
         'guardian_contact',
         'guardian_email',
         'address',
+        'house_number',
+        'street',
+        'purok',
+        'province_code',
+        'municipality_code',
+        'barangay_code',
     ];
 
     protected function casts(): array

@@ -65,6 +65,9 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::get('/school-logo/file', [App\Http\Controllers\SchoolLogoController::class, 'file'])->name('school-logo.file');
     Route::get('/school-logo/deped-file', [App\Http\Controllers\SchoolLogoController::class, 'depedFile'])->name('school-logo.deped-file');
     Route::post('/school-years/switch', [App\Http\Controllers\Admin\SchoolYearController::class, 'switch'])->name('school-years.switch');
+    Route::get('/locations/provinces', [App\Http\Controllers\PhilippineLocationController::class, 'provinces'])->name('locations.provinces');
+    Route::get('/locations/municipalities', [App\Http\Controllers\PhilippineLocationController::class, 'municipalities'])->name('locations.municipalities');
+    Route::get('/locations/barangays', [App\Http\Controllers\PhilippineLocationController::class, 'barangays'])->name('locations.barangays');
 
 
 
