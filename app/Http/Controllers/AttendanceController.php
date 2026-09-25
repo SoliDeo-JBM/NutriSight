@@ -267,7 +267,7 @@ class AttendanceController extends Controller
                 ->where('meal_period', $mealPeriod)
                 ->pluck('meal_name')
                 ->implode(', ');
-            $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal, null, $mealPeriod);
+            $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal, $attendanceRecord->created_at, $mealPeriod);
         }
 
         $studentName = trim($participant->enrollment->student->first_name . ' ' . $participant->enrollment->student->last_name);

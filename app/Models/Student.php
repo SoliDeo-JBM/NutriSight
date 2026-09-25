@@ -23,6 +23,8 @@ class Student extends Model
         'middle_name',
         'sex',
         'birth_date',
+        'father_name',
+        'mother_name',
         'guardian_name',
         'guardian_contact',
         'guardian_email',

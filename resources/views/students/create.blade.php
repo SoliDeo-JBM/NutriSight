@@ -108,22 +108,39 @@
             </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <label class="block text-sm font-semibold mb-1">Guardian's Name <span class="text-red-500">*</span></label>
-                <input type="text" name="guardian_name" value="{{ old('guardian_name', $student->guardian_name ?? '') }}" required maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Maria Dela Cruz">
+        <div>
+            <label class="block text-sm font-semibold mb-1">Parent/Guardian Names <span class="text-red-500">*</span></label>
+            <p class="mb-2 text-xs text-gray-500">Enter at least one name.</p>
+            <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Father's Name</label>
+                    <input type="text" name="father_name" value="{{ old('father_name', $student->father_name ?? '') }}" maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Juan Dela Cruz">
+                    @error('father_name')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Mother's Name</label>
+                    <input type="text" name="mother_name" value="{{ old('mother_name', $student->mother_name ?? '') }}" maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Maria Dela Cruz">
+                    @error('mother_name')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Guardian's Name</label>
+                    <input type="text" name="guardian_name" value="{{ old('guardian_name', $student->guardian_name ?? '') }}" maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="w-full border rounded p-2 text-sm" placeholder="e.g. Ana Santos">
+                    @error('guardian_name')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
+                </div>
             </div>
+        </div>
+
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div>
-                <label class="block text-sm font-semibold mb-1">Guardian's Phone Number <span class="text-red-500">*</span></label>
+                <label class="block text-sm font-semibold mb-1">Parent/Guardian's Contact Number <span class="text-red-500">*</span></label>
                 <input id="guardian-contact" type="tel" name="guardian_contact" value="{{ old('guardian_contact', $student->guardian_contact ?? '') }}" required maxlength="13" pattern="\+?[0-9]{11,12}" inputmode="tel" class="w-full border rounded p-2 text-sm @error('guardian_contact') border-red-500 @enderror" placeholder="e.g. 09171234567" aria-describedby="guardian-contact-error">
                 <p id="guardian-contact-error" class="mt-1 hidden text-sm text-red-600" role="alert"></p>
                 @error('guardian_contact')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
             </div>
-        </div>
-
-        <div>
-            <label class="block text-sm font-semibold mb-1">Guardian's Email (Optional - for daily meal/nutrition updates)</label>
-            <input type="email" name="guardian_email" value="{{ old('guardian_email', $student->guardian_email ?? '') }}" maxlength="255" placeholder="guardian@example.com" class="w-full border rounded p-2 text-sm">
+            <div>
+                <label class="block text-sm font-semibold mb-1">Parent/Guardian's Email <span class="font-normal text-gray-500">(Optional)</span></label>
+                <input type="email" name="guardian_email" value="{{ old('guardian_email', $student->guardian_email ?? '') }}" maxlength="255" placeholder="guardian@example.com" class="w-full border rounded p-2 text-sm">
+            </div>
         </div>
 
         <div>

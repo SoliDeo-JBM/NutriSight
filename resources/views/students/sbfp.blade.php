@@ -136,6 +136,8 @@
                     'sex' => $student->sex ?? '-',
                     'grade' => $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')),
                     'section' => $enrollment?->section ?? '-',
+                    'father_name' => $student->father_name ?? '-',
+                    'mother_name' => $student->mother_name ?? '-',
                     'guardian' => $student->guardian_name ?? '-',
                     'guardian_contact' => $student->guardian_contact ?? '-',
                     'guardian_email' => $student->guardian_email ?? '-',

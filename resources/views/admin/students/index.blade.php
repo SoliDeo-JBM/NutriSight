@@ -103,8 +103,8 @@
                         <th class="px-4 py-3 border">BMI</th>
                         <th class="px-4 py-3 border">BMI Category</th>
                         <th class="px-4 py-3 border">Height for Age</th>
-                        <th class="px-4 py-3 border">Guardian's Email</th>
-                        <th class="px-4 py-3 border">Guardian's Phone Number</th>
+                        <th class="px-4 py-3 border">Parent/Guardian's Email</th>
+                        <th class="px-4 py-3 border">Parent/Guardian's Contact Number</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200">

@@ -64,13 +64,19 @@
                 <div><span class="text-gray-500">Disapproval Reason</span>
                     <div class="font-semibold" x-text="profile.reason"></div>
                 </div>
-                <div class="sm:col-span-2"><span class="text-gray-500">Guardian</span>
+                <div><span class="text-gray-500">Father</span>
+                    <div class="break-words font-semibold" x-text="profile.father_name"></div>
+                </div>
+                <div><span class="text-gray-500">Mother</span>
+                    <div class="break-words font-semibold" x-text="profile.mother_name"></div>
+                </div>
+                <div><span class="text-gray-500">Guardian</span>
                     <div class="break-words font-semibold" x-text="profile.guardian"></div>
                 </div>
-                <div><span class="text-gray-500">Guardian Contact</span>
+                <div><span class="text-gray-500">Parent/Guardian's Contact Number</span>
                     <div class="font-semibold" x-text="profile.guardian_contact"></div>
                 </div>
-                <div><span class="text-gray-500">Guardian Email</span>
+                <div><span class="text-gray-500">Parent/Guardian's Email</span>
                     <div class="font-semibold break-all" x-text="profile.guardian_email"></div>
                 </div>
             </div>

@@ -71,4 +71,26 @@ class StudentValidationTest extends TestCase
 
         $this->assertDatabaseCount('students', 0);
     }
+
+    public function test_student_creation_requires_at_least_one_parent_or_guardian_name(): void
+    {
+        $encoder = User::factory()->create([
+            'role' => User::ROLE_ENCODER,
+            'advisory_grade_level' => 1,
+            'advisory_section' => 'Mabini',
+        ]);
+
+        $response = $this->actingAs($encoder)->from(route('encoder.students.create'))->post(
+            route('encoder.students.store'),
+            array_merge($this->validStudentPayload(), [
+                'father_name' => '',
+                'mother_name' => '',
+                'guardian_name' => '',
+            ])
+        );
+
+        $response->assertRedirect(route('encoder.students.create'));
+        $response->assertSessionHasErrors(['father_name', 'mother_name', 'guardian_name']);
+        $this->assertDatabaseCount('students', 0);
+    }
 }
