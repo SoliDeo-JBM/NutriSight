@@ -7,7 +7,7 @@ $schoolYearLabel = $schoolYear?->year ?? '0000-0000';
 <html>
 
 <head>
-    <title>Student ID - {{ $student->first_name }} {{ $student->last_name }}</title>
+    <title>Learner ID - {{ $student->first_name }} {{ $student->last_name }}</title>
     <link rel="icon" type="image/svg+xml" href="{{ \App\Services\SchoolLogoService::url() }}">
     <style>
         * {

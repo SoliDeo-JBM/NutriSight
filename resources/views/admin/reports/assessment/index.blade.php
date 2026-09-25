@@ -63,8 +63,8 @@
         <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
             <div class="flex items-start justify-between gap-4">
                 <div>
-                    <h2 class="text-lg font-bold text-slate-900">Student Attendance Summary</h2>
-                    <p class="mt-1 text-xs text-slate-500">Students with recorded SBFP attendance</p>
+                    <h2 class="text-lg font-bold text-slate-900">Learner Attendance Summary</h2>
+                    <p class="mt-1 text-xs text-slate-500">Learners with recorded SBFP attendance</p>
                 </div>
                 <div class="text-right">
                     <div class="text-2xl font-bold text-emerald-600">{{ $assessment['complete_attendance_rate'] }}%</div>
@@ -126,7 +126,7 @@
             </thead>
             <tbody>
                 <tr>
-                    <td class="border border-slate-200 px-4 py-3 font-semibold">Students with attendance records</td>
+                    <td class="border border-slate-200 px-4 py-3 font-semibold">Learners with attendance records</td>
                     <td class="border border-slate-200 px-4 py-3 text-right">{{ $assessment['attendance_students'] }}</td>
                     <td class="border border-slate-200 px-4 py-3 text-right">100%</td>
                 </tr>
@@ -280,22 +280,22 @@
                             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                                 <div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Highest Attendance Age Group</div>
                                 <div class="mt-1 font-bold text-slate-900">{{ $attendanceSummary['age']['highest']['age'] ?? 'No data' }}{{ isset($attendanceSummary['age']['highest']['age']) ? ' years' : '' }}</div>
-                                <div class="text-xs text-slate-600">{{ $attendanceSummary['age']['highest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['age']['highest']['count'] ?? 0 }} students)</div>
+                                                <div class="text-xs text-slate-600">{{ $attendanceSummary['age']['highest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['age']['highest']['count'] ?? 0 }} learners)</div>
                             </div>
                             <div class="rounded-lg border border-rose-200 bg-rose-50 p-3">
                                 <div class="text-xs font-semibold uppercase tracking-wide text-rose-700">Lowest Attendance Age Group</div>
                                 <div class="mt-1 font-bold text-slate-900">{{ $attendanceSummary['age']['lowest']['age'] ?? 'No data' }}{{ isset($attendanceSummary['age']['lowest']['age']) ? ' years' : '' }}</div>
-                                <div class="text-xs text-slate-600">{{ $attendanceSummary['age']['lowest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['age']['lowest']['count'] ?? 0 }} students)</div>
+                                                <div class="text-xs text-slate-600">{{ $attendanceSummary['age']['lowest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['age']['lowest']['count'] ?? 0 }} learners)</div>
                             </div>
                             <div class="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
                                 <div class="text-xs font-semibold uppercase tracking-wide text-emerald-700">Highest Attendance Sex</div>
                                 <div class="mt-1 font-bold text-slate-900">{{ $attendanceSummary['sex']['highest']['sex'] ?? 'No data' }}</div>
-                                <div class="text-xs text-slate-600">{{ $attendanceSummary['sex']['highest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['sex']['highest']['count'] ?? 0 }} students)</div>
+                                                <div class="text-xs text-slate-600">{{ $attendanceSummary['sex']['highest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['sex']['highest']['count'] ?? 0 }} learners)</div>
                             </div>
                             <div class="rounded-lg border border-rose-200 bg-rose-50 p-3">
                                 <div class="text-xs font-semibold uppercase tracking-wide text-rose-700">Lowest Attendance Sex</div>
                                 <div class="mt-1 font-bold text-slate-900">{{ $attendanceSummary['sex']['lowest']['sex'] ?? 'No data' }}</div>
-                                <div class="text-xs text-slate-600">{{ $attendanceSummary['sex']['lowest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['sex']['lowest']['count'] ?? 0 }} students)</div>
+                                                <div class="text-xs text-slate-600">{{ $attendanceSummary['sex']['lowest']['attendance_rate'] ?? 0 }}% complete ({{ $attendanceSummary['sex']['lowest']['count'] ?? 0 }} learners)</div>
                             </div>
                         </div>
                     </section>

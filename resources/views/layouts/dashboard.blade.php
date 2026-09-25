@@ -39,14 +39,14 @@
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
             @if(Auth::user()->role === 'super_admin')
-            <!-- Student Management Dropdown -->
+            <!-- Learner Management Dropdown -->
             <div x-data="{ open: {{ request()->routeIs('super-admin.students.*', 'super-admin.attendance.*') ? 'true' : 'false' }} }" x-cloak class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
-                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Management</span>
+                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Learner Management</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
                 <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('super-admin.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete Student List</a>
+                    <a href="{{ route('super-admin.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete Learner List</a>
                     <a href="{{ route('super-admin.students.sbfp') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.students.sbfp') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete SBFP List</a>
                     <a href="{{ route('super-admin.attendance.index') }}" class="flex items-center gap-3 {{ request()->routeIs('super-admin.attendance.*') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete Attendance List</a>
                 </div>
@@ -72,14 +72,14 @@
             @endif
 
             @if(Auth::user()->role === 'encoder')
-            <!-- Student Management Dropdown -->
+            <!-- Learner Management Dropdown -->
             <div x-data="{ open: {{ request()->routeIs('encoder.students.*') ? 'true' : 'false' }} }" x-cloak class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
-                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Records</span>
+                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Learner Records</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
                 <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('encoder.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('encoder.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Advisory Student List</a>
+                    <a href="{{ route('encoder.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('encoder.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Advisory Learner List</a>
                     <a href="{{ route('encoder.students.sbfp') }}" class="flex items-center gap-3 {{ request()->routeIs('encoder.students.sbfp') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Advisory SBFP List</a>
                 </div>
             </div>
@@ -96,14 +96,14 @@
             <a href="{{ route('admin.meal-plans.index') }}" class="nav-link {{ request()->routeIs('admin.meal-plans.*') ? 'active' : '' }}" onclick="toggleSidebar()">
                 <i class="fas fa-utensils"></i> Meal Plan
             </a>
-            <!-- Student Management Dropdown -->
+            <!-- Learner Management Dropdown -->
             <div x-data="{ open: {{ request()->routeIs('admin.students.*', 'admin.attendance.*') ? 'true' : 'false' }} }" x-cloak class="my-1">
                 <button @click="open = !open" class="w-full flex items-center justify-between px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-stone-800 hover:text-white transition">
-                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Student Management</span>
+                    <span class="flex items-center gap-3"><i class="fas fa-users w-5 text-center"></i> Learner Management</span>
                     <i class="fas fa-chevron-down text-xs transition-transform duration-200" :class="{ 'rotate-180': open }"></i>
                 </button>
                 <div x-show="open" x-cloak x-transition:enter="transition ease-out duration-200" x-transition:enter-start="opacity-0 -translate-y-1" x-transition:enter-end="opacity-100 translate-y-0" class="bg-stone-950/50 py-1 space-y-0.5">
-                    <a href="{{ route('admin.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('admin.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete Student List</a>
+                    <a href="{{ route('admin.students.index') }}" class="flex items-center gap-3 {{ request()->routeIs('admin.students.index') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete Learner List</a>
                     <a href="{{ route('admin.students.sbfp') }}" class="flex items-center gap-3 {{ request()->routeIs('admin.students.sbfp') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete SBFP List</a>
                     <a href="{{ route('admin.attendance.index') }}" class="flex items-center gap-3 {{ request()->routeIs('admin.attendance.*') ? 'pl-10 pr-4 py-2 text-xs text-white bg-stone-800 border-l-2 border-orange-500 font-medium' : 'pl-11 pr-4 py-2 text-xs text-slate-400 hover:text-white hover:bg-stone-800' }} transition" onclick="toggleSidebar()">Complete Attendance List</a>
                 </div>

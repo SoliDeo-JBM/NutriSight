@@ -19,7 +19,7 @@
             <!-- Search Bar -->
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter learner name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             </div>
 
             <!-- Filters Row -->
@@ -93,7 +93,7 @@
                         <th class="px-4 py-3 border">Sex</th>
                         <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
                         <th class="px-4 py-3 border">Parent's Approval</th>
-                        <th class="px-4 py-3 border text-center">Student QR Code</th>
+                        <th class="px-4 py-3 border text-center">Learner QR Code</th>
                     </tr>
                     <tr>
                         <th colspan="8" class="px-4 py-2 border"></th>

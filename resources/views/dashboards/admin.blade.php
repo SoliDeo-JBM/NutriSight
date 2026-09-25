@@ -22,7 +22,7 @@
 <!-- KPI Summary Cards -->
 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
     <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
-        <div class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total SBFP Students</div>
+        <div class="text-gray-500 text-xs font-semibold uppercase tracking-wider">Total SBFP Learners</div>
         <div class="text-3xl font-bold text-gray-900 mt-2">{{ $totalSbfpStudents }}</div>
     </div>
     <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200">
@@ -72,14 +72,14 @@
 <!-- Period Progress Table -->
 <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
     <div class="p-6 border-b border-gray-200">
-        <h2 class="text-lg font-bold text-gray-800">Student Period Progress Report</h2>
+        <h2 class="text-lg font-bold text-gray-800">Learner Period Progress Report</h2>
     </div>
     <div class="overflow-x-auto">
         <table class="w-full">
             <thead class="bg-gray-100 border-b">
                 <tr>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">No.</th>
-                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Student ID</th>
+                    <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Learner ID</th>
                     <th class="px-6 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Name</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Baseline</th>
                     <th class="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase">Midline</th>

@@ -5,15 +5,15 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Advisory Student List</h1>
-            <p class="text-sm text-gray-500 mt-1">Master list of advisory students with WHO nutritional metrics.</p>
+            <h1 class="text-2xl font-bold text-gray-900">Advisory Learner List</h1>
+            <p class="text-sm text-gray-500 mt-1">Master list of advisory learners with WHO nutritional metrics.</p>
         </div>
         <div class="flex flex-wrap gap-2">
             <button type="button" onclick="document.getElementById('change-section-modal').classList.remove('hidden')" class="bg-amber-500 text-white px-4 py-2 rounded text-sm hover:bg-amber-600 inline-flex items-center gap-2 whitespace-nowrap">
                 <i class="fas fa-pen"></i> Change Section Name
             </button>
             <a href="{{ route('encoder.students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
-                <i class="fas fa-plus"></i> Add Advisory Student
+                <i class="fas fa-plus"></i> Add Advisory Learner
             </a>
         </div>
     </div>
@@ -25,7 +25,7 @@
             <div class="mb-4 flex items-center justify-between">
                 <div>
                     <h2 class="font-bold text-gray-900">Change Section Name</h2>
-                    <p class="mt-1 text-xs text-gray-500">This updates all {{ $user->advisory_section }} students in the active grade and school year.</p>
+                    <p class="mt-1 text-xs text-gray-500">This updates all {{ $user->advisory_section }} learners in the active grade and school year.</p>
                 </div>
                 <button type="button" onclick="document.getElementById('change-section-modal').classList.add('hidden')" aria-label="Close"><i class="fas fa-times text-gray-400"></i></button>
             </div>
@@ -42,7 +42,7 @@
             <!-- Search Bar -->
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter learner name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             </div>
 
             <!-- Filters Row -->
@@ -89,7 +89,7 @@
         </form>
     </div>
 
-    <!-- Students Table -->
+    <!-- Learners Table -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full border-collapse bg-white text-left text-sm text-gray-500">
@@ -152,7 +152,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria. Click "Add Advisory Student" to begin.</td>
+                        <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No learners found matching your criteria. Click "Add Advisory Learner" to begin.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -172,12 +172,12 @@
     <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="withdraw-student-title" onclick="event.stopPropagation()">
         <div class="mb-4 flex items-start justify-between gap-4">
             <div>
-                <h2 id="withdraw-student-title" class="font-bold text-gray-900">Remove Student</h2>
+                <h2 id="withdraw-student-title" class="font-bold text-gray-900">Remove Learner</h2>
                 <p class="mt-1 text-sm text-gray-600">Are you sure you want to mark <span id="withdraw-student-name" class="font-semibold text-gray-900"></span> as withdrawn?</p>
             </div>
             <button type="button" onclick="closeWithdrawModal()" aria-label="Close" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>
         </div>
-        <p class="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">The student’s existing measurements, attendance, feeding, and approval records will be preserved.</p>
+        <p class="rounded-lg bg-amber-50 p-3 text-xs leading-5 text-amber-800">The learner’s existing measurements, attendance, feeding, and approval records will be preserved.</p>
         <form id="withdraw-student-form" method="POST" class="mt-5 flex justify-end gap-3">
             @csrf
             @method('DELETE')

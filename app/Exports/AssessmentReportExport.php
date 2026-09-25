@@ -19,7 +19,7 @@ class AssessmentReportExport implements FromArray, ShouldAutoSize, WithHeadings
 
     public static function columnHeadings(): array
     {
-        return ['School Year', 'Students With Attendance', 'Complete Attendance', 'Complete %', 'With Absences', 'Absences %', 'At-Risk Nutrition Cohort', 'Recovered to Normal', 'Recovered %', 'Still Needing Support', 'Support %'];
+        return ['School Year', 'Learners With Attendance', 'Complete Attendance', 'Complete %', 'With Absences', 'Absences %', 'At-Risk Nutrition Cohort', 'Recovered to Normal', 'Recovered %', 'Still Needing Support', 'Support %'];
     }
 
     public static function values(array $assessment): array

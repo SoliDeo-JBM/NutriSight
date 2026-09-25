@@ -23,7 +23,7 @@ class AssessmentReportWorkbookExport implements Export, WithMultipleSheets
         return [
             new AssessmentReportSheet('Summary', AssessmentReportExport::columnHeadings(), [AssessmentReportExport::values($assessment)], $this->assessment, $this->adminName, $this->superAdminName),
             new AssessmentReportSheet('Attendance Demographics', ['Sex', 'Age', 'Complete Attendance', 'Complete %', 'With Absences', 'Absence %'], $this->attendanceRows($assessment['attendance_demographics'])),
-            new AssessmentReportSheet('Participants', ['Sex', 'Age', 'Participants', 'Percentage'], $this->participantRows($assessment['participant_demographics'])),
+            new AssessmentReportSheet('Learners', ['Sex', 'Age', 'Learners', 'Percentage'], $this->participantRows($assessment['participant_demographics'])),
             new AssessmentReportSheet('Endline Recovery', ['Sex', 'Age', 'Recovered to Normal', 'Recovered %', 'Still Needing Support', 'Support %'], $this->recoveryRows($assessment['recovery_demographics'])),
             new AssessmentReportSheet('Period Summary', ['Period', 'Nutrition Status', 'Count'], $this->periodSummaryRows($assessment['period_summary'])),
             new AssessmentReportSheet('Period Demographics', ['Sex', 'Age', 'Baseline', 'Midline', 'Endline', 'Percentage'], $this->periodRows($assessment['period_demographics'])),

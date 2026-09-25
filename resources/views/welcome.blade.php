@@ -71,7 +71,7 @@
                                     </div>
                                     <div x-show="mode === 'dashboard'" class="grid grid-cols-2 gap-2 sm:grid-cols-4">
                                         <div class="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
-                                            <div class="text-[7px] font-bold uppercase tracking-wide text-slate-500 sm:text-[9px]">Total SBFP Students</div>
+                                            <div class="text-[7px] font-bold uppercase tracking-wide text-slate-500 sm:text-[9px]">Total SBFP Learners</div>
                                             <div class="mt-1 text-xl font-black text-slate-900 sm:text-3xl" x-text="metrics[period].total"></div>
                                         </div>
                                         <div class="rounded-md border border-slate-200 bg-white p-2 shadow-sm">
@@ -106,7 +106,7 @@
                                         <div class="grid gap-3 lg:grid-cols-2">
                                             <div class="rounded-md border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
                                                 <div class="flex items-start justify-between gap-2">
-                                                    <div><h2 class="text-[10px] font-bold text-slate-900 sm:text-xs">Student Attendance Summary</h2><p class="mt-1 text-[8px] text-slate-500 sm:text-[9px]">Students with recorded SBFP attendance</p></div>
+                                                    <div><h2 class="text-[10px] font-bold text-slate-900 sm:text-xs">Learner Attendance Summary</h2><p class="mt-1 text-[8px] text-slate-500 sm:text-[9px]">Learners with recorded SBFP attendance</p></div>
                                                     <div class="text-right"><div class="text-lg font-black text-emerald-600 sm:text-2xl" x-text="assessment.completeAttendanceRate + '%' "></div><div class="text-[8px] text-slate-500">complete</div></div>
                                                 </div>
                                                 <div class="mt-3 h-2 overflow-hidden rounded-full bg-rose-100"><div class="h-full bg-emerald-500" :style="'width: ' + assessment.completeAttendanceRate + '%' "></div></div>
@@ -209,7 +209,7 @@
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="h-5 w-5" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 19a4 4 0 10-6 0M12 13a4 4 0 100-8 4 4 0 000 8Zm7 6a3 3 0 10-4.5-2.6M17 13a3 3 0 100-6" /></svg>
                         </div>
                         <h3 class="mt-5 text-lg font-bold text-slate-900">Learner Records</h3>
-                        <p class="mt-2 text-sm leading-6 text-slate-600">Maintain searchable student profiles, enrollments, sections, and guardian details.</p>
+                        <p class="mt-2 text-sm leading-6 text-slate-600">Maintain searchable learner profiles, enrollments, sections, and guardian details.</p>
                     </article>
 
                     <article class="border border-slate-200 bg-white p-6 shadow-sm transition hover:-translate-y-1 hover:shadow-md">
@@ -295,7 +295,7 @@
                     <h2 class="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">Every record supports a healthier future.</h2>
                 </div>
                 <div class="text-lg leading-8 text-slate-600">
-                    <p>NutriSight supports the School-Based Feeding Program (SBFP) at Marisol Bliss Elementary School by bringing student nutrition, attendance, feeding, and assessment records into a shared system for better follow-through.</p>
+                    <p>NutriSight supports the School-Based Feeding Program (SBFP) at Marisol Bliss Elementary School by bringing learner nutrition, attendance, feeding, and assessment records into a shared system for better follow-through.</p>
                 </div>
             </div>
         </section>

@@ -158,7 +158,7 @@
     </div>
 
 
-    <h2>Student Attendance Summary</h2>
+    <h2>Learner Attendance Summary</h2>
     <table>
         <thead>
             <tr>
@@ -169,7 +169,7 @@
         </thead>
         <tbody>
             <tr>
-                <td>Students with attendance records</td>
+                <td>Learners with attendance records</td>
                 <td class="number">{{ $assessment['attendance_students'] }}</td>
                 <td class="number">100%</td>
             </tr>

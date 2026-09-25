@@ -13,7 +13,7 @@
         
         <p>Dear Parent / Guardian of <strong>{{ $student->first_name }} {{ $student->last_name }}</strong>,</p>
 
-        <p><strong>{{ $student->first_name }} {{ $student->last_name }}</strong> is present on school based feeding program today and eaten <strong>{{ $meal }}</strong>.</p>
+        <p><strong>{{ $student->first_name }} {{ $student->last_name }}</strong> is present in the school-based feeding program today and ate <strong>{{ $meal }}</strong>.</p>
 
         <div style="background: #f8fafc; border-left: 4px solid #22c55e; padding: 12px 16px; margin: 16px 0;">
             <p style="margin: 0 0 8px 0;"><strong>Attendance date:</strong> {{ $date }}</p>

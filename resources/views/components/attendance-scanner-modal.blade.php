@@ -29,15 +29,15 @@
                 }
 
                 if (response.ok) {
-                    this.studentName = data.student_name || 'Student';
+                    this.studentName = data.student_name || 'Learner';
                     this.studentDetails = (data.grade_level && data.section) ? (data.grade_level + ' - ' + data.section) : '';
                     this.statusMessage = data.success || 'Attendance logged successfully.';
                     this.statusClass = 'text-green-700 font-bold';
                     this.statusBg = 'bg-green-50 border-green-200';
                 } else {
                     this.studentName = data.student_name || 'Invalid QR / Barcode';
-                    this.studentDetails = (data.grade_level && data.section) ? (data.grade_level + ' - ' + data.section) : 'No student record matched LRN: ' + lrnToScan;
-                    this.statusMessage = data.error || 'Student not found in active school year.';
+                    this.studentDetails = (data.grade_level && data.section) ? (data.grade_level + ' - ' + data.section) : 'No learner record matched LRN: ' + lrnToScan;
+                    this.statusMessage = data.error || 'Learner not found in active school year.';
                     if (data.error && data.error.toLowerCase().includes('add meal first')) {
                         window.dispatchEvent(new CustomEvent('meal-required'));
                     }
@@ -59,7 +59,7 @@
             });
         }
     }">
-        <h2 class="text-lg font-medium text-gray-900 mb-4"><i class="fas fa-qrcode text-orange-600 mr-2"></i> Scan Student QR Code</h2>
+        <h2 class="text-lg font-medium text-gray-900 mb-4"><i class="fas fa-qrcode text-orange-600 mr-2"></i> Scan Learner QR Code</h2>
         
         <input type="text" 
                x-ref="scannerInput"

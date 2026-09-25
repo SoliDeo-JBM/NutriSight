@@ -5,7 +5,7 @@
     <!-- Header -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">Complete Student List</h1>
+            <h1 class="text-2xl font-bold text-gray-900">Complete Learner List</h1>
             <p class="text-sm text-gray-500 mt-1">Master list of all learners with WHO nutritional metrics across school sections.</p>
         </div>
     </div>
@@ -16,7 +16,7 @@
             <!-- Search Bar -->
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter learner name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             </div>
 
             <!-- Filters Row -->
@@ -84,7 +84,7 @@
         </form>
     </div>
 
-    <!-- Students Table -->
+    <!-- Learners Table -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div class="overflow-x-auto">
             <table class="w-full border-collapse bg-white text-left text-sm text-gray-500">
@@ -146,7 +146,7 @@
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="15" class="px-4 py-8 border text-center text-gray-500">No students found matching your criteria.</td>
+                        <td colspan="15" class="px-4 py-8 border text-center text-gray-500">No learners found matching your criteria.</td>
                     </tr>
                     @endforelse
                 </tbody>

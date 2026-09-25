@@ -10,7 +10,7 @@
     : 'Section (' . $advisorySection . ') - Grade (' . $advisoryGrade . ')';
     @endphp
     <div class="mb-6 flex items-start justify-between gap-4">
-        <h1 class="text-2xl font-bold">{{ isset($student) ? 'Edit Advisory Student' : 'Add Advisory Student' }}</h1>
+        <h1 class="text-2xl font-bold">{{ isset($student) ? 'Edit Advisory Learner' : 'Add Advisory Learner' }}</h1>
         <strong class="shrink-0 text-right text-sm text-blue-700">{{ $advisoryLabel }}</strong>
     </div>
 
@@ -29,7 +29,7 @@
         @if(isset($student)) @method('PUT') @endif
 
         <div>
-            <label class="block text-sm font-semibold mb-1">LRN / Student Number <span class="text-red-500">*</span></label>
+            <label class="block text-sm font-semibold mb-1">LRN / Learner Number <span class="text-red-500">*</span></label>
             <input id="student-lrn" type="text" name="lrn" value="{{ old('lrn', $student->lrn ?? '') }}" required inputmode="numeric" pattern="[0-9]+" autocomplete="off" class="w-full border rounded p-2 text-sm @error('lrn') border-red-500 @enderror" placeholder="e.g. 136542100012" aria-describedby="student-lrn-error">
             <p id="student-lrn-error" class="mt-1 hidden text-sm text-red-600" role="alert">LRN must contain numbers only. Remove the other characters before submitting.</p>
             @error('lrn')<p class="mt-1 text-sm text-red-600">{{ $message }}</p>@enderror
@@ -133,7 +133,7 @@
 
         <div class="flex justify-end gap-3 pt-4">
             <a href="{{ route('encoder.students.index') }}" class="bg-gray-200 text-gray-700 px-4 py-2 rounded text-sm hover:bg-gray-300">Cancel</a>
-            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-700">{{ isset($student) ? 'Update Student' : 'Save Student' }}</button>
+            <button type="submit" class="bg-blue-600 text-white px-6 py-2 rounded text-sm hover:bg-blue-700">{{ isset($student) ? 'Update Learner' : 'Save Learner' }}</button>
         </div>
     </form>
 </div>

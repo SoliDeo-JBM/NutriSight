@@ -6,7 +6,7 @@
     <div class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
             <h1 class="text-2xl font-bold text-slate-900">{{ $routePrefix === 'encoder' ? 'Attendance List' : 'Complete Attendance List' }}</h1>
-            <p class="mt-1 text-sm text-slate-500">Record feeding attendance for {{ $routePrefix === 'encoder' ? 'your advisory class' : 'all approved SBFP students' }}.</p>
+            <p class="mt-1 text-sm text-slate-500">Record feeding attendance for {{ $routePrefix === 'encoder' ? 'your advisory class' : 'all approved SBFP learners' }}.</p>
         </div>
         <form method="GET" action="{{ route($routePrefix . '.attendance.index') }}" class="flex items-end gap-2">
             <div>
@@ -38,9 +38,9 @@
 
     <div class="flex flex-col gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center">
         <div class="relative flex-1">
-            <label for="attendance-search" class="sr-only">Search student name</label>
+            <label for="attendance-search" class="sr-only">Search learner name</label>
             <i class="fas fa-search pointer-events-none absolute left-3 top-3 text-slate-400"></i>
-            <input id="attendance-search" type="search" placeholder="Search student name..." class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
+            <input id="attendance-search" type="search" placeholder="Search learner name..." class="w-full rounded-lg border border-slate-300 py-2 pl-9 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500">
         </div>
         <select id="attendance-status-filter" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm">
             <option value="all">All statuses</option>
@@ -58,7 +58,7 @@
 
     @if(!$hasMeal)
     <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        No meal is scheduled for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}. Add a meal before marking a student present or absent.
+        No meal is scheduled for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}. Add a meal before marking a learner present or absent.
     </div>
     @endif
 
@@ -91,12 +91,12 @@
                     <td class="px-4 py-3">{{ $enrollment?->section }}</td>
                     <td class="px-4 py-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $status === 'present' ? 'bg-emerald-100 text-emerald-800' : ($status === 'absent' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600') }}">{{ ucfirst($status) }}</span></td>
                     <td class="min-w-[220px] px-2 py-3">
-                        <form action="{{ route($routePrefix . '.attendance.update') }}" method="POST" class="mx-auto grid max-w-[220px] grid-cols-[1fr_1fr_32px] items-center gap-1">@csrf<input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}"><input type="hidden" name="date" value="{{ $date }}"><button type="submit" name="status" value="present" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-emerald-100' }} disabled:cursor-not-allowed disabled:opacity-50">Present</button><button type="submit" name="status" value="absent" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'absent' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-rose-100' }} disabled:cursor-not-allowed disabled:opacity-50">Absent</button><button type="submit" name="status" value="unmarked" data-confirm-message="Clear this student's attendance status for the selected date?" title="Clear attendance status" aria-label="Clear attendance status" class="h-8 w-8 rounded-md bg-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">X</button></form>
+                        <form action="{{ route($routePrefix . '.attendance.update') }}" method="POST" class="mx-auto grid max-w-[220px] grid-cols-[1fr_1fr_32px] items-center gap-1">@csrf<input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}"><input type="hidden" name="date" value="{{ $date }}"><button type="submit" name="status" value="present" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-emerald-100' }} disabled:cursor-not-allowed disabled:opacity-50">Present</button><button type="submit" name="status" value="absent" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'absent' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-rose-100' }} disabled:cursor-not-allowed disabled:opacity-50">Absent</button><button type="submit" name="status" value="unmarked" data-confirm-message="Clear this learner's attendance status for the selected date?" title="Clear attendance status" aria-label="Clear attendance status" class="h-8 w-8 rounded-md bg-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">X</button></form>
                     </td>
                 </tr>
                 @empty
                 <tr>
-                    <td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500">No approved SBFP students found.</td>
+                    <td colspan="6" class="px-4 py-10 text-center text-sm text-slate-500">No approved SBFP learners found.</td>
                 </tr>
                 @endforelse
             </tbody>
@@ -271,7 +271,7 @@
             </form>
         </div>
         @empty
-        <p class="text-gray-500 text-center py-6 text-sm">No approved SBFP students found.</p>
+        <p class="text-gray-500 text-center py-6 text-sm">No approved SBFP learners found.</p>
         @endforelse
     </div>
 </div>

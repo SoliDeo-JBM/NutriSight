@@ -20,7 +20,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
-            <p class="text-sm text-gray-500 mt-1">Students automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
+            <p class="text-sm text-gray-500 mt-1">Learners automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
             <div class="mt-4 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
                 <button type="button" @click="openEditPeriodModal()" class="shrink-0 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
                     <i class="fas fa-pen"></i> Edit Period
@@ -45,7 +45,7 @@
             <!-- Search Bar -->
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or LRN / ID</label>
-                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter student name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                <input type="text" name="search" value="{{ request('search') }}" placeholder="Enter learner name or LRN..." @input.debounce.350ms="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
             </div>
 
             <!-- Filters Row -->
@@ -106,7 +106,7 @@
                         <th class="px-4 py-3 border">Sex</th>
                         <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
                         <th class="px-4 py-3 border">Parent's Approval</th>
-                        <th class="px-4 py-3 border text-center">Student QR Code</th>
+                        <th class="px-4 py-3 border text-center">Learner QR Code</th>
                     </tr>
                     <tr>
                         <th colspan="6" class="px-4 py-2 border"></th>
@@ -243,7 +243,7 @@
         <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
             <h3 class="text-lg font-bold mb-1">Parent's Approval</h3>
             <p class="text-sm text-gray-500 mb-4">Update approval answers for the advisory SBFP participants.</p>
-            <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" data-loading-message="Updating student approvals..." @submit.prevent="requestConfirmation($event, 'approval')">
+            <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" data-loading-message="Updating learner approvals..." @submit.prevent="requestConfirmation($event, 'approval')">
                 @csrf
                 @method('PATCH')
                 <div class="overflow-x-auto mb-6">
@@ -296,9 +296,9 @@
     <div x-show="showModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
         <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
             <h3 class="text-lg font-bold mb-1">Add Period</h3>
-            <p class="text-sm text-gray-500 mb-4">Existing measurements are locked. Enter complete measurements only for students missing the selected period.</p>
+            <p class="text-sm text-gray-500 mb-4">Existing measurements are locked. Enter complete measurements only for learners missing the selected period.</p>
 
-            <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" data-loading-message="Saving student assessments..." @submit.prevent="requestConfirmation($event, 'add')">
+            <form action="{{ route('encoder.students.assessment.bulk') }}" method="POST" data-loading-message="Saving learner assessments..." @submit.prevent="requestConfirmation($event, 'add')">
                 @csrf
 
                 <div class="mb-4">
@@ -350,9 +350,9 @@
     <div x-show="showEditModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
         <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-5xl mx-4 max-h-[90vh] overflow-y-auto">
             <h3 class="text-lg font-bold mb-1">Edit Period</h3>
-            <p class="text-sm text-gray-500 mb-4">Edit measurements for multiple students in an existing period.</p>
+            <p class="text-sm text-gray-500 mb-4">Edit measurements for multiple learners in an existing period.</p>
 
-            <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" data-loading-message="Updating student assessments..." @submit.prevent="requestConfirmation($event, 'edit')">
+            <form action="{{ route('encoder.students.assessment.bulk.update') }}" method="POST" data-loading-message="Updating learner assessments..." @submit.prevent="requestConfirmation($event, 'edit')">
                 @csrf
                 @method('PATCH')
                 <div class="mb-4">

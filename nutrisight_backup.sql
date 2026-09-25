@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict rlSBJUvrj7unBZNqtdIiTwnXEowFdZuUpLpIAEGbtcnNQNqtqFclJgZLqHUaeK4
+\restrict WXeOeT3LWrqCXWLoOB9AsC6qR0sKKtsneEc7gApjyxi0uFiAtP5750Dp0nBC0X4
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
@@ -191,7 +191,8 @@ ALTER TYPE auth.factor_status OWNER TO supabase_auth_admin;
 CREATE TYPE auth.factor_type AS ENUM (
     'totp',
     'webauthn',
-    'phone'
+    'phone',
+    'recovery_code'
 );
 
 
@@ -1686,10 +1687,19 @@ begin
         '{}'
     ) from unnest(new.filters) f;
 
-    new.selected_columns = (
-        select array_agg(c order by c)
-        from unnest(new.selected_columns) c
-    );
+    -- Normalize selected_columns order so ARRAY['a','b'] and ARRAY['b','a'] are treated
+    -- as the same subscription group in apply_rls. Preserve an empty array as '{}'
+    -- ("primary keys only") so it stays distinct from NULL ("all columns"); array_agg
+    -- over an empty set would otherwise collapse '{}' back to NULL.
+    if new.selected_columns is not null then
+        new.selected_columns = coalesce(
+            (
+                select array_agg(c order by c)
+                from unnest(new.selected_columns) c
+            ),
+            '{}'::text[]
+        );
+    end if;
 
     return new;
 end;
@@ -1821,6 +1831,37 @@ $$;
 ALTER FUNCTION storage.can_insert_object(bucketid text, name text, owner uuid, metadata jsonb) OWNER TO supabase_storage_admin;
 
 --
+-- Name: enforce_bucket_lifecycle_service_role(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+--
+
+CREATE FUNCTION storage.enforce_bucket_lifecycle_service_role() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog'
+    AS $$
+BEGIN
+  IF current_user::text IS DISTINCT FROM TG_ARGV[0]
+     AND (
+       OLD.lifecycle_configuration IS DISTINCT FROM NEW.lifecycle_configuration
+       OR OLD.lifecycle_configuration_generation IS DISTINCT FROM NEW.lifecycle_configuration_generation
+     ) THEN
+    -- AFTER runs only after caller RLS has accepted the proposed row. The API
+    -- recognizes this specific error after rolling back its permission probe;
+    -- direct non-service writes still fail and cannot persist the change.
+    RAISE EXCEPTION 'bucket control columns may only be changed by the configured storage service role'
+      USING ERRCODE = 'PST01',
+            SCHEMA = TG_TABLE_SCHEMA,
+            TABLE = TG_TABLE_NAME,
+            CONSTRAINT = TG_NAME;
+  END IF;
+
+  RETURN NULL;
+END;
+$$;
+
+
+ALTER FUNCTION storage.enforce_bucket_lifecycle_service_role() OWNER TO supabase_storage_admin;
+
+--
 -- Name: enforce_bucket_name_length(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
@@ -1907,8 +1948,14 @@ CREATE FUNCTION storage.get_common_prefix(p_key text, p_prefix text, p_delimiter
     LANGUAGE sql IMMUTABLE
     AS $$
 SELECT CASE
-    WHEN position(p_delimiter IN substring(p_key FROM length(p_prefix) + 1)) > 0
-    THEN left(p_key, length(p_prefix) + position(p_delimiter IN substring(p_key FROM length(p_prefix) + 1)))
+    WHEN p_delimiter <> ''
+         AND position(p_delimiter IN substring(p_key FROM length(p_prefix) + 1)) > 0
+    THEN left(
+        p_key,
+        length(p_prefix)
+            + position(p_delimiter IN substring(p_key FROM length(p_prefix) + 1))
+            + length(p_delimiter) - 1
+    )
     ELSE NULL
 END;
 $$;
@@ -1917,76 +1964,109 @@ $$;
 ALTER FUNCTION storage.get_common_prefix(p_key text, p_prefix text, p_delimiter text) OWNER TO supabase_storage_admin;
 
 --
--- Name: get_size_by_bucket(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+-- Name: get_size_by_bucket(text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE FUNCTION storage.get_size_by_bucket() RETURNS TABLE(size bigint, bucket_id text)
+CREATE FUNCTION storage.get_size_by_bucket(noncurrent_versions text DEFAULT 'include'::text, delete_markers text DEFAULT 'include'::text) RETURNS TABLE(size bigint, bucket_id text)
     LANGUAGE plpgsql STABLE
     AS $$
 BEGIN
+    -- COALESCE first: NULL NOT IN (...) evaluates to NULL (not TRUE), so a
+    -- bare NOT IN check silently leaves an explicit NULL argument unreset.
+    noncurrent_versions := COALESCE(noncurrent_versions, 'include');
+    delete_markers := COALESCE(delete_markers, 'include');
+    IF noncurrent_versions NOT IN ('exclude', 'only', 'include') THEN
+        noncurrent_versions := 'include';
+    END IF;
+    IF delete_markers NOT IN ('exclude', 'only', 'include') THEN
+        delete_markers := 'include';
+    END IF;
+
     return query
         select sum((metadata->>'size')::bigint)::bigint as size, obj.bucket_id
         from "storage".objects as obj
+        where (noncurrent_versions != 'exclude' OR obj.archived_at IS NULL)
+          and (noncurrent_versions != 'only' OR obj.archived_at IS NOT NULL)
+          and (delete_markers != 'exclude' OR NOT obj.is_delete_marker)
+          and (delete_markers != 'only' OR obj.is_delete_marker)
         group by obj.bucket_id;
 END
 $$;
 
 
-ALTER FUNCTION storage.get_size_by_bucket() OWNER TO supabase_storage_admin;
+ALTER FUNCTION storage.get_size_by_bucket(noncurrent_versions text, delete_markers text) OWNER TO supabase_storage_admin;
 
 --
--- Name: list_multipart_uploads_with_delimiter(text, text, text, integer, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+-- Name: list_multipart_uploads_with_delimiter(text, text, text, integer, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE FUNCTION storage.list_multipart_uploads_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer DEFAULT 100, next_key_token text DEFAULT ''::text, next_upload_token text DEFAULT ''::text) RETURNS TABLE(key text, id text, created_at timestamp with time zone)
-    LANGUAGE plpgsql
+CREATE FUNCTION storage.list_multipart_uploads_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer DEFAULT 100, next_key_token text DEFAULT ''::text, next_upload_token text DEFAULT ''::text, raw_prefix_param text DEFAULT NULL::text) RETURNS TABLE(key text, id text, created_at timestamp with time zone)
+    LANGUAGE sql STABLE
     AS $_$
-BEGIN
-    RETURN QUERY EXECUTE
-        'SELECT DISTINCT ON(key COLLATE "C") * from (
-            SELECT
-                CASE
-                    WHEN position($2 IN substring(key from length($1) + 1)) > 0 THEN
-                        substring(key from 1 for length($1) + position($2 IN substring(key from length($1) + 1)))
-                    ELSE
-                        key
-                END AS key, id, created_at
-            FROM
-                storage.s3_multipart_uploads
-            WHERE
-                bucket_id = $5 AND
-                key ILIKE $1 || ''%'' AND
-                CASE
-                    WHEN $4 != '''' AND $6 = '''' THEN
-                        CASE
-                            WHEN position($2 IN substring(key from length($1) + 1)) > 0 THEN
-                                substring(key from 1 for length($1) + position($2 IN substring(key from length($1) + 1))) COLLATE "C" > $4
-                            ELSE
-                                key COLLATE "C" > $4
-                            END
-                    ELSE
-                        true
-                END AND
-                CASE
-                    WHEN $6 != '''' THEN
-                        id COLLATE "C" > $6
-                    ELSE
-                        true
-                    END
-            ORDER BY
-                key COLLATE "C" ASC, created_at ASC) as e order by key COLLATE "C" LIMIT $3'
-        USING prefix_param, delimiter_param, max_keys, next_key_token, bucket_id, next_upload_token;
-END;
+WITH candidates AS (
+    SELECT
+        upload.key AS object_key,
+        CASE
+            WHEN position($3 IN substring(upload.key FROM length(coalesce($7, $2)) + 1)) > 0
+            THEN left(
+                upload.key,
+                length(coalesce($7, $2))
+                    + position($3 IN substring(upload.key FROM length(coalesce($7, $2)) + 1))
+                    + length($3) - 1
+            )
+            ELSE upload.key
+        END AS result_key,
+        upload.id,
+        upload.created_at,
+        position($3 IN substring(upload.key FROM length(coalesce($7, $2)) + 1)) > 0 AS is_common_prefix
+    FROM storage.s3_multipart_uploads AS upload
+    WHERE upload.bucket_id = $1
+      AND upload.key COLLATE "C" LIKE $2 || '%'
+), filtered AS (
+    SELECT candidate.*
+    FROM candidates AS candidate
+    WHERE $5 = ''
+       OR candidate.result_key COLLATE "C" > $5
+       OR (
+           candidate.result_key COLLATE "C" = $5
+           AND NOT candidate.is_common_prefix
+           AND $6 <> ''
+           -- A completed or aborted marker repeats the remaining same-key uploads.
+           AND COALESCE(
+               (candidate.created_at, candidate.id COLLATE "C") > (
+                   SELECT marker.created_at, marker.id COLLATE "C"
+                   FROM storage.s3_multipart_uploads AS marker
+                   WHERE marker.bucket_id = $1
+                     AND marker.key COLLATE "C" = $5
+                     AND marker.id = $6
+               ),
+               TRUE
+           )
+       )
+), ranked AS (
+    SELECT
+        filtered.*,
+        row_number() OVER (
+            PARTITION BY filtered.result_key COLLATE "C"
+            ORDER BY filtered.created_at, filtered.id COLLATE "C"
+        ) AS prefix_rank
+    FROM filtered
+)
+SELECT ranked.result_key, ranked.id, ranked.created_at
+FROM ranked
+WHERE NOT ranked.is_common_prefix OR ranked.prefix_rank = 1
+ORDER BY ranked.result_key COLLATE "C", ranked.created_at, ranked.id COLLATE "C"
+LIMIT $4;
 $_$;
 
 
-ALTER FUNCTION storage.list_multipart_uploads_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer, next_key_token text, next_upload_token text) OWNER TO supabase_storage_admin;
+ALTER FUNCTION storage.list_multipart_uploads_with_delimiter(bucket_id text, prefix_param text, delimiter_param text, max_keys integer, next_key_token text, next_upload_token text, raw_prefix_param text) OWNER TO supabase_storage_admin;
 
 --
--- Name: list_objects_with_delimiter(text, text, text, integer, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+-- Name: list_objects_with_delimiter(text, text, text, integer, text, text, text, text, text, timestamp with time zone, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE FUNCTION storage.list_objects_with_delimiter(_bucket_id text, prefix_param text, delimiter_param text, max_keys integer DEFAULT 100, start_after text DEFAULT ''::text, next_token text DEFAULT ''::text, sort_order text DEFAULT 'asc'::text) RETURNS TABLE(name text, id uuid, metadata jsonb, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone)
+CREATE FUNCTION storage.list_objects_with_delimiter(_bucket_id text, prefix_param text, delimiter_param text, max_keys integer DEFAULT 100, start_after text DEFAULT ''::text, next_token text DEFAULT ''::text, sort_order text DEFAULT 'asc'::text, noncurrent_versions text DEFAULT 'exclude'::text, delete_markers text DEFAULT 'exclude'::text, next_token_archived_at timestamp with time zone DEFAULT NULL::timestamp with time zone, next_token_version text DEFAULT ''::text) RETURNS TABLE(name text, id uuid, metadata jsonb, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, version text, archived_at timestamp with time zone, is_delete_marker boolean, is_versioned boolean)
     LANGUAGE plpgsql STABLE
     AS $_$
 DECLARE
@@ -1998,15 +2078,38 @@ DECLARE
     v_is_asc BOOLEAN;
     v_prefix TEXT;
     v_start TEXT;
+    v_start_relative TEXT;
     v_upper_bound TEXT;
     v_file_batch_size INT;
+    v_version_filter TEXT;
 
-    -- Seek state
+    -- true when noncurrent_versions can return >1 row per name; keeps them
+    -- ordered most-recent-first and lets pagination resume mid-key
+    v_multi_row BOOLEAN;
+    v_name_order TEXT;
+    v_exact_range_predicate TEXT;
+    v_strict_range_predicate TEXT;
+    v_inclusive_range_predicate TEXT;
+
+    -- Seek state for the current name. archived_at is normalized to JavaScript's
+    -- millisecond precision and version breaks ties within the same millisecond.
+    -- Current rows use 'infinity'; NULL means no tiebreak has been established.
     v_next_seek TEXT;
+    v_next_seek_at TIMESTAMPTZ;
+    v_next_seek_version TEXT;
+    v_next_seek_strict BOOLEAN := false;
+    v_cursor_is_folder BOOLEAN;
     v_count INT := 0;
+    v_previous_seek TEXT;
+    v_previous_seek_at TIMESTAMPTZ;
+    v_previous_seek_version TEXT;
+    v_previous_count INT;
 
     -- Dynamic SQL for batch query only
     v_batch_query TEXT;
+    v_batch_query_strict TEXT;
+    v_delete_marker_peek_query TEXT;
+    v_delete_marker_peek_query_strict TEXT;
 
 BEGIN
     -- ========================================================================
@@ -2016,36 +2119,204 @@ BEGIN
     v_prefix := coalesce(prefix_param, '');
     v_start := CASE WHEN coalesce(next_token, '') <> '' THEN next_token ELSE coalesce(start_after, '') END;
     v_file_batch_size := LEAST(GREATEST(max_keys * 2, 100), 1000);
+    v_next_seek_at := NULL;
+    v_next_seek_version := '';
+
+    -- COALESCE first: NULL NOT IN (...) evaluates to NULL (not TRUE), so a
+    -- bare NOT IN check silently leaves an explicit NULL argument unreset.
+    noncurrent_versions := COALESCE(noncurrent_versions, 'exclude');
+    delete_markers := COALESCE(delete_markers, 'exclude');
+    IF noncurrent_versions NOT IN ('exclude', 'only', 'include') THEN
+        noncurrent_versions := 'exclude';
+    END IF;
+    IF delete_markers NOT IN ('exclude', 'only', 'include') THEN
+        delete_markers := 'exclude';
+    END IF;
+
+    v_multi_row := noncurrent_versions IN ('only', 'include');
+    v_name_order := CASE WHEN v_is_asc THEN 'ASC' ELSE 'DESC' END;
+
+    v_version_filter := '';
+    IF noncurrent_versions = 'exclude' THEN
+        v_version_filter := v_version_filter || ' AND o.archived_at IS NULL';
+    ELSIF noncurrent_versions = 'only' THEN
+        v_version_filter := v_version_filter || ' AND o.archived_at IS NOT NULL';
+    END IF;
+    IF delete_markers = 'exclude' THEN
+        v_version_filter := v_version_filter || ' AND NOT o.is_delete_marker';
+    ELSIF delete_markers = 'only' THEN
+        v_version_filter := v_version_filter || ' AND o.is_delete_marker';
+    END IF;
 
     -- Calculate upper bound for prefix filtering (bytewise, using COLLATE "C")
     IF v_prefix = '' THEN
         v_upper_bound := NULL;
-    ELSIF right(v_prefix, 1) = delimiter_param THEN
-        v_upper_bound := left(v_prefix, -1) || chr(ascii(delimiter_param) + 1);
     ELSE
         v_upper_bound := left(v_prefix, -1) || chr(ascii(right(v_prefix, 1)) + 1);
     END IF;
 
-    -- Build batch query (dynamic SQL - called infrequently, amortized over many rows)
-    IF v_is_asc THEN
-        IF v_upper_bound IS NOT NULL THEN
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND o.name COLLATE "C" >= $2 ' ||
-                'AND o.name COLLATE "C" < $3 ORDER BY o.name COLLATE "C" ASC LIMIT $4';
+    -- Keep caller-provided cursors inside the requested prefix range.
+    IF v_start <> '' AND v_upper_bound IS NOT NULL THEN
+        IF v_is_asc THEN
+            IF v_start COLLATE "C" < v_prefix COLLATE "C" THEN
+                v_start := '';
+            ELSIF v_start COLLATE "C" >= v_upper_bound COLLATE "C" THEN
+                RETURN;
+            END IF;
         ELSE
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND o.name COLLATE "C" >= $2 ' ||
-                'ORDER BY o.name COLLATE "C" ASC LIMIT $4';
+            IF v_start COLLATE "C" < v_prefix COLLATE "C" THEN
+                RETURN;
+            ELSIF v_start COLLATE "C" >= v_upper_bound COLLATE "C" THEN
+                v_start := '';
+            END IF;
+        END IF;
+    END IF;
+
+    v_start_relative := substring(v_start FROM length(v_prefix) + 1);
+
+    -- Direction affects only the indexed name range and its ordering. Cursor
+    -- state transitions and within-key version ordering stay shared.
+    IF v_is_asc THEN
+        v_exact_range_predicate := 'TRUE';
+        v_strict_range_predicate := 'o.name COLLATE "C" > $2';
+        v_inclusive_range_predicate := 'o.name COLLATE "C" >= $2';
+        IF v_upper_bound IS NOT NULL THEN
+            v_exact_range_predicate := 'o.name COLLATE "C" < $3';
+            v_strict_range_predicate := v_strict_range_predicate || ' AND o.name COLLATE "C" < $3';
+            v_inclusive_range_predicate := v_inclusive_range_predicate || ' AND o.name COLLATE "C" < $3';
         END IF;
     ELSE
-        IF v_upper_bound IS NOT NULL THEN
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND o.name COLLATE "C" < $2 ' ||
-                'AND o.name COLLATE "C" >= $3 ORDER BY o.name COLLATE "C" DESC LIMIT $4';
-        ELSE
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND o.name COLLATE "C" < $2 ' ||
-                'ORDER BY o.name COLLATE "C" DESC LIMIT $4';
+        v_exact_range_predicate := 'TRUE';
+        v_strict_range_predicate := 'o.name COLLATE "C" < $2';
+        v_inclusive_range_predicate := 'o.name COLLATE "C" < $2';
+        IF v_prefix <> '' THEN
+            v_exact_range_predicate := 'o.name COLLATE "C" >= $3';
+            v_strict_range_predicate := v_strict_range_predicate || ' AND o.name COLLATE "C" >= $3';
+            v_inclusive_range_predicate := v_inclusive_range_predicate || ' AND o.name COLLATE "C" >= $3';
+        END IF;
+    END IF;
+
+    -- Build batch query (dynamic SQL - called infrequently, amortized over many rows)
+    -- The multi-row order matches the externally serialized cursor exactly:
+    -- archived_at at millisecond precision, then version as the final tiebreak.
+    --
+    -- When v_multi_row, the seek is a keyset tuple comparison ("name > $2 OR
+    -- (name = $2 AND tiebreak)") - Postgres won't split that OR into indexable
+    -- form (confirmed even with fully literal values), so as one WHERE clause
+    -- it forces a full bucket scan filtered row-by-row. Splitting it into two
+    -- independently-indexable branches (exact name match with the tiebreak
+    -- filter, vs. strictly-past names) combined with UNION ALL lets each
+    -- branch keep name as a real index condition; the outer ORDER BY/LIMIT
+    -- re-merges them into the same page the single query used to produce.
+    IF v_multi_row THEN
+        v_batch_query := format(
+            $sql$
+            SELECT *
+            FROM (
+                (
+                    SELECT o.name, o.id, o.updated_at, o.created_at,
+                           o.last_accessed_at, o.metadata, o.version,
+                           o.archived_at, o.is_delete_marker, o.is_versioned
+                    FROM storage.objects o
+                    WHERE o.bucket_id = $1
+                      AND o.name COLLATE "C" = $2
+                      AND %s
+                      AND NOT $7::boolean
+                      AND (
+                          $5::timestamptz IS NULL
+                          OR COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) < $5
+                          OR (
+                              COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) = $5
+                              AND COALESCE(o.version, '') > $6
+                          )
+                      )
+                      %s
+                    ORDER BY
+                        COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) DESC,
+                        COALESCE(o.version, '') ASC
+                    LIMIT $4
+                )
+                UNION ALL
+                (
+                    SELECT o.name, o.id, o.updated_at, o.created_at,
+                           o.last_accessed_at, o.metadata, o.version,
+                           o.archived_at, o.is_delete_marker, o.is_versioned
+                    FROM storage.objects o
+                    WHERE o.bucket_id = $1
+                      AND %s
+                      %s
+                    ORDER BY
+                        o.name COLLATE "C" %s,
+                        COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) DESC,
+                        COALESCE(o.version, '') ASC
+                    LIMIT $4
+                )
+            ) sub
+            ORDER BY
+                sub.name COLLATE "C" %s,
+                COALESCE(date_trunc('milliseconds', sub.archived_at), 'infinity'::timestamptz) DESC,
+                COALESCE(sub.version, '') ASC
+            LIMIT $4
+            $sql$,
+            v_exact_range_predicate,
+            v_version_filter,
+            v_strict_range_predicate,
+            v_version_filter,
+            v_name_order,
+            v_name_order
+        );
+    ELSE
+        v_batch_query := format(
+            $sql$
+            SELECT o.name, o.id, o.updated_at, o.created_at,
+                   o.last_accessed_at, o.metadata, o.version,
+                   o.archived_at, o.is_delete_marker, o.is_versioned
+            FROM storage.objects o
+            WHERE o.bucket_id = $1
+              AND %s
+              %s
+            ORDER BY o.name COLLATE "C" %s, o.archived_at DESC
+            LIMIT $4
+            $sql$,
+            v_inclusive_range_predicate,
+            v_version_filter,
+            v_name_order
+        );
+
+        -- Strict counterpart of the query above: used once the single-row
+        -- ASC batch advance (below) has left v_next_seek pointing at the
+        -- last row already emitted, so an inclusive predicate would
+        -- re-match it forever. Only single-row mode ever sets strict mode,
+        -- so this variant is never needed when v_multi_row.
+        v_batch_query_strict := format(
+            $sql$
+            SELECT o.name, o.id, o.updated_at, o.created_at,
+                   o.last_accessed_at, o.metadata, o.version,
+                   o.archived_at, o.is_delete_marker, o.is_versioned
+            FROM storage.objects o
+            WHERE o.bucket_id = $1
+              AND %s
+              %s
+            ORDER BY o.name COLLATE "C" %s, o.archived_at DESC
+            LIMIT $4
+            $sql$,
+            v_strict_range_predicate,
+            v_version_filter,
+            v_name_order
+        );
+    END IF;
+
+    -- The static peek predicates cannot use the partial delete-marker index
+    -- once PL/pgSQL switches to a generic plan because whether
+    -- is_delete_marker is required remains parameter-dependent. Reuse the
+    -- already-specialized batch query with a one-row limit for this sparse
+    -- filter so the plan sees a literal `o.is_delete_marker` predicate.
+    IF delete_markers = 'only' THEN
+        v_delete_marker_peek_query :=
+            'SELECT marker_page.name FROM (' || v_batch_query || ') marker_page LIMIT 1';
+        IF NOT v_multi_row THEN
+            v_delete_marker_peek_query_strict :=
+                'SELECT marker_page.name FROM (' || v_batch_query_strict || ') marker_page LIMIT 1';
         END IF;
     END IF;
 
@@ -2056,20 +2327,18 @@ BEGIN
         IF v_is_asc THEN
             v_next_seek := v_prefix;
         ELSE
-            -- DESC without cursor: find the last item in range
-            IF v_upper_bound IS NOT NULL THEN
-                SELECT o.name INTO v_next_seek FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" >= v_prefix AND o.name COLLATE "C" < v_upper_bound
-                ORDER BY o.name COLLATE "C" DESC LIMIT 1;
-            ELSIF v_prefix <> '' THEN
-                SELECT o.name INTO v_next_seek FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" >= v_prefix
-                ORDER BY o.name COLLATE "C" DESC LIMIT 1;
-            ELSE
-                SELECT o.name INTO v_next_seek FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id
-                ORDER BY o.name COLLATE "C" DESC LIMIT 1;
-            END IF;
+            -- DESC without cursor performs one specialized initial seek so
+            -- partial current-version and delete-marker indexes remain available.
+            EXECUTE format(
+                'SELECT o.name FROM storage.objects o WHERE o.bucket_id = $1%s%s ORDER BY o.name COLLATE "C" DESC LIMIT 1',
+                CASE WHEN v_upper_bound IS NOT NULL
+                    THEN ' AND o.name COLLATE "C" >= $2 AND o.name COLLATE "C" < $3'
+                    ELSE ''
+                END,
+                v_version_filter
+            )
+            INTO v_next_seek
+            USING _bucket_id, v_prefix, v_upper_bound;
 
             IF v_next_seek IS NOT NULL THEN
                 v_next_seek := v_next_seek || delimiter_param;
@@ -2078,23 +2347,38 @@ BEGIN
             END IF;
         END IF;
     ELSE
-        -- Cursor provided: determine if it refers to a folder or leaf
-        IF EXISTS (
-            SELECT 1 FROM storage.objects o
-            WHERE o.bucket_id = _bucket_id
-              AND o.name COLLATE "C" LIKE v_start || delimiter_param || '%'
-            LIMIT 1
-        ) THEN
-            -- Cursor refers to a folder
+        -- Folder continuation tokens retain their trailing delimiter. A
+        -- delimiter-less startAfter is always a literal key boundary.
+        v_cursor_is_folder := delimiter_param <> ''
+            AND v_start_relative <> ''
+            AND right(v_start_relative, length(delimiter_param)) = delimiter_param;
+
+        IF v_cursor_is_folder THEN
+            v_next_seek := CASE
+                WHEN right(v_start, length(delimiter_param)) = delimiter_param
+                    THEN v_start
+                ELSE v_start || delimiter_param
+            END;
             IF v_is_asc THEN
-                v_next_seek := v_start || chr(ascii(delimiter_param) + 1);
-            ELSE
-                v_next_seek := v_start || delimiter_param;
+                v_next_seek := left(v_next_seek, -1)
+                    || chr(ascii(right(v_next_seek, 1)) + 1);
             END IF;
+            v_next_seek_strict := NOT v_is_asc;
         ELSE
-            -- Cursor refers to a leaf object
-            IF v_is_asc THEN
-                v_next_seek := v_start || delimiter_param;
+            -- leaf object: when v_multi_row, stay on v_start with the
+            -- caller-supplied tiebreak so a page boundary mid-key resumes
+            -- that key's remaining rows instead of skipping them. Truncate
+            -- to milliseconds like every other v_next_seek_at assignment -
+            -- harmless today since object.ts's cursor always round-trips
+            -- through JS Date first, but this shouldn't rely on that.
+            IF v_multi_row THEN
+                v_next_seek := v_start;
+                v_next_seek_at := date_trunc('milliseconds', next_token_archived_at);
+                v_next_seek_version := coalesce(next_token_version, '');
+                v_next_seek_strict := coalesce(next_token, '') = '';
+            ELSIF v_is_asc THEN
+                v_next_seek := v_start;
+                v_next_seek_strict := true;
             ELSE
                 v_next_seek := v_start;
             END IF;
@@ -2108,30 +2392,196 @@ BEGIN
     LOOP
         EXIT WHEN v_count >= max_keys;
 
+        v_previous_seek := v_next_seek;
+        v_previous_seek_at := v_next_seek_at;
+        v_previous_seek_version := v_next_seek_version;
+        v_previous_count := v_count;
+
         -- STEP 1: PEEK using STATIC SQL (plan cached, very fast)
-        IF v_is_asc THEN
-            IF v_upper_bound IS NOT NULL THEN
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" >= v_next_seek AND o.name COLLATE "C" < v_upper_bound
-                ORDER BY o.name COLLATE "C" ASC LIMIT 1;
+        -- v_multi_row is branched here (rather than folded into the WHERE
+        -- clause as a bound parameter) so each concrete query keeps an
+        -- unconditional seek predicate - once PL/pgSQL switches to its
+        -- cached generic plan (after 5 calls), a parameter-gated
+        -- "(NOT v_multi_row AND name >= $x) OR (v_multi_row AND ...)"
+        -- predicate stops the planner from using name as an index
+        -- condition at all, degrading every subsequent peek to a full
+        -- index scan filtered row-by-row instead of a bounded range scan.
+        -- v_multi_row's seek predicate is a keyset tuple comparison
+        -- ("name > x OR (name = x AND tiebreak)") - Postgres does not
+        -- split this OR into indexable form even with fully literal
+        -- values, so it falls back to a full scan filtered row-by-row.
+        -- Splitting it into two independently-indexable branches (exact
+        -- name match with the tiebreak filter, vs. strictly-past name)
+        -- combined with UNION ALL lets each branch keep name as a real
+        -- index condition; the outer ORDER BY/LIMIT picks whichever of
+        -- the (at most 2) rows sorts first.
+        IF delete_markers = 'only' THEN
+            EXECUTE CASE WHEN v_next_seek_strict AND NOT v_multi_row
+                THEN v_delete_marker_peek_query_strict
+                ELSE v_delete_marker_peek_query
+            END
+                INTO v_peek_name
+                USING _bucket_id, v_next_seek,
+                    CASE WHEN v_is_asc THEN COALESCE(v_upper_bound, v_prefix) ELSE v_prefix END,
+                    1, v_next_seek_at, v_next_seek_version, v_next_seek_strict;
+        ELSIF v_multi_row THEN
+            IF v_is_asc THEN
+                IF v_upper_bound IS NOT NULL THEN
+                    SELECT sub.name INTO v_peek_name FROM (
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" = v_next_seek
+                           AND o.name COLLATE "C" < v_upper_bound
+                           AND NOT v_next_seek_strict
+                           AND (v_next_seek_at IS NULL
+                                OR COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) < v_next_seek_at
+                                OR (COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) = v_next_seek_at
+                                    AND COALESCE(o.version, '') > v_next_seek_version))
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) DESC, COALESCE(o.version, '') ASC LIMIT 1)
+                        UNION ALL
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" > v_next_seek AND o.name COLLATE "C" < v_upper_bound
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY o.name COLLATE "C" ASC LIMIT 1)
+                    ) sub ORDER BY sub.name COLLATE "C" ASC LIMIT 1;
+                ELSE
+                    SELECT sub.name INTO v_peek_name FROM (
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" = v_next_seek
+                           AND NOT v_next_seek_strict
+                           AND (v_next_seek_at IS NULL
+                                OR COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) < v_next_seek_at
+                                OR (COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) = v_next_seek_at
+                                    AND COALESCE(o.version, '') > v_next_seek_version))
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) DESC, COALESCE(o.version, '') ASC LIMIT 1)
+                        UNION ALL
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" > v_next_seek
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY o.name COLLATE "C" ASC LIMIT 1)
+                    ) sub ORDER BY sub.name COLLATE "C" ASC LIMIT 1;
+                END IF;
             ELSE
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" >= v_next_seek
-                ORDER BY o.name COLLATE "C" ASC LIMIT 1;
+                IF v_upper_bound IS NOT NULL THEN
+                    SELECT sub.name INTO v_peek_name FROM (
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" = v_next_seek
+                           AND o.name COLLATE "C" >= v_prefix
+                           AND NOT v_next_seek_strict
+                           AND (v_next_seek_at IS NULL
+                                OR COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) < v_next_seek_at
+                                OR (COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) = v_next_seek_at
+                                    AND COALESCE(o.version, '') > v_next_seek_version))
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) DESC, COALESCE(o.version, '') ASC LIMIT 1)
+                        UNION ALL
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" < v_next_seek AND o.name COLLATE "C" >= v_prefix
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY o.name COLLATE "C" DESC LIMIT 1)
+                    ) sub ORDER BY sub.name COLLATE "C" DESC LIMIT 1;
+                ELSE
+                    SELECT sub.name INTO v_peek_name FROM (
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" = v_next_seek
+                           AND NOT v_next_seek_strict
+                           AND (v_next_seek_at IS NULL
+                                OR COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) < v_next_seek_at
+                                OR (COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) = v_next_seek_at
+                                    AND COALESCE(o.version, '') > v_next_seek_version))
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY COALESCE(date_trunc('milliseconds', o.archived_at), 'infinity'::timestamptz) DESC, COALESCE(o.version, '') ASC LIMIT 1)
+                        UNION ALL
+                        (SELECT o.name FROM storage.objects o
+                         WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" < v_next_seek
+                           AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                           AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                           AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                           AND (delete_markers != 'only' OR o.is_delete_marker)
+                         ORDER BY o.name COLLATE "C" DESC LIMIT 1)
+                    ) sub ORDER BY sub.name COLLATE "C" DESC LIMIT 1;
+                END IF;
             END IF;
         ELSE
-            IF v_upper_bound IS NOT NULL THEN
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" < v_next_seek AND o.name COLLATE "C" >= v_prefix
-                ORDER BY o.name COLLATE "C" DESC LIMIT 1;
-            ELSIF v_prefix <> '' THEN
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" < v_next_seek AND o.name COLLATE "C" >= v_prefix
-                ORDER BY o.name COLLATE "C" DESC LIMIT 1;
+            -- Single-row mode is always noncurrent_versions='exclude'. Keep
+            -- this predicate literal so generic plans use the current index.
+            IF v_is_asc THEN
+                IF v_next_seek_strict AND v_upper_bound IS NOT NULL THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = _bucket_id
+                      AND o.name COLLATE "C" > v_next_seek
+                      AND o.name COLLATE "C" < v_upper_bound
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                      AND (delete_markers != 'only' OR o.is_delete_marker)
+                    ORDER BY o.name COLLATE "C" ASC LIMIT 1;
+                ELSIF v_next_seek_strict THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = _bucket_id
+                      AND o.name COLLATE "C" > v_next_seek
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                      AND (delete_markers != 'only' OR o.is_delete_marker)
+                    ORDER BY o.name COLLATE "C" ASC LIMIT 1;
+                ELSIF v_upper_bound IS NOT NULL THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = _bucket_id
+                      AND o.name COLLATE "C" >= v_next_seek
+                      AND o.name COLLATE "C" < v_upper_bound
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                      AND (delete_markers != 'only' OR o.is_delete_marker)
+                    ORDER BY o.name COLLATE "C" ASC LIMIT 1;
+                ELSE
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = _bucket_id
+                      AND o.name COLLATE "C" >= v_next_seek
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                      AND (delete_markers != 'only' OR o.is_delete_marker)
+                    ORDER BY o.name COLLATE "C" ASC LIMIT 1;
+                END IF;
             ELSE
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = _bucket_id AND o.name COLLATE "C" < v_next_seek
-                ORDER BY o.name COLLATE "C" DESC LIMIT 1;
+                IF v_upper_bound IS NOT NULL THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = _bucket_id
+                      AND o.name COLLATE "C" < v_next_seek
+                      AND o.name COLLATE "C" >= v_prefix
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                      AND (delete_markers != 'only' OR o.is_delete_marker)
+                    ORDER BY o.name COLLATE "C" DESC LIMIT 1;
+                ELSE
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = _bucket_id
+                      AND o.name COLLATE "C" < v_next_seek
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                      AND (delete_markers != 'only' OR o.is_delete_marker)
+                    ORDER BY o.name COLLATE "C" DESC LIMIT 1;
+                END IF;
             END IF;
         END IF;
 
@@ -2142,33 +2592,53 @@ BEGIN
 
         IF v_common_prefix IS NOT NULL THEN
             -- FOLDER: Emit and skip to next folder (no heap access needed)
-            name := rtrim(v_common_prefix, delimiter_param);
+            name := v_common_prefix;
             id := NULL;
             updated_at := NULL;
             created_at := NULL;
             last_accessed_at := NULL;
             metadata := NULL;
+            version := NULL;
+            archived_at := NULL;
+            is_delete_marker := NULL;
+            is_versioned := NULL;
             RETURN NEXT;
             v_count := v_count + 1;
 
             -- Advance seek past the folder range
             IF v_is_asc THEN
-                v_next_seek := left(v_common_prefix, -1) || chr(ascii(delimiter_param) + 1);
+                v_next_seek := left(v_common_prefix, -1)
+                    || chr(ascii(right(v_common_prefix, 1)) + 1);
             ELSE
                 v_next_seek := v_common_prefix;
             END IF;
+            v_next_seek_at := NULL;
+            v_next_seek_version := '';
+            v_next_seek_strict := NOT v_is_asc;
         ELSE
             -- FILE: Batch fetch using DYNAMIC SQL (overhead amortized over many rows)
             -- For ASC: upper_bound is the exclusive upper limit (< condition)
             -- For DESC: prefix is the inclusive lower limit (>= condition)
-            FOR v_current IN EXECUTE v_batch_query USING _bucket_id, v_next_seek,
-                CASE WHEN v_is_asc THEN COALESCE(v_upper_bound, v_prefix) ELSE v_prefix END, v_file_batch_size
+            FOR v_current IN EXECUTE CASE WHEN v_next_seek_strict AND NOT v_multi_row THEN v_batch_query_strict ELSE v_batch_query END
+                USING _bucket_id, v_next_seek,
+                CASE WHEN v_is_asc THEN COALESCE(v_upper_bound, v_prefix) ELSE v_prefix END, v_file_batch_size, v_next_seek_at, v_next_seek_version,
+                v_next_seek_strict
             LOOP
                 v_common_prefix := storage.get_common_prefix(v_current.name, v_prefix, delimiter_param);
 
                 IF v_common_prefix IS NOT NULL THEN
-                    -- Hit a folder: exit batch, let peek handle it
-                    v_next_seek := v_current.name;
+                    -- Hit a folder: exit batch, let peek handle it. Reset
+                    -- strict mode too it may have been set by an earlier
+                    -- row in this same batch (see the single-row ASC advance
+                    -- below), and v_next_seek here is the folder-triggering
+                    -- row's own name, which the next peek must find inclusively.
+                    v_next_seek := CASE
+                        WHEN v_is_asc THEN v_current.name
+                        ELSE v_current.name || delimiter_param
+                    END;
+                    v_next_seek_at := NULL;
+                    v_next_seek_version := '';
+                    v_next_seek_strict := false;
                     EXIT;
                 END IF;
 
@@ -2179,12 +2649,29 @@ BEGIN
                 created_at := v_current.created_at;
                 last_accessed_at := v_current.last_accessed_at;
                 metadata := v_current.metadata;
+                version := v_current.version;
+                archived_at := v_current.archived_at;
+                is_delete_marker := v_current.is_delete_marker;
+                is_versioned := v_current.is_versioned;
                 RETURN NEXT;
                 v_count := v_count + 1;
 
-                -- Advance seek past this file
-                IF v_is_asc THEN
-                    v_next_seek := v_current.name || delimiter_param;
+                -- when v_multi_row, stay on this name and record its
+                -- archived_at as the new tiebreak so remaining rows for the
+                -- same key are picked up before moving to the next name
+                IF v_multi_row THEN
+                    v_next_seek := v_current.name;
+                    v_next_seek_at := COALESCE(date_trunc('milliseconds', v_current.archived_at), 'infinity'::timestamptz);
+                    v_next_seek_version := COALESCE(v_current.version, '');
+                    v_next_seek_strict := false;
+                ELSIF v_is_asc THEN
+                    -- Appending the delimiter as a fake lexical successor
+                    -- would skip a real key like `name || '!'` (or any
+                    -- character sorting below the delimiter), which sorts
+                    -- between `name` and `name || delimiter`. Track the real
+                    -- name and mark the next comparison strict instead.
+                    v_next_seek := v_current.name;
+                    v_next_seek_strict := true;
                 ELSE
                     v_next_seek := v_current.name;
                 END IF;
@@ -2192,12 +2679,20 @@ BEGIN
                 EXIT WHEN v_count >= max_keys;
             END LOOP;
         END IF;
+
+        IF v_count = v_previous_count
+           AND v_next_seek IS NOT DISTINCT FROM v_previous_seek
+           AND v_next_seek_at IS NOT DISTINCT FROM v_previous_seek_at
+           AND v_next_seek_version IS NOT DISTINCT FROM v_previous_seek_version THEN
+            RAISE EXCEPTION 'storage.list_objects_with_delimiter made no progress at seek (%, %, %)',
+                v_next_seek, v_next_seek_at, v_next_seek_version;
+        END IF;
     END LOOP;
 END;
 $_$;
 
 
-ALTER FUNCTION storage.list_objects_with_delimiter(_bucket_id text, prefix_param text, delimiter_param text, max_keys integer, start_after text, next_token text, sort_order text) OWNER TO supabase_storage_admin;
+ALTER FUNCTION storage.list_objects_with_delimiter(_bucket_id text, prefix_param text, delimiter_param text, max_keys integer, start_after text, next_token text, sort_order text, noncurrent_versions text, delete_markers text, next_token_archived_at timestamp with time zone, next_token_version text) OWNER TO supabase_storage_admin;
 
 --
 -- Name: operation(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
@@ -2213,6 +2708,66 @@ $$;
 
 
 ALTER FUNCTION storage.operation() OWNER TO supabase_storage_admin;
+
+--
+-- Name: protect_bucket_control_columns(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+--
+
+CREATE FUNCTION storage.protect_bucket_control_columns() RETURNS trigger
+    LANGUAGE plpgsql
+    SET search_path TO 'pg_catalog'
+    AS $$
+DECLARE
+  configuration_changed boolean;
+BEGIN
+  IF TG_OP = 'INSERT' THEN
+    IF NEW.lifecycle_configuration IS NOT NULL
+       OR NEW.lifecycle_configuration_generation IS NOT NULL THEN
+      IF NOT pg_has_role(current_user, TG_ARGV[0], 'MEMBER') THEN
+        RAISE EXCEPTION 'only members of the configured storage service role may insert lifecycle policy state'
+          USING ERRCODE = '42501',
+                HINT = format(
+                  'Insert with both lifecycle columns NULL and configure lifecycle through the Storage API afterward, or insert as a member of %I.',
+                  TG_ARGV[0]
+                );
+      END IF;
+    END IF;
+
+    RETURN NEW;
+  END IF;
+
+  configuration_changed =
+    OLD.lifecycle_configuration IS DISTINCT FROM NEW.lifecycle_configuration
+    OR OLD.lifecycle_configuration_generation IS DISTINCT FROM NEW.lifecycle_configuration_generation;
+
+  IF NOT configuration_changed THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.type IS DISTINCT FROM 'STANDARD' THEN
+    RAISE EXCEPTION 'bucket versioning and lifecycle controls require a Standard bucket'
+      USING ERRCODE = '0A000';
+  END IF;
+
+  IF NEW.lifecycle_configuration IS NULL
+     AND NEW.lifecycle_configuration_generation IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF NEW.lifecycle_configuration IS NULL
+     OR NEW.lifecycle_configuration_generation IS NULL
+     OR OLD.lifecycle_configuration IS NOT DISTINCT FROM NEW.lifecycle_configuration
+     OR OLD.lifecycle_configuration_generation IS NOT DISTINCT FROM NEW.lifecycle_configuration_generation THEN
+    RAISE EXCEPTION 'a changed lifecycle policy requires a new non-null generation'
+      USING ERRCODE = '22023';
+  END IF;
+
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION storage.protect_bucket_control_columns() OWNER TO supabase_storage_admin;
 
 --
 -- Name: protect_delete(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
@@ -2236,10 +2791,10 @@ $$;
 ALTER FUNCTION storage.protect_delete() OWNER TO supabase_storage_admin;
 
 --
--- Name: search(text, text, integer, integer, integer, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+-- Name: search(text, text, integer, integer, integer, text, text, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE FUNCTION storage.search(prefix text, bucketname text, limits integer DEFAULT 100, levels integer DEFAULT 1, offsets integer DEFAULT 0, search text DEFAULT ''::text, sortcolumn text DEFAULT 'name'::text, sortorder text DEFAULT 'asc'::text) RETURNS TABLE(name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb)
+CREATE FUNCTION storage.search(prefix text, bucketname text, limits integer DEFAULT 100, levels integer DEFAULT 1, offsets integer DEFAULT 0, search text DEFAULT ''::text, sortcolumn text DEFAULT 'name'::text, sortorder text DEFAULT 'asc'::text, noncurrent_versions text DEFAULT 'exclude'::text, delete_markers text DEFAULT 'exclude'::text) RETURNS TABLE(name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb, version text, archived_at timestamp with time zone, is_delete_marker boolean, is_versioned boolean)
     LANGUAGE plpgsql STABLE
     AS $_$
 DECLARE
@@ -2260,14 +2815,26 @@ DECLARE
     v_sort_order TEXT;
     v_upper_bound TEXT;
     v_file_batch_size INT;
+    v_version_filter TEXT;
+    v_multi_row BOOLEAN;
 
     -- Dynamic SQL for batch query only
     v_batch_query TEXT;
+    v_delete_marker_peek_query TEXT;
+    v_delete_marker_peek_query_strict TEXT;
 
     -- Seek state
     v_next_seek TEXT;
+    v_next_seek_at TIMESTAMPTZ;
+    v_next_seek_version TEXT;
+    v_next_seek_strict BOOLEAN := false;
     v_count INT := 0;
     v_skipped INT := 0;
+    v_previous_seek TEXT;
+    v_previous_seek_at TIMESTAMPTZ;
+    v_previous_seek_version TEXT;
+    v_previous_count INT;
+    v_previous_skipped INT;
 BEGIN
     -- ========================================================================
     -- INITIALIZATION
@@ -2280,6 +2847,33 @@ BEGIN
     v_combined_levels := coalesce(array_length(string_to_array(v_prefix, v_delimiter), 1), 1);
     v_is_asc := lower(coalesce(sortorder, 'asc')) = 'asc';
     v_file_batch_size := LEAST(GREATEST(v_limit * 2, 100), 1000);
+    v_next_seek_at := NULL;
+    v_next_seek_version := '';
+
+    -- COALESCE first: NULL NOT IN (...) evaluates to NULL (not TRUE), so a
+    -- bare NOT IN check silently leaves an explicit NULL argument unreset.
+    noncurrent_versions := COALESCE(noncurrent_versions, 'exclude');
+    delete_markers := COALESCE(delete_markers, 'exclude');
+    IF noncurrent_versions NOT IN ('exclude', 'only', 'include') THEN
+        noncurrent_versions := 'exclude';
+    END IF;
+    IF delete_markers NOT IN ('exclude', 'only', 'include') THEN
+        delete_markers := 'exclude';
+    END IF;
+
+    v_multi_row := noncurrent_versions IN ('only', 'include');
+
+    v_version_filter := '';
+    IF noncurrent_versions = 'exclude' THEN
+        v_version_filter := v_version_filter || ' AND o.archived_at IS NULL';
+    ELSIF noncurrent_versions = 'only' THEN
+        v_version_filter := v_version_filter || ' AND o.archived_at IS NOT NULL';
+    END IF;
+    IF delete_markers = 'exclude' THEN
+        v_version_filter := v_version_filter || ' AND NOT o.is_delete_marker';
+    ELSIF delete_markers = 'only' THEN
+        v_version_filter := v_version_filter || ' AND o.is_delete_marker';
+    END IF;
 
     -- Validate sort column
     CASE lower(coalesce(sortcolumn, 'name'))
@@ -2304,6 +2898,10 @@ BEGIN
                 WHERE objects.name ILIKE $3 || '%%'
                   AND bucket_id = $4
                   AND array_length(objects.path_tokens, 1) <> $2
+                  AND ($7 != 'exclude' OR objects.archived_at IS NULL)
+                  AND ($7 != 'only' OR objects.archived_at IS NOT NULL)
+                  AND ($8 != 'exclude' OR NOT objects.is_delete_marker)
+                  AND ($8 != 'only' OR objects.is_delete_marker)
                 GROUP BY folder
                 ORDER BY folder %s
             )
@@ -2312,18 +2910,29 @@ BEGIN
                    NULL::timestamptz AS updated_at,
                    NULL::timestamptz AS created_at,
                    NULL::timestamptz AS last_accessed_at,
-                   NULL::jsonb AS metadata FROM folders)
+                   NULL::jsonb AS metadata,
+                   NULL::text AS version,
+                   NULL::timestamptz AS archived_at,
+                   NULL::boolean AS is_delete_marker,
+                   NULL::boolean AS is_versioned FROM folders)
             UNION ALL
             (SELECT array_to_string(path_tokens[$1:$2], '/') AS "name",
-                   id, updated_at, created_at, last_accessed_at, metadata
+                   id, updated_at, created_at, last_accessed_at, metadata,
+                   version, archived_at, is_delete_marker, is_versioned
              FROM storage.objects
              WHERE objects.name ILIKE $3 || '%%'
                AND bucket_id = $4
                AND array_length(objects.path_tokens, 1) = $2
-             ORDER BY %I %s)
+               AND ($7 != 'exclude' OR objects.archived_at IS NULL)
+               AND ($7 != 'only' OR objects.archived_at IS NOT NULL)
+               AND ($8 != 'exclude' OR NOT objects.is_delete_marker)
+               AND ($8 != 'only' OR objects.is_delete_marker)
+             -- name, then version, as tiebreaks so two versions of the same
+             -- key tying on the sort column still sort deterministically
+             ORDER BY %I %s, name COLLATE "C" %s, COALESCE(version, '') %s)
             LIMIT $5 OFFSET $6
-            $sql$, v_sort_order, v_order_by, v_sort_order
-        ) USING v_prefix_start, v_combined_levels, v_prefix, bucketname, v_limit, offsets;
+            $sql$, v_sort_order, v_order_by, v_sort_order, v_sort_order, v_sort_order
+        ) USING v_prefix_start, v_combined_levels, v_prefix, bucketname, v_limit, offsets, noncurrent_versions, delete_markers;
         RETURN;
     END IF;
 
@@ -2340,26 +2949,95 @@ BEGIN
         v_upper_bound := left(v_prefix_lower, -1) || chr(ascii(right(v_prefix_lower, 1)) + 1);
     END IF;
 
-    -- Build batch query (dynamic SQL - called infrequently, amortized over many rows)
+    -- Build a resume-safe batch query. The exact-name branch returns remaining
+    -- versions after the current (archived_at, version) boundary; the strict
+    -- name branch returns subsequent keys. UNION ALL keeps both predicates
+    -- independently indexable.
     IF v_is_asc THEN
         IF v_upper_bound IS NOT NULL THEN
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" >= $2 ' ||
-                'AND lower(o.name) COLLATE "C" < $3 ORDER BY lower(o.name) COLLATE "C" ASC LIMIT $4';
+            v_batch_query := 'SELECT * FROM (' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" = $2 AND ($5::timestamptz IS NULL OR COALESCE(o.archived_at, ''infinity''::timestamptz) < $5 OR (COALESCE(o.archived_at, ''infinity''::timestamptz) = $5 AND COALESCE(o.version, '''') > $6))' ||
+                v_version_filter || ' ORDER BY COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4) UNION ALL ' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" > $2 AND lower(o.name) COLLATE "C" < $3' || v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" ASC, COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4)' ||
+                ') sub ORDER BY lower(sub.name) COLLATE "C" ASC, COALESCE(sub.archived_at, ''infinity''::timestamptz) DESC, COALESCE(sub.version, '''') ASC LIMIT $4';
         ELSE
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" >= $2 ' ||
-                'ORDER BY lower(o.name) COLLATE "C" ASC LIMIT $4';
+            v_batch_query := 'SELECT * FROM (' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" = $2 AND ($5::timestamptz IS NULL OR COALESCE(o.archived_at, ''infinity''::timestamptz) < $5 OR (COALESCE(o.archived_at, ''infinity''::timestamptz) = $5 AND COALESCE(o.version, '''') > $6))' ||
+                v_version_filter || ' ORDER BY COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4) UNION ALL ' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" > $2' || v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" ASC, COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4)' ||
+                ') sub ORDER BY lower(sub.name) COLLATE "C" ASC, COALESCE(sub.archived_at, ''infinity''::timestamptz) DESC, COALESCE(sub.version, '''') ASC LIMIT $4';
         END IF;
     ELSE
         IF v_upper_bound IS NOT NULL THEN
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" < $2 ' ||
-                'AND lower(o.name) COLLATE "C" >= $3 ORDER BY lower(o.name) COLLATE "C" DESC LIMIT $4';
+            v_batch_query := 'SELECT * FROM (' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" = $2 AND ($5::timestamptz IS NULL OR COALESCE(o.archived_at, ''infinity''::timestamptz) < $5 OR (COALESCE(o.archived_at, ''infinity''::timestamptz) = $5 AND COALESCE(o.version, '''') > $6))' ||
+                v_version_filter || ' ORDER BY COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4) UNION ALL ' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" < $2 AND lower(o.name) COLLATE "C" >= $3' || v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" DESC, COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4)' ||
+                ') sub ORDER BY lower(sub.name) COLLATE "C" DESC, COALESCE(sub.archived_at, ''infinity''::timestamptz) DESC, COALESCE(sub.version, '''') ASC LIMIT $4';
         ELSE
-            v_batch_query := 'SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata ' ||
-                'FROM storage.objects o WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" < $2 ' ||
-                'ORDER BY lower(o.name) COLLATE "C" DESC LIMIT $4';
+            v_batch_query := 'SELECT * FROM (' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" = $2 AND ($5::timestamptz IS NULL OR COALESCE(o.archived_at, ''infinity''::timestamptz) < $5 OR (COALESCE(o.archived_at, ''infinity''::timestamptz) = $5 AND COALESCE(o.version, '''') > $6))' ||
+                v_version_filter || ' ORDER BY COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4) UNION ALL ' ||
+                '(SELECT o.name, o.id, o.updated_at, o.created_at, o.last_accessed_at, o.metadata, o.version, o.archived_at, o.is_delete_marker, o.is_versioned FROM storage.objects o ' ||
+                'WHERE o.bucket_id = $1 AND lower(o.name) COLLATE "C" < $2' || v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" DESC, COALESCE(o.archived_at, ''infinity''::timestamptz) DESC, COALESCE(o.version, '''') ASC LIMIT $4)' ||
+                ') sub ORDER BY lower(sub.name) COLLATE "C" DESC, COALESCE(sub.archived_at, ''infinity''::timestamptz) DESC, COALESCE(sub.version, '''') ASC LIMIT $4';
+        END IF;
+    END IF;
+
+    -- Keep the delete-marker predicate literal so the cached generic
+    -- plan can use idx_objects_delete_markers during the main-loop peek.
+    IF delete_markers = 'only' THEN
+        IF v_multi_row THEN
+            v_delete_marker_peek_query :=
+                'SELECT marker_page.name FROM (' || v_batch_query || ') marker_page LIMIT 1';
+        ELSIF v_is_asc THEN
+            -- Two separate literal query strings, not one gated by a bound
+            -- boolean: folding "$n AND op1 OR NOT $n AND op2" into a single
+            -- query defeats the generic plan's ability to push either
+            -- comparison into the index. Branching in PL/pgSQL control flow
+            -- instead keeps each query's index condition intact.
+            v_delete_marker_peek_query :=
+                'SELECT o.name FROM storage.objects o WHERE o.bucket_id = $1 ' ||
+                'AND lower(o.name) COLLATE "C" >= $2' ||
+                CASE WHEN v_upper_bound IS NOT NULL
+                    THEN ' AND lower(o.name) COLLATE "C" < $3'
+                    ELSE ''
+                END ||
+                v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1';
+            -- Strict variant: used once the single-row ASC batch advance
+            -- (below) has left v_next_seek pointing at the last row already
+            -- emitted, so a plain >= would re-match it forever.
+            v_delete_marker_peek_query_strict :=
+                'SELECT o.name FROM storage.objects o WHERE o.bucket_id = $1 ' ||
+                'AND lower(o.name) COLLATE "C" > $2' ||
+                CASE WHEN v_upper_bound IS NOT NULL
+                    THEN ' AND lower(o.name) COLLATE "C" < $3'
+                    ELSE ''
+                END ||
+                v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1';
+        ELSE
+            v_delete_marker_peek_query :=
+                'SELECT o.name FROM storage.objects o WHERE o.bucket_id = $1 ' ||
+                'AND lower(o.name) COLLATE "C" < $2' ||
+                CASE WHEN v_upper_bound IS NOT NULL
+                    THEN ' AND lower(o.name) COLLATE "C" >= $3'
+                    ELSE ''
+                END ||
+                v_version_filter ||
+                ' ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1';
         END IF;
     END IF;
 
@@ -2367,20 +3045,18 @@ BEGIN
     IF v_is_asc THEN
         v_next_seek := v_prefix_lower;
     ELSE
-        -- DESC: find the last item in range first (static SQL)
-        IF v_upper_bound IS NOT NULL THEN
-            SELECT o.name INTO v_peek_name FROM storage.objects o
-            WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_prefix_lower AND lower(o.name) COLLATE "C" < v_upper_bound
-            ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
-        ELSIF v_prefix_lower <> '' THEN
-            SELECT o.name INTO v_peek_name FROM storage.objects o
-            WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_prefix_lower
-            ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
-        ELSE
-            SELECT o.name INTO v_peek_name FROM storage.objects o
-            WHERE o.bucket_id = bucketname
-            ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
-        END IF;
+        -- DESC performs one specialized initial seek so partial current-version
+        -- and delete-marker indexes remain available.
+        EXECUTE format(
+            'SELECT o.name FROM storage.objects o WHERE o.bucket_id = $1%s%s ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1',
+            CASE WHEN v_upper_bound IS NOT NULL
+                THEN ' AND lower(o.name) COLLATE "C" >= $2 AND lower(o.name) COLLATE "C" < $3'
+                ELSE ''
+            END,
+            v_version_filter
+        )
+        INTO v_peek_name
+        USING bucketname, v_prefix_lower, v_upper_bound;
 
         IF v_peek_name IS NOT NULL THEN
             v_next_seek := lower(v_peek_name) || v_delimiter;
@@ -2391,39 +3067,172 @@ BEGIN
 
     -- ========================================================================
     -- MAIN LOOP: Hybrid peek-then-batch algorithm
-    -- Uses STATIC SQL for peek (hot path) and DYNAMIC SQL for batch
+    -- Uses STATIC SQL for peek (hot path) and DYNAMIC SQL for batch and
+    -- the delete-marker-only path
     -- ========================================================================
     LOOP
         EXIT WHEN v_count >= v_limit;
 
-        -- STEP 1: PEEK using STATIC SQL (plan cached, very fast)
-        IF v_is_asc THEN
-            IF v_upper_bound IS NOT NULL THEN
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_next_seek AND lower(o.name) COLLATE "C" < v_upper_bound
-                ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
-            ELSE
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_next_seek
-                ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+        v_previous_seek := v_next_seek;
+        v_previous_seek_at := v_next_seek_at;
+        v_previous_seek_version := v_next_seek_version;
+        v_previous_count := v_count;
+        v_previous_skipped := v_skipped;
+
+        -- STEP 1: PEEK
+        v_peek_name := NULL;
+        IF delete_markers = 'only' THEN
+            EXECUTE CASE WHEN v_next_seek_strict
+                THEN v_delete_marker_peek_query_strict
+                ELSE v_delete_marker_peek_query
+            END
+                INTO v_peek_name
+                USING bucketname, v_next_seek,
+                    CASE WHEN v_is_asc THEN COALESCE(v_upper_bound, v_prefix_lower) ELSE v_prefix_lower END,
+                    1, v_next_seek_at, v_next_seek_version;
+        ELSIF v_multi_row AND v_next_seek_at IS NOT NULL THEN
+            SELECT o.name INTO v_peek_name
+            FROM storage.objects o
+            WHERE o.bucket_id = bucketname
+              AND lower(o.name) COLLATE "C" = v_next_seek
+              AND (COALESCE(o.archived_at, 'infinity'::timestamptz) < v_next_seek_at
+                   OR (COALESCE(o.archived_at, 'infinity'::timestamptz) = v_next_seek_at
+                       AND COALESCE(o.version, '') > v_next_seek_version))
+              AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+              AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+              AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+              AND (delete_markers != 'only' OR o.is_delete_marker)
+            ORDER BY COALESCE(o.archived_at, 'infinity'::timestamptz) DESC,
+                     COALESCE(o.version, '') ASC
+            LIMIT 1;
+
+            -- The current key is exhausted. Clear its version boundary and
+            -- make the following ASC name peek strict. Appending '/' is not a
+            -- valid lexical successor because keys ending in characters such
+            -- as '!' sort between the exhausted name and name || '/'.
+            IF v_peek_name IS NULL THEN
+                IF v_is_asc THEN
+                    v_next_seek_strict := true;
+                END IF;
+                v_next_seek_at := NULL;
+                v_next_seek_version := '';
             END IF;
-        ELSE
-            IF v_upper_bound IS NOT NULL THEN
+        END IF;
+
+        -- Single-row mode is always noncurrent_versions='exclude'. Keep the
+        -- current-row predicate literal so generic plans use the current index.
+        IF delete_markers != 'only' AND v_peek_name IS NULL AND NOT v_multi_row THEN
+            IF v_is_asc THEN
+                IF v_next_seek_strict AND v_upper_bound IS NOT NULL THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" > v_next_seek AND lower(o.name) COLLATE "C" < v_upper_bound
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                    ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+                ELSIF v_next_seek_strict THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" > v_next_seek
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                    ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+                ELSIF v_upper_bound IS NOT NULL THEN
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_next_seek AND lower(o.name) COLLATE "C" < v_upper_bound
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                    ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+                ELSE
+                    SELECT o.name INTO v_peek_name FROM storage.objects o
+                    WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_next_seek
+                      AND o.archived_at IS NULL
+                      AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                    ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+                END IF;
+            ELSIF v_upper_bound IS NOT NULL THEN
                 SELECT o.name INTO v_peek_name FROM storage.objects o
                 WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" < v_next_seek AND lower(o.name) COLLATE "C" >= v_prefix_lower
-                ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
-            ELSIF v_prefix_lower <> '' THEN
-                SELECT o.name INTO v_peek_name FROM storage.objects o
-                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" < v_next_seek AND lower(o.name) COLLATE "C" >= v_prefix_lower
+                  AND o.archived_at IS NULL
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
                 ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
             ELSE
                 SELECT o.name INTO v_peek_name FROM storage.objects o
                 WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" < v_next_seek
+                  AND o.archived_at IS NULL
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
+            END IF;
+        ELSIF delete_markers != 'only' AND v_peek_name IS NULL AND v_is_asc THEN
+            IF v_next_seek_strict AND v_upper_bound IS NOT NULL THEN
+                SELECT o.name INTO v_peek_name FROM storage.objects o
+                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" > v_next_seek AND lower(o.name) COLLATE "C" < v_upper_bound
+                  AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                  AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                  AND (delete_markers != 'only' OR o.is_delete_marker)
+                ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+            ELSIF v_next_seek_strict THEN
+                SELECT o.name INTO v_peek_name FROM storage.objects o
+                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" > v_next_seek
+                  AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                  AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                  AND (delete_markers != 'only' OR o.is_delete_marker)
+                ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+            ELSIF v_upper_bound IS NOT NULL THEN
+                SELECT o.name INTO v_peek_name FROM storage.objects o
+                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_next_seek AND lower(o.name) COLLATE "C" < v_upper_bound
+                  AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                  AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                  AND (delete_markers != 'only' OR o.is_delete_marker)
+                ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+            ELSE
+                SELECT o.name INTO v_peek_name FROM storage.objects o
+                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" >= v_next_seek
+                  AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                  AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                  AND (delete_markers != 'only' OR o.is_delete_marker)
+                ORDER BY lower(o.name) COLLATE "C" ASC LIMIT 1;
+            END IF;
+        ELSIF delete_markers != 'only' AND v_peek_name IS NULL THEN
+            IF v_upper_bound IS NOT NULL THEN
+                SELECT o.name INTO v_peek_name FROM storage.objects o
+                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" < v_next_seek AND lower(o.name) COLLATE "C" >= v_prefix_lower
+                  AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                  AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                  AND (delete_markers != 'only' OR o.is_delete_marker)
+                ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
+            ELSE
+                SELECT o.name INTO v_peek_name FROM storage.objects o
+                WHERE o.bucket_id = bucketname AND lower(o.name) COLLATE "C" < v_next_seek
+                  AND (noncurrent_versions != 'exclude' OR o.archived_at IS NULL)
+                  AND (noncurrent_versions != 'only' OR o.archived_at IS NOT NULL)
+                  AND (delete_markers != 'exclude' OR NOT o.is_delete_marker)
+                  AND (delete_markers != 'only' OR o.is_delete_marker)
                 ORDER BY lower(o.name) COLLATE "C" DESC LIMIT 1;
             END IF;
         END IF;
 
         EXIT WHEN v_peek_name IS NULL;
+
+        -- If the peek landed on a different key than we were tracking, any
+        -- version boundary belongs to the OLD key and must not leak into the
+        -- new one - e.g. the deleteMarkers='only' peek doesn't know or care
+        -- whether it's continuing the same key or jumping to a new one, so
+        -- it never clears these itself.
+        IF lower(v_peek_name) IS DISTINCT FROM v_next_seek THEN
+            v_next_seek_at := NULL;
+            v_next_seek_version := '';
+        END IF;
+
+        -- The peek is authoritative for the next key to process. This is
+        -- especially important after exhausting a multi-version key: the
+        -- version boundary has been cleared, so executing the batch against
+        -- a stale v_next_seek would replay every version of that old key.
+        v_next_seek := lower(v_peek_name);
+        v_next_seek_strict := false;
 
         -- STEP 2: Check if this is a FOLDER or FILE
         v_common_prefix := storage.get_common_prefix(lower(v_peek_name), v_prefix_lower, v_delimiter);
@@ -2439,6 +3248,10 @@ BEGIN
                 created_at := NULL;
                 last_accessed_at := NULL;
                 metadata := NULL;
+                version := NULL;
+                archived_at := NULL;
+                is_delete_marker := NULL;
+                is_versioned := NULL;
                 RETURN NEXT;
                 v_count := v_count + 1;
             END IF;
@@ -2449,19 +3262,32 @@ BEGIN
             ELSE
                 v_next_seek := lower(v_common_prefix);
             END IF;
+            v_next_seek_at := NULL;
+            v_next_seek_version := '';
         ELSE
             -- FILE: Batch fetch using DYNAMIC SQL (overhead amortized over many rows)
             -- For ASC: upper_bound is the exclusive upper limit (< condition)
             -- For DESC: prefix_lower is the inclusive lower limit (>= condition)
             FOR v_current IN EXECUTE v_batch_query
                 USING bucketname, v_next_seek,
-                    CASE WHEN v_is_asc THEN COALESCE(v_upper_bound, v_prefix_lower) ELSE v_prefix_lower END, v_file_batch_size
+                    CASE WHEN v_is_asc THEN COALESCE(v_upper_bound, v_prefix_lower) ELSE v_prefix_lower END, v_file_batch_size,
+                    v_next_seek_at, v_next_seek_version
             LOOP
                 v_common_prefix := storage.get_common_prefix(lower(v_current.name), v_prefix_lower, v_delimiter);
 
                 IF v_common_prefix IS NOT NULL THEN
-                    -- Hit a folder: exit batch, let peek handle it
-                    v_next_seek := lower(v_current.name);
+                    -- Hit a folder: exit batch, let peek handle it. Reset
+                    -- strict mode too - it may have been set by an earlier
+                    -- row in this same batch (see the single-row ASC advance
+                    -- below), and v_next_seek here is the folder-triggering
+                    -- row's own name, which the next peek must find inclusively.
+                    v_next_seek := CASE
+                        WHEN v_is_asc THEN lower(v_current.name)
+                        ELSE lower(v_current.name) || v_delimiter
+                    END;
+                    v_next_seek_at := NULL;
+                    v_next_seek_version := '';
+                    v_next_seek_strict := false;
                     EXIT;
                 END IF;
 
@@ -2476,13 +3302,29 @@ BEGIN
                     created_at := v_current.created_at;
                     last_accessed_at := v_current.last_accessed_at;
                     metadata := v_current.metadata;
+                    version := v_current.version;
+                    archived_at := v_current.archived_at;
+                    is_delete_marker := v_current.is_delete_marker;
+                    is_versioned := v_current.is_versioned;
                     RETURN NEXT;
                     v_count := v_count + 1;
                 END IF;
 
-                -- Advance seek past this file
-                IF v_is_asc THEN
-                    v_next_seek := lower(v_current.name) || v_delimiter;
+                -- Multi-row mode must remain on this key until all of its
+                -- versions have crossed the internal batch boundary.
+                IF v_multi_row THEN
+                    v_next_seek := lower(v_current.name);
+                    v_next_seek_at := COALESCE(v_current.archived_at, 'infinity'::timestamptz);
+                    v_next_seek_version := COALESCE(v_current.version, '');
+                ELSIF v_is_asc THEN
+                    -- Appending the delimiter as a fake lexical successor would
+                    -- skip a real key like `name || '!'` (or any character
+                    -- sorting below the delimiter), which sorts between `name`
+                    -- and `name || delimiter`. Track the real name and mark the
+                    -- next comparison strict instead - same fix as the
+                    -- exhausted-key case above.
+                    v_next_seek := lower(v_current.name);
+                    v_next_seek_strict := true;
                 ELSE
                     v_next_seek := lower(v_current.name);
                 END IF;
@@ -2490,28 +3332,58 @@ BEGIN
                 EXIT WHEN v_count >= v_limit;
             END LOOP;
         END IF;
+
+        IF v_count = v_previous_count
+           AND v_skipped = v_previous_skipped
+           AND v_next_seek IS NOT DISTINCT FROM v_previous_seek
+           AND v_next_seek_at IS NOT DISTINCT FROM v_previous_seek_at
+           AND v_next_seek_version IS NOT DISTINCT FROM v_previous_seek_version THEN
+            RAISE EXCEPTION 'storage.search made no progress at seek (%, %, %)',
+                v_next_seek, v_next_seek_at, v_next_seek_version;
+        END IF;
     END LOOP;
 END;
 $_$;
 
 
-ALTER FUNCTION storage.search(prefix text, bucketname text, limits integer, levels integer, offsets integer, search text, sortcolumn text, sortorder text) OWNER TO supabase_storage_admin;
+ALTER FUNCTION storage.search(prefix text, bucketname text, limits integer, levels integer, offsets integer, search text, sortcolumn text, sortorder text, noncurrent_versions text, delete_markers text) OWNER TO supabase_storage_admin;
 
 --
--- Name: search_by_timestamp(text, text, integer, integer, text, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+-- Name: search_by_timestamp(text, text, integer, integer, text, text, text, text, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE FUNCTION storage.search_by_timestamp(p_prefix text, p_bucket_id text, p_limit integer, p_level integer, p_start_after text, p_sort_order text, p_sort_column text, p_sort_column_after text) RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb)
+CREATE FUNCTION storage.search_by_timestamp(p_prefix text, p_bucket_id text, p_limit integer, p_level integer, p_start_after text, p_sort_order text, p_sort_column text, p_sort_column_after text, noncurrent_versions text DEFAULT 'exclude'::text, delete_markers text DEFAULT 'exclude'::text, p_start_after_version text DEFAULT ''::text) RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb, version text, archived_at timestamp with time zone, is_delete_marker boolean, is_versioned boolean)
     LANGUAGE plpgsql STABLE
     AS $_$
 DECLARE
     v_cursor_op text;
     v_query text;
     v_prefix text;
+    v_prefix_pattern text;
     v_sort_order text;
     v_sort_column text;
+    v_version_tiebreak text;
 BEGIN
     v_prefix := coalesce(p_prefix, '');
+    -- Keep the raw prefix for common-prefix calculations and escape only LIKE metacharacters.
+    v_prefix_pattern := replace(v_prefix, chr(92), chr(92) || chr(92));
+    v_prefix_pattern := replace(v_prefix_pattern, '%', chr(92) || '%');
+    v_prefix_pattern := replace(v_prefix_pattern, '_', chr(92) || '_');
+
+    -- COALESCE first: NULL NOT IN (...) evaluates to NULL (not TRUE), so a
+    -- bare NOT IN check silently leaves an explicit NULL argument unreset.
+    noncurrent_versions := COALESCE(noncurrent_versions, 'exclude');
+    delete_markers := COALESCE(delete_markers, 'exclude');
+    IF noncurrent_versions NOT IN ('exclude', 'only', 'include') THEN
+        noncurrent_versions := 'exclude';
+    END IF;
+    IF delete_markers NOT IN ('exclude', 'only', 'include') THEN
+        delete_markers := 'exclude';
+    END IF;
+
+    -- $9 is only populated in multi-row mode; it's always '' otherwise, so
+    -- only use each row's real version as a tiebreak in multi-row mode.
+    v_version_tiebreak := CASE WHEN noncurrent_versions IN ('only', 'include') THEN 'COALESCE(version, '''')' ELSE '''''' END;
 
     -- Defense-in-depth: this function is independently reachable and must
     -- not trust p_sort_order/p_sort_column to already be validated by a
@@ -2542,21 +3414,33 @@ BEGIN
                 o.created_at AS obj_created_at,
                 o.last_accessed_at AS obj_last_accessed_at,
                 o.metadata AS obj_metadata,
+                o.version AS obj_version,
+                o.archived_at AS obj_archived_at,
+                o.is_delete_marker AS obj_is_delete_marker,
+                o.is_versioned AS obj_is_versioned,
                 storage.get_common_prefix(o.name, $1, '/') AS common_prefix
             FROM storage.objects o
             WHERE o.bucket_id = $2
-              AND o.name COLLATE "C" LIKE $1 || '%%'
+              AND o.name COLLATE "C" LIKE $10 || '%%'
+              AND ($7 != 'exclude' OR o.archived_at IS NULL)
+              AND ($7 != 'only' OR o.archived_at IS NOT NULL)
+              AND ($8 != 'exclude' OR NOT o.is_delete_marker)
+              AND ($8 != 'only' OR o.is_delete_marker)
         ),
         -- Aggregate common prefixes (folders)
         -- Both created_at and updated_at use MIN(obj_created_at) to match the old prefixes table behavior
         aggregated_prefixes AS (
             SELECT
-                rtrim(common_prefix, '/') AS name,
+                common_prefix AS name,
                 NULL::uuid AS id,
                 MIN(obj_created_at) AS updated_at,
                 MIN(obj_created_at) AS created_at,
                 NULL::timestamptz AS last_accessed_at,
                 NULL::jsonb AS metadata,
+                NULL::text AS version,
+                NULL::timestamptz AS archived_at,
+                NULL::boolean AS is_delete_marker,
+                NULL::boolean AS is_versioned,
                 TRUE AS is_prefix
             FROM raw_objects
             WHERE common_prefix IS NOT NULL
@@ -2570,6 +3454,10 @@ BEGIN
                 obj_created_at AS created_at,
                 obj_last_accessed_at AS last_accessed_at,
                 obj_metadata AS metadata,
+                obj_version AS version,
+                obj_archived_at AS archived_at,
+                obj_is_delete_marker AS is_delete_marker,
+                obj_is_versioned AS is_versioned,
                 FALSE AS is_prefix
             FROM raw_objects
             WHERE common_prefix IS NULL
@@ -2585,11 +3473,14 @@ BEGIN
             WHERE (
                 $5 = ''
                 OR ROW(
-                    date_trunc('milliseconds', %I),
-                    name COLLATE "C"
+                    COALESCE(date_trunc('milliseconds', %I), 'epoch'::timestamptz),
+                    name COLLATE "C",
+                    %s
                 ) %s ROW(
-                    COALESCE(NULLIF($6, '')::timestamptz, 'epoch'::timestamptz),
-                    $5
+                    -- truncated the same way as the stored value above
+                    date_trunc('milliseconds', COALESCE(NULLIF($6, '')::timestamptz, 'epoch'::timestamptz)),
+                    $5,
+                    $9
                 )
             )
         )
@@ -2600,33 +3491,42 @@ BEGIN
             updated_at,
             created_at,
             last_accessed_at,
-            metadata
+            metadata,
+            version,
+            archived_at,
+            is_delete_marker,
+            is_versioned
         FROM filtered
         ORDER BY
             COALESCE(date_trunc('milliseconds', %I), 'epoch'::timestamptz) %s,
-            name COLLATE "C" %s
+            name COLLATE "C" %s,
+            COALESCE(version, '') %s
         LIMIT $4
     $sql$,
         v_sort_column,
+        v_version_tiebreak,
         v_cursor_op,
         v_sort_column,
+        v_sort_order,
         v_sort_order,
         v_sort_order
     );
 
+    -- version is the third tiebreak component for two versions of the same
+    -- key tying on both timestamp and name (see filtered CTE / ORDER BY above)
     RETURN QUERY EXECUTE v_query
-    USING v_prefix, p_bucket_id, p_level, p_limit, p_start_after, p_sort_column_after;
+    USING v_prefix, p_bucket_id, p_level, p_limit, p_start_after, p_sort_column_after, noncurrent_versions, delete_markers, coalesce(p_start_after_version, ''), v_prefix_pattern;
 END;
 $_$;
 
 
-ALTER FUNCTION storage.search_by_timestamp(p_prefix text, p_bucket_id text, p_limit integer, p_level integer, p_start_after text, p_sort_order text, p_sort_column text, p_sort_column_after text) OWNER TO supabase_storage_admin;
+ALTER FUNCTION storage.search_by_timestamp(p_prefix text, p_bucket_id text, p_limit integer, p_level integer, p_start_after text, p_sort_order text, p_sort_column text, p_sort_column_after text, noncurrent_versions text, delete_markers text, p_start_after_version text) OWNER TO supabase_storage_admin;
 
 --
--- Name: search_v2(text, text, integer, integer, text, text, text, text); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
+-- Name: search_v2(text, text, integer, integer, text, text, text, text, text, text, timestamp with time zone, text, boolean); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
 --
 
-CREATE FUNCTION storage.search_v2(prefix text, bucket_name text, limits integer DEFAULT 100, levels integer DEFAULT 1, start_after text DEFAULT ''::text, sort_order text DEFAULT 'asc'::text, sort_column text DEFAULT 'name'::text, sort_column_after text DEFAULT ''::text) RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb)
+CREATE FUNCTION storage.search_v2(prefix text, bucket_name text, limits integer DEFAULT 100, levels integer DEFAULT 1, start_after text DEFAULT ''::text, sort_order text DEFAULT 'asc'::text, sort_column text DEFAULT 'name'::text, sort_column_after text DEFAULT ''::text, noncurrent_versions text DEFAULT 'exclude'::text, delete_markers text DEFAULT 'exclude'::text, start_after_archived_at timestamp with time zone DEFAULT NULL::timestamp with time zone, start_after_version text DEFAULT ''::text, start_after_is_continuation boolean DEFAULT false) RETURNS TABLE(key text, name text, id uuid, updated_at timestamp with time zone, created_at timestamp with time zone, last_accessed_at timestamp with time zone, metadata jsonb, version text, archived_at timestamp with time zone, is_delete_marker boolean, is_versioned boolean)
     LANGUAGE plpgsql STABLE
     AS $$
 DECLARE
@@ -2660,29 +3560,38 @@ BEGIN
             l.updated_at,
             l.created_at,
             l.last_accessed_at,
-            l.metadata
+            l.metadata,
+            l.version,
+            l.archived_at,
+            l.is_delete_marker,
+            l.is_versioned
         FROM storage.list_objects_with_delimiter(
             bucket_name,
             coalesce(prefix, ''),
             '/',
             v_limit,
-            start_after,
-            '',
-            v_sort_ord
+            CASE WHEN start_after_is_continuation THEN '' ELSE start_after END,
+            CASE WHEN start_after_is_continuation THEN start_after ELSE '' END,
+            v_sort_ord,
+            noncurrent_versions,
+            delete_markers,
+            start_after_archived_at,
+            start_after_version
         ) l;
     ELSE
         -- Use aggregation approach for timestamp sorting
         -- Not efficient for large datasets but supports correct pagination
         RETURN QUERY SELECT * FROM storage.search_by_timestamp(
             prefix, bucket_name, v_limit, levels, start_after,
-            v_sort_ord, v_sort_col, sort_column_after
+            v_sort_ord, v_sort_col, sort_column_after,
+            noncurrent_versions, delete_markers, start_after_version
         );
     END IF;
 END;
 $$;
 
 
-ALTER FUNCTION storage.search_v2(prefix text, bucket_name text, limits integer, levels integer, start_after text, sort_order text, sort_column text, sort_column_after text) OWNER TO supabase_storage_admin;
+ALTER FUNCTION storage.search_v2(prefix text, bucket_name text, limits integer, levels integer, start_after text, sort_order text, sort_column text, sort_column_after text, noncurrent_versions text, delete_markers text, start_after_archived_at timestamp with time zone, start_after_version text, start_after_is_continuation boolean) OWNER TO supabase_storage_admin;
 
 --
 -- Name: update_updated_at_column(); Type: FUNCTION; Schema: storage; Owner: supabase_storage_admin
@@ -2952,6 +3861,39 @@ COMMENT ON COLUMN auth.mfa_factors.last_webauthn_challenge_data IS 'Stores the l
 
 
 --
+-- Name: mfa_recovery_code_sets; Type: TABLE; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE TABLE auth.mfa_recovery_code_sets (
+    id uuid NOT NULL,
+    user_id uuid NOT NULL,
+    mfa_factor_id uuid NOT NULL,
+    failed_verification_count integer DEFAULT 0 NOT NULL,
+    verification_locked_until timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT mfa_recovery_code_sets_failed_verification_count_check CHECK ((failed_verification_count >= 0))
+);
+
+
+ALTER TABLE auth.mfa_recovery_code_sets OWNER TO supabase_auth_admin;
+
+--
+-- Name: mfa_recovery_codes; Type: TABLE; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE TABLE auth.mfa_recovery_codes (
+    id uuid NOT NULL,
+    mfa_recovery_code_set_id uuid NOT NULL,
+    code_hash text NOT NULL,
+    consumed_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+ALTER TABLE auth.mfa_recovery_codes OWNER TO supabase_auth_admin;
+
+--
 -- Name: oauth_authorizations; Type: TABLE; Schema: auth; Owner: supabase_auth_admin
 --
 
@@ -3065,6 +4007,7 @@ CREATE TABLE auth.one_time_tokens (
     relates_to text NOT NULL,
     created_at timestamp without time zone DEFAULT now() NOT NULL,
     updated_at timestamp without time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone,
     CONSTRAINT one_time_tokens_token_hash_check CHECK ((char_length(token_hash) > 0))
 );
 
@@ -3190,6 +4133,47 @@ ALTER TABLE auth.schema_migrations OWNER TO supabase_auth_admin;
 
 COMMENT ON TABLE auth.schema_migrations IS 'Auth: Manages updates to the auth system.';
 
+
+--
+-- Name: scim_tokens; Type: TABLE; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE TABLE auth.scim_tokens (
+    id uuid NOT NULL,
+    sso_provider_id uuid NOT NULL,
+    token_hash text NOT NULL,
+    prefix text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    expires_at timestamp with time zone,
+    revoked_at timestamp with time zone,
+    last_used_at timestamp with time zone,
+    CONSTRAINT scim_tokens_expires_at_future CHECK (((expires_at IS NULL) OR (expires_at > created_at))),
+    CONSTRAINT scim_tokens_revoked_after_created CHECK (((revoked_at IS NULL) OR (revoked_at >= created_at))),
+    CONSTRAINT scim_tokens_token_hash_check CHECK ((token_hash ~ '^[0-9a-f]{64}$'::text))
+);
+
+
+ALTER TABLE auth.scim_tokens OWNER TO supabase_auth_admin;
+
+--
+-- Name: scim_users; Type: TABLE; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE TABLE auth.scim_users (
+    id uuid NOT NULL,
+    sso_provider_id uuid NOT NULL,
+    user_id uuid,
+    resource jsonb NOT NULL,
+    user_name text GENERATED ALWAYS AS (lower((resource ->> 'userName'::text))) STORED NOT NULL,
+    external_id text GENERATED ALWAYS AS ((resource ->> 'externalId'::text)) STORED,
+    active boolean GENERATED ALWAYS AS (COALESCE(((resource ->> 'active'::text))::boolean, true)) STORED NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    deleted_at timestamp with time zone
+);
+
+
+ALTER TABLE auth.scim_users OWNER TO supabase_auth_admin;
 
 --
 -- Name: sessions; Type: TABLE; Schema: auth; Owner: supabase_auth_admin
@@ -3886,6 +4870,54 @@ ALTER SEQUENCE public.report_periods_id_seq OWNED BY public.report_periods.id;
 
 
 --
+-- Name: sbfp_parent_approval_requests; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.sbfp_parent_approval_requests (
+    id bigint NOT NULL,
+    sbfp_participant_id bigint NOT NULL,
+    email character varying(255) NOT NULL,
+    token_hash character varying(255) NOT NULL,
+    weight numeric(8,2) NOT NULL,
+    height numeric(8,2) NOT NULL,
+    bmi numeric(8,2) NOT NULL,
+    bmi_category character varying(255) NOT NULL,
+    status character varying(255) DEFAULT 'pending'::character varying NOT NULL,
+    expires_at timestamp(0) without time zone NOT NULL,
+    sent_at timestamp(0) without time zone,
+    responded_at timestamp(0) without time zone,
+    decision_reason character varying(255),
+    closed_reason character varying(255),
+    closed_by_user_id bigint,
+    created_at timestamp(0) without time zone,
+    updated_at timestamp(0) without time zone
+);
+
+
+ALTER TABLE public.sbfp_parent_approval_requests OWNER TO postgres;
+
+--
+-- Name: sbfp_parent_approval_requests_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.sbfp_parent_approval_requests_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.sbfp_parent_approval_requests_id_seq OWNER TO postgres;
+
+--
+-- Name: sbfp_parent_approval_requests_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.sbfp_parent_approval_requests_id_seq OWNED BY public.sbfp_parent_approval_requests.id;
+
+
+--
 -- Name: sbfp_participants; Type: TABLE; Schema: public; Owner: postgres
 --
 
@@ -3895,7 +4927,8 @@ CREATE TABLE public.sbfp_participants (
     parent_consent character varying(255),
     disapproval_reason text,
     created_at timestamp(0) without time zone,
-    updated_at timestamp(0) without time zone
+    updated_at timestamp(0) without time zone,
+    profile_image_url text
 );
 
 
@@ -3920,6 +4953,47 @@ ALTER SEQUENCE public.sbfp_participants_id_seq OWNER TO postgres;
 --
 
 ALTER SEQUENCE public.sbfp_participants_id_seq OWNED BY public.sbfp_participants.id;
+
+
+--
+-- Name: school_year_user_records; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.school_year_user_records (
+    id bigint NOT NULL,
+    school_year_id bigint NOT NULL,
+    user_id bigint NOT NULL,
+    role character varying(255) NOT NULL,
+    deped_id bigint,
+    "position" character varying(255),
+    advisory_grade_level character varying(255),
+    advisory_section character varying(255),
+    created_at timestamp(0) without time zone,
+    updated_at timestamp(0) without time zone
+);
+
+
+ALTER TABLE public.school_year_user_records OWNER TO postgres;
+
+--
+-- Name: school_year_user_records_id_seq; Type: SEQUENCE; Schema: public; Owner: postgres
+--
+
+CREATE SEQUENCE public.school_year_user_records_id_seq
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1;
+
+
+ALTER SEQUENCE public.school_year_user_records_id_seq OWNER TO postgres;
+
+--
+-- Name: school_year_user_records_id_seq; Type: SEQUENCE OWNED BY; Schema: public; Owner: postgres
+--
+
+ALTER SEQUENCE public.school_year_user_records_id_seq OWNED BY public.school_year_user_records.id;
 
 
 --
@@ -4120,7 +5194,11 @@ CREATE TABLE public.users (
     deleted_at timestamp(0) without time zone,
     remember_token character varying(100),
     created_at timestamp(0) without time zone,
-    updated_at timestamp(0) without time zone
+    updated_at timestamp(0) without time zone,
+    first_name character varying(255),
+    middle_name character varying(255),
+    last_name character varying(255),
+    name_extension character varying(255)
 );
 
 
@@ -4231,6 +5309,15 @@ CREATE TABLE storage.buckets (
     owner_id text,
     type storage.buckettype DEFAULT 'STANDARD'::storage.buckettype NOT NULL,
     versioning_status text DEFAULT 'DISABLED'::text NOT NULL,
+    lifecycle_configuration jsonb,
+    lifecycle_configuration_generation uuid,
+    CONSTRAINT buckets_lifecycle_configuration_pair_check CHECK (((lifecycle_configuration IS NULL) = (lifecycle_configuration_generation IS NULL))),
+    CONSTRAINT buckets_lifecycle_configuration_shape_check CHECK (((lifecycle_configuration IS NULL) OR ((jsonb_typeof(lifecycle_configuration) = 'object'::text) AND (lifecycle_configuration ? 'rules'::text) AND
+CASE
+    WHEN (jsonb_typeof((lifecycle_configuration -> 'rules'::text)) = 'array'::text) THEN ((jsonb_array_length((lifecycle_configuration -> 'rules'::text)) >= 1) AND (jsonb_array_length((lifecycle_configuration -> 'rules'::text)) <= 1000))
+    ELSE false
+END))),
+    CONSTRAINT buckets_lifecycle_configuration_standard_only_check CHECK (((type = 'STANDARD'::storage.buckettype) OR ((lifecycle_configuration IS NULL) AND (lifecycle_configuration_generation IS NULL)))),
     CONSTRAINT buckets_versioning_dark_check CHECK ((versioning_status = 'DISABLED'::text)),
     CONSTRAINT buckets_versioning_standard_only_check CHECK (((type = 'STANDARD'::storage.buckettype) OR (versioning_status = 'DISABLED'::text))),
     CONSTRAINT buckets_versioning_status_check CHECK ((versioning_status = ANY (ARRAY['DISABLED'::text, 'ENABLED'::text, 'SUSPENDED'::text])))
@@ -4467,10 +5554,24 @@ ALTER TABLE ONLY public.report_periods ALTER COLUMN id SET DEFAULT nextval('publ
 
 
 --
+-- Name: sbfp_parent_approval_requests id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sbfp_parent_approval_requests ALTER COLUMN id SET DEFAULT nextval('public.sbfp_parent_approval_requests_id_seq'::regclass);
+
+
+--
 -- Name: sbfp_participants id; Type: DEFAULT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.sbfp_participants ALTER COLUMN id SET DEFAULT nextval('public.sbfp_participants_id_seq'::regclass);
+
+
+--
+-- Name: school_year_user_records id; Type: DEFAULT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.school_year_user_records ALTER COLUMN id SET DEFAULT nextval('public.school_year_user_records_id_seq'::regclass);
 
 
 --
@@ -4573,6 +5674,22 @@ COPY auth.mfa_factors (id, user_id, friendly_name, factor_type, status, created_
 
 
 --
+-- Data for Name: mfa_recovery_code_sets; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.mfa_recovery_code_sets (id, user_id, mfa_factor_id, failed_verification_count, verification_locked_until, created_at, updated_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: mfa_recovery_codes; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.mfa_recovery_codes (id, mfa_recovery_code_set_id, code_hash, consumed_at, created_at) FROM stdin;
+\.
+
+
+--
 -- Data for Name: oauth_authorizations; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
 --
 
@@ -4608,7 +5725,7 @@ COPY auth.oauth_consents (id, user_id, client_id, scopes, granted_at, revoked_at
 -- Data for Name: one_time_tokens; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
 --
 
-COPY auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to, created_at, updated_at) FROM stdin;
+COPY auth.one_time_tokens (id, user_id, token_type, token_hash, relates_to, created_at, updated_at, expires_at) FROM stdin;
 \.
 
 
@@ -4718,6 +5835,27 @@ COPY auth.schema_migrations (version) FROM stdin;
 20260219120000
 20260302000000
 20260625000000
+20260821000000
+20260821010000
+20260824000000
+20260824000001
+20260831180000
+\.
+
+
+--
+-- Data for Name: scim_tokens; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.scim_tokens (id, sso_provider_id, token_hash, prefix, created_at, expires_at, revoked_at, last_used_at) FROM stdin;
+\.
+
+
+--
+-- Data for Name: scim_users; Type: TABLE DATA; Schema: auth; Owner: supabase_auth_admin
+--
+
+COPY auth.scim_users (id, sso_provider_id, user_id, resource, created_at, updated_at, deleted_at) FROM stdin;
 \.
 
 
@@ -4774,6 +5912,7 @@ COPY auth.webauthn_credentials (id, user_id, credential_id, public_key, attestat
 --
 
 COPY public.attendance_report_months (id, school_year_id, month, created_at, updated_at) FROM stdin;
+3	6	9	2026-09-14 18:39:38	2026-09-14 18:39:38
 \.
 
 
@@ -4790,141 +5929,314 @@ COPY public.attendance_report_sections (id, attendance_report_month_id, grade_le
 --
 
 COPY public.audit_logs (id, user_id, action, module, description, ip_address, created_at, updated_at) FROM stdin;
-74	28	created	School Years	Created academic school year 2026-2027	127.0.0.1	2026-09-10 13:46:38	2026-09-10 13:46:38
-75	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-10 13:46:43	2026-09-10 13:46:43
-76	27	Created	Accounts	Created new encoder account for Encoder User 1	127.0.0.1	2026-09-10 13:50:02	2026-09-10 13:50:02
-77	27	Created	Accounts	Created new encoder account for Encoder User 2	127.0.0.1	2026-09-10 13:51:08	2026-09-10 13:51:08
-78	27	Created	Accounts	Created new encoder account for Encoder User 3	127.0.0.1	2026-09-10 13:52:15	2026-09-10 13:52:15
-79	32	Created	Students	Added student Juan Santos	127.0.0.1	2026-09-10 14:01:03	2026-09-10 14:01:03
-80	33	Created	Students	Added student Laxamana Alyamce	127.0.0.1	2026-09-10 14:01:22	2026-09-10 14:01:22
-81	32	Created	Students	Added student Maria Dela Cruz	127.0.0.1	2026-09-10 14:02:40	2026-09-10 14:02:40
-82	26	Created	Students	Added student Christian Paul Aquino	127.0.0.1	2026-09-10 14:02:53	2026-09-10 14:02:53
-83	33	Created	Students	Added student Cruz Juan	127.0.0.1	2026-09-10 14:03:11	2026-09-10 14:03:11
-84	31	Created	Students	Added student Mateo Reyes	127.0.0.1	2026-09-10 14:04:04	2026-09-10 14:04:04
-85	32	Created	Students	Added student Carlo Reyes	127.0.0.1	2026-09-10 14:04:15	2026-09-10 14:04:15
-86	33	Created	Students	Added student Clara Santos	127.0.0.1	2026-09-10 14:05:38	2026-09-10 14:05:38
-87	32	Created	Students	Added student Sofia Garcia	127.0.0.1	2026-09-10 14:05:55	2026-09-10 14:05:55
-88	26	Created	Students	Added student Samantha Nicole Dizon	127.0.0.1	2026-09-10 14:06:43	2026-09-10 14:06:43
-89	33	Created	Students	Added student Anthony Reyes	127.0.0.1	2026-09-10 14:07:11	2026-09-10 14:07:11
-90	31	Created	Students	Added student Chloe Santos	127.0.0.1	2026-09-10 14:07:08	2026-09-10 14:07:08
-91	32	Created	Students	Added student Ethan Mendoza	127.0.0.1	2026-09-10 14:08:04	2026-09-10 14:08:04
-92	26	Created	Students	Added student Lucas Miguel Ramos	127.0.0.1	2026-09-10 14:08:59	2026-09-10 14:08:59
-93	33	Created	Students	Added student Princess bautista	127.0.0.1	2026-09-10 14:09:16	2026-09-10 14:09:16
-94	32	Created	Students	Added student Andrea Flores	127.0.0.1	2026-09-10 14:09:18	2026-09-10 14:09:18
-95	31	Created	Students	Added student Juan Mendoza	127.0.0.1	2026-09-10 14:09:40	2026-09-10 14:09:40
-96	33	Created	Students	Added student Princess bautista	127.0.0.1	2026-09-10 14:09:57	2026-09-10 14:09:57
-97	32	Created	Students	Added student Miguel Navarro	127.0.0.1	2026-09-10 14:10:12	2026-09-10 14:10:12
-98	26	Created	Students	Added student Beatrice Santos	127.0.0.1	2026-09-10 14:10:28	2026-09-10 14:10:28
-99	33	Created	Students	Added student Bianca Mendoza	127.0.0.1	2026-09-10 14:11:40	2026-09-10 14:11:40
-100	26	Created	Students	Added student Gabriel James Garcia	127.0.0.1	2026-09-10 14:11:54	2026-09-10 14:11:54
-101	31	Created	Students	Added student Sophia Cruz	127.0.0.1	2026-09-10 14:12:11	2026-09-10 14:12:11
-102	32	Created	Students	Added student Lara Castillo	127.0.0.1	2026-09-10 14:12:22	2026-09-10 14:12:22
-103	33	Created	Students	Added student Joshua Villanueva	127.0.0.1	2026-09-10 14:13:10	2026-09-10 14:13:10
-104	32	Created	Students	Added student Daniel Bautista	127.0.0.1	2026-09-10 14:13:21	2026-09-10 14:13:21
-105	26	Created	Students	Added student Sofia Mendoza	127.0.0.1	2026-09-10 14:13:55	2026-09-10 14:13:55
-106	31	Created	Students	Added student Gabriel Tolentino	127.0.0.1	2026-09-10 14:14:11	2026-09-10 14:14:11
-107	33	Created	Students	Added student Angela Ramos	127.0.0.1	2026-09-10 14:14:22	2026-09-10 14:14:22
-108	32	Created	Students	Added student Chloe Aquino	127.0.0.1	2026-09-10 14:14:27	2026-09-10 14:14:27
-109	26	Created	Students	Added student Liam Ethan Villanueva	127.0.0.1	2026-09-10 14:15:28	2026-09-10 14:15:28
-110	33	Created	Students	Added student Christian Garcia	127.0.0.1	2026-09-10 14:15:48	2026-09-10 14:15:48
-111	26	Updated	Students	Updated student Samantha Nicole Dizon	127.0.0.1	2026-09-10 14:16:10	2026-09-10 14:16:10
-112	33	Updated	Students	Updated student Cruz Juan	127.0.0.1	2026-09-10 14:16:31	2026-09-10 14:16:31
-113	26	Updated	Students	Updated student Christian Paul Aquino	127.0.0.1	2026-09-10 14:16:44	2026-09-10 14:16:44
-114	31	Created	Students	Added student Isabella Villanueva	127.0.0.1	2026-09-10 14:17:01	2026-09-10 14:17:01
-115	26	Created	Students	Added student Mia Sophia Torres	127.0.0.1	2026-09-10 14:18:45	2026-09-10 14:18:45
-116	31	Created	Students	Added student Luis Ocampo	127.0.0.1	2026-09-10 14:19:17	2026-09-10 14:19:17
-117	26	Created	Students	Added student Ethan Noah Castro	127.0.0.1	2026-09-10 14:20:13	2026-09-10 14:20:13
-118	31	Created	Students	Added student Mia David	127.0.0.1	2026-09-10 14:21:22	2026-09-10 14:21:22
-119	26	Created	Students	Added student Zoey Hannah Bautista	127.0.0.1	2026-09-10 14:21:37	2026-09-10 14:21:37
-120	31	Created	Students	Added student Ethan Aguilar	127.0.0.1	2026-09-10 14:23:44	2026-09-10 14:23:44
-121	33	Updated	Students	Updated student Laxamana Alyamce	127.0.0.1	2026-09-10 14:25:34	2026-09-10 14:25:34
-122	31	Created	Students	Added student Zoe Navarro	127.0.0.1	2026-09-10 14:25:57	2026-09-10 14:25:57
-123	32	Updated	Students	Updated student Juan Santos	127.0.0.1	2026-09-10 14:26:41	2026-09-10 14:26:41
-124	31	Updated	Students	Updated student Isabella Villanueva	127.0.0.1	2026-09-10 14:26:47	2026-09-10 14:26:47
-125	33	Updated	Students	Updated student Bianca Mendoza	127.0.0.1	2026-09-10 14:27:11	2026-09-10 14:27:11
-126	26	Updated	Students	Updated student Ethan Noah Castro	127.0.0.1	2026-09-10 14:31:47	2026-09-10 14:31:47
-127	27	Created	Meal Plan	Added meal for 2026-09-01: Bacon & Eggs	127.0.0.1	2026-09-10 14:36:52	2026-09-10 14:36:52
-128	27	Created	Meal Plan	Added meal for 2026-09-10: Bacon & Eggs	127.0.0.1	2026-09-10 14:37:14	2026-09-10 14:37:14
-129	26	Updated	Students	Updated student Liam Ethan Villanueva	127.0.0.1	2026-09-10 14:48:44	2026-09-10 14:48:44
-130	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 14:51:19	2026-09-10 14:51:19
-131	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 14:52:19	2026-09-10 14:52:19
-132	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 14:54:56	2026-09-10 14:54:56
-133	26	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 14:55:56	2026-09-10 14:55:56
-134	27	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 15:53:34	2026-09-10 15:53:34
-135	27	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 15:54:29	2026-09-10 15:54:29
-136	27	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 15:55:09	2026-09-10 15:55:09
-137	27	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 15:56:22	2026-09-10 15:56:22
-138	32	Updated	Students	Updated student Maria Dela Cruz	127.0.0.1	2026-09-10 16:04:49	2026-09-10 16:04:49
-139	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:05:10	2026-09-10 16:05:10
-140	27	Updated	Meal Plan	Updated meal plan ID 5	127.0.0.1	2026-09-10 16:13:09	2026-09-10 16:13:09
-141	27	Created	Meal Plan	Added meal for 2026-09-01: rice	127.0.0.1	2026-09-10 16:13:15	2026-09-10 16:13:15
-142	27	Updated	Meal Plan	Updated meal plan ID 6	127.0.0.1	2026-09-10 16:13:35	2026-09-10 16:13:35
-143	27	Created	Meal Plan	Added meal for 2026-09-10: rice	127.0.0.1	2026-09-10 16:13:42	2026-09-10 16:13:42
-144	27	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 16:14:05	2026-09-10 16:14:05
-145	27	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 16:14:16	2026-09-10 16:14:16
-146	27	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 16:14:19	2026-09-10 16:14:19
-147	27	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 16:14:43	2026-09-10 16:14:43
-148	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:19:23	2026-09-10 16:19:23
-149	32	Updated	Students	Updated student Sofia Garcia	127.0.0.1	2026-09-10 16:26:08	2026-09-10 16:26:08
-150	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:26:26	2026-09-10 16:26:26
-151	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:42:55	2026-09-10 16:42:55
-152	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:43:03	2026-09-10 16:43:03
-153	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:43:07	2026-09-10 16:43:07
-154	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:43:23	2026-09-10 16:43:23
-155	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:43:28	2026-09-10 16:43:28
-156	32	Updated	Attendance	Updated attendance status for participant ID 13 on 2026-09-10	127.0.0.1	2026-09-10 16:43:37	2026-09-10 16:43:37
-157	32	Updated	Attendance	Updated attendance status for participant ID 23 on 2026-09-10	127.0.0.1	2026-09-10 16:44:38	2026-09-10 16:44:38
-158	32	Updated	Attendance	Updated attendance status for participant ID 19 on 2026-09-10	127.0.0.1	2026-09-10 16:45:51	2026-09-10 16:45:51
-159	32	Updated	Attendance	Updated attendance status for participant ID 11 on 2026-09-10	127.0.0.1	2026-09-10 16:46:39	2026-09-10 16:46:39
-160	32	Updated	Attendance	Updated attendance status for participant ID 11 on 2026-09-10	127.0.0.1	2026-09-10 16:46:46	2026-09-10 16:46:46
-161	32	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 16:48:24	2026-09-10 16:48:24
-162	32	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 16:48:29	2026-09-10 16:48:29
-163	32	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 16:50:04	2026-09-10 16:50:04
-164	32	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 16:50:09	2026-09-10 16:50:09
-165	32	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 16:50:13	2026-09-10 16:50:13
-166	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 17:51:27	2026-09-10 17:51:27
-167	26	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 17:51:42	2026-09-10 17:51:42
-168	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 17:51:58	2026-09-10 17:51:58
-169	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 17:59:37	2026-09-10 17:59:37
-170	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 17:59:57	2026-09-10 17:59:57
-171	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 18:00:08	2026-09-10 18:00:08
-172	26	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 18:00:19	2026-09-10 18:00:19
-173	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:09:48	2026-09-10 18:09:48
-174	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:16:37	2026-09-10 18:16:37
-175	32	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 18:18:48	2026-09-10 18:18:48
-176	32	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:18:54	2026-09-10 18:18:54
-177	32	Created	Attendance	Scanned QR attendance for student Bianca Mendoza	127.0.0.1	2026-09-10 18:18:59	2026-09-10 18:18:59
-178	32	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 18:19:21	2026-09-10 18:19:21
-179	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:24:46	2026-09-10 18:24:46
-180	26	Created	Attendance	Scanned QR attendance for student Liam Ethan Villanueva	127.0.0.1	2026-09-10 18:25:56	2026-09-10 18:25:56
-181	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-10 18:26:55	2026-09-10 18:26:55
-182	26	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 18:26:59	2026-09-10 18:26:59
-183	27	Created	Attendance	Scanned QR attendance for student Isabella Villanueva	127.0.0.1	2026-09-10 18:31:01	2026-09-10 18:31:01
-184	26	Updated	Attendance	Updated attendance status for participant ID 41 on 2026-09-10	127.0.0.1	2026-09-10 19:55:33	2026-09-10 19:55:33
-185	26	Created	Students	Added student Rafael Gomez	127.0.0.1	2026-09-10 20:53:01	2026-09-10 20:53:01
-186	26	Created	Students	Added student Bianca Louise Morales	127.0.0.1	2026-09-10 20:54:52	2026-09-10 20:54:52
-187	26	Created	Students	Added student Nathan Rivera	127.0.0.1	2026-09-10 21:21:00	2026-09-10 21:21:00
-188	26	Created	Students	Added student Andrea Pascual	127.0.0.1	2026-09-10 21:22:41	2026-09-10 21:22:41
-189	26	Updated	Attendance	Updated attendance status for participant ID 41 on 2026-09-10	127.0.0.1	2026-09-10 22:16:09	2026-09-10 22:16:09
-190	26	Updated	Attendance	Updated attendance status for participant ID 41 on 2026-09-10	127.0.0.1	2026-09-10 22:17:06	2026-09-10 22:17:06
-191	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to approved	127.0.0.1	2026-09-10 22:20:08	2026-09-10 22:20:08
-192	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to disapproved	127.0.0.1	2026-09-10 22:21:10	2026-09-10 22:21:10
-193	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to disapproved	127.0.0.1	2026-09-10 22:22:47	2026-09-10 22:22:47
-194	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to approved	127.0.0.1	2026-09-10 22:23:52	2026-09-10 22:23:52
-195	26	Updated	Students	Updated student Beatrice Santos	127.0.0.1	2026-09-10 22:28:35	2026-09-10 22:28:35
-196	26	Updated	SBFP Approval	Updated parent consent for student Beatrice Santos to disapproved	127.0.0.1	2026-09-10 22:32:03	2026-09-10 22:32:03
-197	33	Updated	SBFP Approval	Updated parent consent for student Joshua Villanueva to disapproved	127.0.0.1	2026-09-10 22:35:25	2026-09-10 22:35:25
-198	26	Updated	Students	Updated student Andrea Pascual	127.0.0.1	2026-09-11 00:25:16	2026-09-11 00:25:16
-199	26	Created	Students	Added student Alu Card	127.0.0.1	2026-09-11 00:52:29	2026-09-11 00:52:29
-200	26	Updated	Students	Updated student Andrea Pascual	127.0.0.1	2026-09-11 00:57:50	2026-09-11 00:57:50
-201	26	Created	Students	Added student Steve Jobs	127.0.0.1	2026-09-11 01:10:03	2026-09-11 01:10:03
-202	26	Updated	Students	Updated student Lucas Miguel Ramos	127.0.0.1	2026-09-11 01:21:54	2026-09-11 01:21:54
-203	26	Updated	Students	Updated student Liam Ethan Villanueva	127.0.0.1	2026-09-11 01:24:06	2026-09-11 01:24:06
-204	26	Updated	Students	Updated student Liam Ethan Villanueva	127.0.0.1	2026-09-11 01:26:18	2026-09-11 01:26:18
-205	26	Updated	Students	Updated student Alu Card	127.0.0.1	2026-09-11 01:26:44	2026-09-11 01:26:44
-206	27	Created	Meal Plan	Added meal for 2026-09-11: Chicken Adobo	127.0.0.1	2026-09-11 01:31:02	2026-09-11 01:31:02
-207	27	Created	Meal Plan	Added meal for 2026-09-11: Milo	127.0.0.1	2026-09-11 01:31:09	2026-09-11 01:31:09
-208	27	Created	Attendance	Scanned QR attendance for student Alu Card	127.0.0.1	2026-09-11 01:32:11	2026-09-11 01:32:11
+237	28	created	School Years	Created academic school year 2026-2027	127.0.0.1	2026-09-13 22:00:11	2026-09-13 22:00:11
+238	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-13 22:00:17	2026-09-13 22:00:17
+239	28	created	School Years	Created academic school year 2027-2028	127.0.0.1	2026-09-13 22:01:55	2026-09-13 22:01:55
+240	27	Updated	Accounts	Updated account profile for Encoder User 1	127.0.0.1	2026-09-13 22:11:25	2026-09-13 22:11:25
+241	27	Updated	Accounts	Updated account profile for Encoder User 3	127.0.0.1	2026-09-13 22:12:27	2026-09-13 22:12:27
+242	26	Created	Students	Added student Juan Santos	127.0.0.1	2026-09-13 22:45:51	2026-09-13 22:45:51
+243	26	Created	Students	Added student Ana Reyes	127.0.0.1	2026-09-13 22:50:53	2026-09-13 22:50:53
+244	26	Created	Students	Added student Luis Garcia	127.0.0.1	2026-09-13 22:53:01	2026-09-13 22:53:01
+245	26	Created	Students	Added student Bea Mendoza	127.0.0.1	2026-09-13 22:58:33	2026-09-13 22:58:33
+246	26	Created	Students	Added student Mark Cruz	127.0.0.1	2026-09-13 23:00:13	2026-09-13 23:00:13
+247	26	Created	Students	Added student Lea Bautista	127.0.0.1	2026-09-13 23:01:31	2026-09-13 23:01:31
+248	26	Created	Students	Added student Paul Torres	127.0.0.1	2026-09-13 23:07:20	2026-09-13 23:07:20
+249	26	Created	Students	Added student Kim Villanueva	127.0.0.1	2026-09-13 23:08:53	2026-09-13 23:08:53
+250	26	Created	Students	Added student Ian Ramos	127.0.0.1	2026-09-13 23:10:09	2026-09-13 23:10:09
+251	26	Created	Students	Added student Mia Castro	127.0.0.1	2026-09-13 23:11:28	2026-09-13 23:11:28
+252	31	Created	Students	Added student Carlos Dizon	127.0.0.1	2026-09-13 23:21:28	2026-09-13 23:21:28
+253	31	Created	Students	Added student Rosa Pineda	127.0.0.1	2026-09-13 23:22:44	2026-09-13 23:22:44
+254	31	Created	Students	Added student Roy Gutierrez	127.0.0.1	2026-09-13 23:24:46	2026-09-13 23:24:46
+255	31	Created	Students	Added student Eve Navarro	127.0.0.1	2026-09-13 23:25:52	2026-09-13 23:25:52
+256	31	Created	Students	Added student Jay Mercado	127.0.0.1	2026-09-13 23:27:44	2026-09-13 23:27:44
+257	31	Created	Students	Added student Zoe Rivera	127.0.0.1	2026-09-13 23:29:12	2026-09-13 23:29:12
+258	31	Created	Students	Added student Leo Ocampo	127.0.0.1	2026-09-13 23:30:40	2026-09-13 23:30:40
+259	31	Created	Students	Added student May Aguilar	127.0.0.1	2026-09-13 23:31:44	2026-09-13 23:31:44
+260	31	Created	Students	Added student Ken Suarez	127.0.0.1	2026-09-13 23:33:46	2026-09-13 23:33:46
+261	31	Created	Students	Added student Joy Ferrer	127.0.0.1	2026-09-13 23:35:15	2026-09-13 23:35:15
+262	32	Created	Students	Added student Sam David	127.0.0.1	2026-09-13 23:40:05	2026-09-13 23:40:05
+263	32	Created	Students	Added student Ivy Lopez	127.0.0.1	2026-09-13 23:41:06	2026-09-13 23:41:06
+264	32	Created	Students	Added student Gil Perez	127.0.0.1	2026-09-13 23:42:01	2026-09-13 23:42:01
+265	32	Created	Students	Added student Pat Gomez	127.0.0.1	2026-09-13 23:43:13	2026-09-13 23:43:13
+266	32	Created	Students	Added student Ray Yabut	127.0.0.1	2026-09-13 23:44:18	2026-09-13 23:44:18
+267	32	Created	Students	Added student Ria Sunga	127.0.0.1	2026-09-13 23:45:50	2026-09-13 23:45:50
+268	32	Created	Students	Added student Ted Manalo	127.0.0.1	2026-09-13 23:50:24	2026-09-13 23:50:24
+269	32	Created	Students	Added student Amy Valdes	127.0.0.1	2026-09-13 23:51:38	2026-09-13 23:51:38
+270	32	Created	Students	Added student Dan Lim	127.0.0.1	2026-09-13 23:52:47	2026-09-13 23:52:47
+271	32	Created	Students	Added student Fe Tan	127.0.0.1	2026-09-13 23:53:51	2026-09-13 23:53:51
+272	33	Created	Students	Added student Al Go	127.0.0.1	2026-09-14 00:01:17	2026-09-14 00:01:17
+273	33	Created	Students	Added student Luz Sy	127.0.0.1	2026-09-14 00:02:14	2026-09-14 00:02:14
+274	33	Created	Students	Added student Ben Ong	127.0.0.1	2026-09-14 00:03:29	2026-09-14 00:03:29
+275	33	Created	Students	Added student Meg Chua	127.0.0.1	2026-09-14 00:04:29	2026-09-14 00:04:29
+276	33	Created	Students	Added student Vic Uy	127.0.0.1	2026-09-14 00:05:25	2026-09-14 00:05:25
+277	33	Created	Students	Added student Sol Yap	127.0.0.1	2026-09-14 00:06:29	2026-09-14 00:06:29
+278	33	Created	Students	Added student Rey Co	127.0.0.1	2026-09-14 00:07:54	2026-09-14 00:07:54
+279	33	Created	Students	Added student Paz Lee	127.0.0.1	2026-09-14 00:09:04	2026-09-14 00:09:04
+280	33	Created	Students	Added student Tom Ang	127.0.0.1	2026-09-14 00:10:37	2026-09-14 00:10:37
+281	33	Created	Students	Added student Mae Dy	127.0.0.1	2026-09-14 00:11:55	2026-09-14 00:11:55
+282	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-14 00:40:38	2026-09-14 00:40:38
+283	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-14 00:40:45	2026-09-14 00:40:45
+284	28	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-14 00:53:22	2026-09-14 00:53:22
+285	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-14 00:54:55	2026-09-14 00:54:55
+286	28	updated	School Years	Activated academic school year 2027-2028	127.0.0.1	2026-09-14 00:55:43	2026-09-14 00:55:43
+287	27	Updated	Accounts	Updated account profile for Encoder User 3	127.0.0.1	2026-09-14 01:01:31	2026-09-14 01:01:31
+288	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-09-14 01:03:10	2026-09-14 01:03:10
+289	27	Updated	Accounts	Updated account profile for Encoder User 2	127.0.0.1	2026-09-14 01:03:25	2026-09-14 01:03:25
+290	27	Updated	Accounts	Updated account profile for Encoder User 1	127.0.0.1	2026-09-14 01:03:49	2026-09-14 01:03:49
+291	33	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-14 08:35:58	2026-09-14 08:35:58
+292	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-14 14:41:55	2026-09-14 14:41:55
+293	26	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-14 14:47:16	2026-09-14 14:47:16
+294	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-14 14:52:20	2026-09-14 14:52:20
+295	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-14 14:52:27	2026-09-14 14:52:27
+296	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 16:51:51	2026-09-14 16:51:51
+297	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:06:32	2026-09-14 17:06:32
+298	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:21:55	2026-09-14 17:21:55
+299	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:22:15	2026-09-14 17:22:15
+300	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:25:06	2026-09-14 17:25:06
+301	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:25:27	2026-09-14 17:25:27
+302	31	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:25:54	2026-09-14 17:25:54
+303	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 17:52:39	2026-09-14 17:52:39
+304	33	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-14 18:15:24	2026-09-14 18:15:24
+305	26	Updated	Students	Updated student Juan Santos	127.0.0.1	2026-09-14 18:31:13	2026-09-14 18:31:13
+306	26	Updated	Students	Updated student Ana Reyes	127.0.0.1	2026-09-14 18:32:13	2026-09-14 18:32:13
+307	26	Updated	Students	Updated student Luis Garcia	127.0.0.1	2026-09-14 18:32:29	2026-09-14 18:32:29
+308	26	Updated	Students	Updated student Bea Mendoza	127.0.0.1	2026-09-14 18:34:42	2026-09-14 18:34:42
+309	26	Updated	Students	Updated student Ana Reyes	127.0.0.1	2026-09-14 18:35:10	2026-09-14 18:35:10
+310	26	Updated	Students	Updated student Luis Garcia	127.0.0.1	2026-09-14 18:35:26	2026-09-14 18:35:26
+311	26	Updated	Students	Updated student Mark Cruz	127.0.0.1	2026-09-14 18:35:44	2026-09-14 18:35:44
+312	27	Created	Meal Plan	Added meal for 2026-09-14: Chicken Adobo	127.0.0.1	2026-09-14 18:38:10	2026-09-14 18:38:10
+313	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-14 18:39:41	2026-09-14 18:39:41
+314	26	Created	Attendance	Scanned QR attendance for student Luis Garcia	127.0.0.1	2026-09-14 18:39:56	2026-09-14 18:39:56
+315	26	Created	Attendance	Scanned QR attendance for student Mark Cruz	127.0.0.1	2026-09-14 18:40:09	2026-09-14 18:40:09
+316	31	Updated	Students	Updated student Carlos Dizon	127.0.0.1	2026-09-14 18:41:20	2026-09-14 18:41:20
+317	31	Updated	Students	Updated student Rosa Pineda	127.0.0.1	2026-09-14 18:41:42	2026-09-14 18:41:42
+318	31	Updated	Students	Updated student Roy Gutierrez	127.0.0.1	2026-09-14 18:42:01	2026-09-14 18:42:01
+319	31	Updated	Students	Updated student Eve Navarro	127.0.0.1	2026-09-14 18:42:17	2026-09-14 18:42:17
+320	31	Updated	Students	Updated student Jay Mercado	127.0.0.1	2026-09-14 18:42:31	2026-09-14 18:42:31
+321	31	Created	Attendance	Scanned QR attendance for student Carlos Dizon	127.0.0.1	2026-09-14 18:43:29	2026-09-14 18:43:29
+322	31	Created	Attendance	Scanned QR attendance for student Rosa Pineda	127.0.0.1	2026-09-14 18:43:41	2026-09-14 18:43:41
+323	31	Created	Attendance	Scanned QR attendance for student Roy Gutierrez	127.0.0.1	2026-09-14 18:43:51	2026-09-14 18:43:51
+324	31	Created	Attendance	Scanned QR attendance for student Jay Mercado	127.0.0.1	2026-09-14 18:44:05	2026-09-14 18:44:05
+325	32	Updated	Students	Updated student Sam David	127.0.0.1	2026-09-14 18:45:56	2026-09-14 18:45:56
+326	32	Updated	Students	Updated student Ivy Lopez	127.0.0.1	2026-09-14 18:46:12	2026-09-14 18:46:12
+327	32	Updated	Students	Updated student Gil Perez	127.0.0.1	2026-09-14 18:46:25	2026-09-14 18:46:25
+328	32	Updated	Students	Updated student Pat Gomez	127.0.0.1	2026-09-14 18:46:39	2026-09-14 18:46:39
+329	32	Updated	Students	Updated student Ray Yabut	127.0.0.1	2026-09-14 18:46:54	2026-09-14 18:46:54
+330	32	Created	Attendance	Scanned QR attendance for student Sam David	127.0.0.1	2026-09-14 18:47:43	2026-09-14 18:47:43
+331	32	Created	Attendance	Scanned QR attendance for student Ivy Lopez	127.0.0.1	2026-09-14 18:47:51	2026-09-14 18:47:51
+332	33	Updated	Students	Updated student Al Go	127.0.0.1	2026-09-14 18:48:50	2026-09-14 18:48:50
+333	33	Updated	Students	Updated student Luz Sy	127.0.0.1	2026-09-14 18:49:06	2026-09-14 18:49:06
+334	33	Updated	Students	Updated student Ben Ong	127.0.0.1	2026-09-14 18:49:25	2026-09-14 18:49:25
+335	33	Updated	Students	Updated student Meg Chua	127.0.0.1	2026-09-14 18:49:51	2026-09-14 18:49:51
+336	33	Updated	Students	Updated student Vic Uy	127.0.0.1	2026-09-14 18:50:04	2026-09-14 18:50:04
+337	33	Created	Attendance	Scanned QR attendance for student Al Go	127.0.0.1	2026-09-14 18:51:06	2026-09-14 18:51:06
+338	33	Created	Attendance	Scanned QR attendance for student Luz Sy	127.0.0.1	2026-09-14 18:51:16	2026-09-14 18:51:16
+339	33	Created	Attendance	Scanned QR attendance for student Ben Ong	127.0.0.1	2026-09-14 18:51:25	2026-09-14 18:51:25
+340	33	Created	Attendance	Scanned QR attendance for student Meg Chua	127.0.0.1	2026-09-14 18:51:31	2026-09-14 18:51:31
+341	33	Created	Attendance	Scanned QR attendance for student Vic Uy	127.0.0.1	2026-09-14 18:51:40	2026-09-14 18:51:40
+342	33	Updated	Attendance	Updated attendance status for participant ID 90 on 2026-09-14	127.0.0.1	2026-09-14 18:52:40	2026-09-14 18:52:40
+343	33	Updated	Attendance	Updated attendance status for participant ID 91 on 2026-09-14	127.0.0.1	2026-09-14 18:52:50	2026-09-14 18:52:50
+344	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-15 17:06:07	2026-09-15 17:06:07
+345	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-15 17:06:13	2026-09-15 17:06:13
+346	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-15 17:28:55	2026-09-15 17:28:55
+347	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-15 17:34:29	2026-09-15 17:34:29
+348	28	updated	School Years	Activated academic school year 2027-2028	127.0.0.1	2026-09-15 21:49:33	2026-09-15 21:49:33
+349	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-15 21:50:14	2026-09-15 21:50:14
+350	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-15 22:19:45	2026-09-15 22:19:45
+351	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-15 22:19:50	2026-09-15 22:19:50
+352	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-15 22:19:57	2026-09-15 22:19:57
+353	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-15 22:20:09	2026-09-15 22:20:09
+354	26	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-13	127.0.0.1	2026-09-15 22:46:10	2026-09-15 22:46:10
+355	26	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-14	127.0.0.1	2026-09-15 22:52:29	2026-09-15 22:52:29
+356	26	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-13	127.0.0.1	2026-09-15 22:52:36	2026-09-15 22:52:36
+357	26	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-13	127.0.0.1	2026-09-15 23:13:37	2026-09-15 23:13:37
+358	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-16 09:49:36	2026-09-16 09:49:36
+359	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-16 09:51:28	2026-09-16 09:51:28
+360	27	Created	Meal Plan	Added meal for 2026-09-16: Siomai Rice	127.0.0.1	2026-09-16 10:37:39	2026-09-16 10:37:39
+361	26	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-16 10:37:54	2026-09-16 10:37:54
+475	33	Created	Students	Added student Chloe Ramos	127.0.0.1	2026-09-20 16:47:32	2026-09-20 16:47:32
+362	26	Created	Attendance	Scanned QR attendance for student Luis Garcia	127.0.0.1	2026-09-16 10:38:37	2026-09-16 10:38:37
+363	26	Created	Attendance	Scanned QR attendance for student Mark Cruz	127.0.0.1	2026-09-16 10:38:51	2026-09-16 10:38:51
+364	26	Updated	Attendance	Updated attendance status for participant ID 59 on 2026-09-16	127.0.0.1	2026-09-16 10:39:20	2026-09-16 10:39:20
+365	26	Updated	Attendance	Updated attendance status for participant ID 59 on 2026-09-16	127.0.0.1	2026-09-16 10:39:23	2026-09-16 10:39:23
+366	26	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-16 10:49:25	2026-09-16 10:49:25
+367	26	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-16 10:49:29	2026-09-16 10:49:29
+368	26	Updated	Students	Renamed advisory section from A to B for 10 student enrollment(s).	127.0.0.1	2026-09-16 10:51:38	2026-09-16 10:51:38
+369	26	Updated	Students	Updated student Mia Castro	127.0.0.1	2026-09-16 11:01:28	2026-09-16 11:01:28
+370	26	Updated	Students	Renamed advisory section from B to A for 9 student enrollment(s).	127.0.0.1	2026-09-16 11:02:35	2026-09-16 11:02:35
+371	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-16 11:08:42	2026-09-16 11:08:42
+372	26	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-16	127.0.0.1	2026-09-16 11:11:19	2026-09-16 11:11:19
+373	26	Updated	Attendance	Updated attendance status for participant ID 59 on 2026-09-16	127.0.0.1	2026-09-16 11:11:22	2026-09-16 11:11:22
+374	26	Updated	Attendance	Updated attendance status for participant ID 61 on 2026-09-16	127.0.0.1	2026-09-16 11:11:25	2026-09-16 11:11:25
+375	26	Updated	Attendance	Updated attendance status for participant ID 60 on 2026-09-16	127.0.0.1	2026-09-16 11:11:49	2026-09-16 11:11:49
+376	26	Updated	Attendance	Updated attendance status for participant ID 60 on 2026-09-16	127.0.0.1	2026-09-16 11:11:54	2026-09-16 11:11:54
+377	26	Updated	Attendance	Updated attendance status for participant ID 60 on 2026-09-16	127.0.0.1	2026-09-16 11:11:54	2026-09-16 11:11:54
+378	26	Updated	Attendance	Updated attendance status for participant ID 60 on 2026-09-16	127.0.0.1	2026-09-16 11:11:57	2026-09-16 11:11:57
+379	26	Updated	Attendance	Updated attendance status for participant ID 60 on 2026-09-16	127.0.0.1	2026-09-16 11:12:00	2026-09-16 11:12:00
+380	26	Updated	Attendance	Updated attendance status for participant ID 61 on 2026-09-16	127.0.0.1	2026-09-16 11:12:14	2026-09-16 11:12:14
+381	26	Created	Students	Added student chin lee	127.0.0.1	2026-09-16 11:16:03	2026-09-16 11:16:03
+382	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-16 11:21:44	2026-09-16 11:21:44
+383	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-16 11:21:54	2026-09-16 11:21:54
+384	27	Updated	Meal Plan	Updated meal plan ID 14	127.0.0.1	2026-09-16 11:22:19	2026-09-16 11:22:19
+385	27	Created	Meal Plan	Added meal for 2026-09-16: drinks	127.0.0.1	2026-09-16 11:22:28	2026-09-16 11:22:28
+386	27	Created	Meal Plan	Added meal for 2026-09-17: milk	127.0.0.1	2026-09-16 11:22:40	2026-09-16 11:22:40
+387	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-16 11:32:43	2026-09-16 11:32:43
+388	26	Created	Students	Added student Richard Santos	127.0.0.1	2026-09-16 13:29:36	2026-09-16 13:29:36
+389	26	Updated	Students	Updated student chin lee	127.0.0.1	2026-09-16 14:00:58	2026-09-16 14:00:58
+390	27	Created	Attendance	Scanned QR attendance for student chin lee	127.0.0.1	2026-09-16 14:03:29	2026-09-16 14:03:29
+391	27	Created	Meal Plan	Added meal for 2026-09-18: adobo	127.0.0.1	2026-09-16 14:11:51	2026-09-16 14:11:51
+392	27	Created	Meal Plan	Added meal for 2026-09-18: milk	127.0.0.1	2026-09-16 14:11:56	2026-09-16 14:11:56
+393	28	Removed	Accounts	Deactivated user account Admin User	127.0.0.1	2026-09-16 14:13:29	2026-09-16 14:13:29
+394	28	Restored	Accounts	Restored user account Admin User	127.0.0.1	2026-09-16 14:13:38	2026-09-16 14:13:38
+395	26	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-17 13:21:00	2026-09-17 13:21:00
+396	26	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-17 13:21:05	2026-09-17 13:21:05
+397	26	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-16	127.0.0.1	2026-09-17 13:47:31	2026-09-17 13:47:31
+398	27	Updated	Attendance	Updated attendance status for participant ID 90 on 2026-09-17	127.0.0.1	2026-09-18 14:22:28	2026-09-18 14:22:28
+399	26	Updated	Attendance	Updated attendance status for participant ID 97 on 2026-09-18	127.0.0.1	2026-09-17 15:10:59	2026-09-17 15:10:59
+400	27	Updated	Attendance	Updated attendance status for participant ID 78 on 2026-09-19	127.0.0.1	2026-09-17 15:12:48	2026-09-17 15:12:48
+401	27	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-13	127.0.0.1	2026-09-17 15:18:52	2026-09-17 15:18:52
+402	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:20:45	2026-09-17 15:20:45
+403	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:23:32	2026-09-17 15:23:32
+404	27	Updated	Attendance	Updated attendance status for participant ID 91 on 2026-09-17	127.0.0.1	2026-09-17 15:23:47	2026-09-17 15:23:47
+405	27	Updated	Attendance	Updated attendance status for participant ID 78 on 2026-09-17	127.0.0.1	2026-09-17 15:23:49	2026-09-17 15:23:49
+406	27	Updated	Attendance	Updated attendance status for participant ID 57 on 2026-09-17	127.0.0.1	2026-09-17 15:23:50	2026-09-17 15:23:50
+407	27	Updated	Attendance	Updated attendance status for participant ID 61 on 2026-09-17	127.0.0.1	2026-09-17 15:23:51	2026-09-17 15:23:51
+408	27	Updated	Attendance	Updated attendance status for participant ID 78 on 2026-09-19	127.0.0.1	2026-09-22 15:26:43	2026-09-22 15:26:43
+409	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:33:24	2026-09-17 15:33:24
+410	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:33:34	2026-09-17 15:33:34
+411	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:33:43	2026-09-17 15:33:43
+412	26	Updated	Attendance	Updated attendance status for participant ID 60 on 2026-09-17	127.0.0.1	2026-09-17 15:34:40	2026-09-17 15:34:40
+413	26	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:35:05	2026-09-17 15:35:05
+414	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-17	127.0.0.1	2026-09-17 15:36:14	2026-09-17 15:36:14
+415	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-14	127.0.0.1	2026-09-17 16:11:22	2026-09-17 16:11:22
+416	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-16	127.0.0.1	2026-09-17 16:11:36	2026-09-17 16:11:36
+417	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-18	127.0.0.1	2026-09-17 16:11:52	2026-09-17 16:11:52
+418	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 16:28:01	2026-09-17 16:28:01
+419	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 17:26:59	2026-09-17 17:26:59
+420	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 17:40:57	2026-09-17 17:40:57
+421	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 17:48:01	2026-09-17 17:48:01
+422	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:08:00	2026-09-17 18:08:00
+423	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:12:07	2026-09-17 18:12:07
+424	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:41:21	2026-09-17 18:41:21
+425	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:41:34	2026-09-17 18:41:34
+426	28	Updated	System Settings	Updated the DepEd logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:43:17	2026-09-17 18:43:17
+427	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:43:27	2026-09-17 18:43:27
+428	28	Updated	System Settings	Reset the DepEd report logo to the default	127.0.0.1	2026-09-17 18:44:46	2026-09-17 18:44:46
+429	28	Updated	System Settings	Updated the DepEd logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:44:53	2026-09-17 18:44:53
+430	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:45:15	2026-09-17 18:45:15
+431	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:46:46	2026-09-17 18:46:46
+432	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:51:03	2026-09-17 18:51:03
+433	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:51:38	2026-09-17 18:51:38
+434	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:55:20	2026-09-17 18:55:20
+435	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:55:56	2026-09-17 18:55:56
+436	28	Updated	System Settings	Updated the DepEd logo used in downloadable SBFP reports	127.0.0.1	2026-09-17 18:56:03	2026-09-17 18:56:03
+437	28	Updated	System Settings	Reset the DepEd report logo to the default	127.0.0.1	2026-09-17 18:59:23	2026-09-17 18:59:23
+438	28	Updated	System Settings	Reset the school report logo to the default	127.0.0.1	2026-09-17 18:59:25	2026-09-17 18:59:25
+439	28	Updated	System Settings	Reset the school report logo to the default	127.0.0.1	2026-09-17 19:25:24	2026-09-17 19:25:24
+440	28	Updated	System Settings	Reset the DepEd report logo to the default	127.0.0.1	2026-09-17 19:25:28	2026-09-17 19:25:28
+441	27	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-18 07:52:51	2026-09-18 07:52:51
+442	27	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-18 07:52:55	2026-09-18 07:52:55
+443	27	Updated	Attendance	Updated attendance status for participant ID 98 on 2026-09-18	127.0.0.1	2026-09-18 07:54:30	2026-09-18 07:54:30
+444	27	Updated	Account Settings	Updated account profile information	127.0.0.1	2026-09-18 08:01:23	2026-09-18 08:01:23
+445	27	Created	Meal Plan	Added meal for 2026-10-01: Crispy pata	127.0.0.1	2026-09-18 08:01:40	2026-09-18 08:01:40
+446	26	Created	Students	Added student Janrey Nicdao	127.0.0.1	2026-09-18 10:46:29	2026-09-18 10:46:29
+447	27	Created	Meal Plan	Added meal for 2026-09-19: hotdog	127.0.0.1	2026-09-18 10:52:46	2026-09-18 10:52:46
+448	27	Created	Attendance	Scanned QR attendance for student Janrey Nicdao	127.0.0.1	2026-09-18 10:54:48	2026-09-18 10:54:48
+449	28	updated	School Years	Activated academic school year 2027-2028	127.0.0.1	2026-09-18 11:01:15	2026-09-18 11:01:15
+450	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-18 11:01:27	2026-09-18 11:01:27
+451	28	created	School Years	Created academic school year 2028-2029	127.0.0.1	2026-09-18 11:02:11	2026-09-18 11:02:11
+452	28	updated	School Years	Activated academic school year 2027-2028	127.0.0.1	2026-09-18 11:02:15	2026-09-18 11:02:15
+453	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-18 11:13:47	2026-09-18 11:13:47
+454	26	Created	Students	Added student Matthew Magtoto	127.0.0.1	2026-09-18 13:44:08	2026-09-18 13:44:08
+455	27	Created	Attendance	Scanned QR attendance for student Matthew Magtoto	127.0.0.1	2026-09-18 13:50:13	2026-09-18 13:50:13
+456	28	updated	School Years	Activated academic school year 2028-2029	127.0.0.1	2026-09-18 14:02:25	2026-09-18 14:02:25
+457	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-09-18 14:02:48	2026-09-18 14:02:48
+458	26	Created	Students	Added student Richard Mungcal	127.0.0.1	2026-09-18 15:59:54	2026-09-18 15:59:54
+459	27	Created	Attendance	Scanned QR attendance for student Richard Mungcal	127.0.0.1	2026-09-18 16:05:54	2026-09-18 16:05:54
+460	28	Updated	System Settings	Reset the school report logo to the default	127.0.0.1	2026-09-20 15:02:32	2026-09-20 15:02:32
+461	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-20 15:41:52	2026-09-20 15:41:52
+462	27	Created	Meal Plan	Added meal for 2026-09-20: Siomai Rice	127.0.0.1	2026-09-20 16:26:04	2026-09-20 16:26:04
+463	27	Created	Attendance	Scanned QR attendance for student Juan Santos	127.0.0.1	2026-09-20 16:26:16	2026-09-20 16:26:16
+464	27	Created	Attendance	Scanned QR attendance for student Bea Mendoza	127.0.0.1	2026-09-20 16:29:59	2026-09-20 16:29:59
+465	33	Created	Students	Added student Juan Santos	127.0.0.1	2026-09-20 16:34:06	2026-09-20 16:34:06
+466	33	Created	Students	Added student Angela Dela Cruz	127.0.0.1	2026-09-20 16:36:18	2026-09-20 16:36:18
+467	33	Created	Students	Added student Daniel Garcia	127.0.0.1	2026-09-20 16:38:34	2026-09-20 16:38:34
+468	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-20 16:39:50	2026-09-20 16:39:50
+469	33	Created	Students	Added student Sofia Reyes	127.0.0.1	2026-09-20 16:39:52	2026-09-20 16:39:52
+470	33	Created	Students	Added student Carlo Mendoza	127.0.0.1	2026-09-20 16:40:58	2026-09-20 16:40:58
+471	33	Created	Students	Added student Mia Aquino	127.0.0.1	2026-09-20 16:42:03	2026-09-20 16:42:03
+472	33	Created	Students	Added student LIam Navarro	127.0.0.1	2026-09-20 16:43:18	2026-09-20 16:43:18
+473	33	Created	Students	Added student Ella Florez	127.0.0.1	2026-09-20 16:44:20	2026-09-20 16:44:20
+474	33	Created	Students	Added student Noah Castillo	127.0.0.1	2026-09-20 16:45:37	2026-09-20 16:45:37
+476	26	Created	Students	Added student Cacalde Nicdao	127.0.0.1	2026-09-20 17:35:44	2026-09-20 17:35:44
+477	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-20 17:59:53	2026-09-20 17:59:53
+478	26	Updated	SBFP Participants	Uploaded 1 profile image(s) for advisory SBFP participants.	127.0.0.1	2026-09-20 18:02:39	2026-09-20 18:02:39
+479	27	Updated	Accounts	Updated account profile for Encoder U. 1	127.0.0.1	2026-09-20 19:39:40	2026-09-20 19:39:40
+480	26	Created	Students	Added student Juan Tamad	127.0.0.1	2026-09-20 19:55:46	2026-09-20 19:55:46
+481	33	Created	Students	Added student Chad Santos	127.0.0.1	2026-09-20 20:05:18	2026-09-20 20:05:18
+482	33	Updated	Students	Updated student Chad Santos	127.0.0.1	2026-09-20 20:05:39	2026-09-20 20:05:39
+483	26	Created	Students	Added student Maria Masipag	127.0.0.1	2026-09-20 20:17:12	2026-09-20 20:17:12
+484	33	Updated	Attendance	Updated attendance for Chad Santos on 2026-09-20 to present.	127.0.0.1	2026-09-20 20:22:58	2026-09-20 20:22:58
+485	33	Updated	Attendance	Updated attendance for Chad Santos on 2026-09-20 to present.	127.0.0.1	2026-09-20 20:23:04	2026-09-20 20:23:04
+486	26	Updated	SBFP Approval	Bulk parent consent changes: Maria Masipag: pending to approved	127.0.0.1	2026-09-20 20:27:18	2026-09-20 20:27:18
+487	33	Created	Students	Added student Chad. 2 Santos	127.0.0.1	2026-09-20 20:27:25	2026-09-20 20:27:25
+488	33	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-20 21:34:57	2026-09-20 21:34:57
+489	33	updated	School Years	Switched viewing context to school year 2028-2029	127.0.0.1	2026-09-20 21:36:03	2026-09-20 21:36:03
+490	33	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-20 21:36:09	2026-09-20 21:36:09
+491	33	Updated	Attendance	Updated attendance for Chad Santos on 2026-09-20 to unmarked.	127.0.0.1	2026-09-20 21:55:27	2026-09-20 21:55:27
+492	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-09-20 21:55:54	2026-09-20 21:55:54
+493	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-09-20 22:01:36	2026-09-20 22:01:36
+494	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-09-20 22:03:08	2026-09-20 22:03:08
+495	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-09-20 22:03:26	2026-09-20 22:03:26
+496	28	Updated	Accounts	Updated account profile for Admin User	127.0.0.1	2026-09-20 22:06:04	2026-09-20 22:06:04
+497	28	Updated	Accounts	Updated account profile for Admin User	127.0.0.1	2026-09-20 22:06:17	2026-09-20 22:06:17
+498	27	Updated	Accounts	Updated account profile for Encoder U. One	127.0.0.1	2026-09-20 22:14:27	2026-09-20 22:14:27
+499	26	Updated	Students	Marked student as withdrawn: Juan Tamad	127.0.0.1	2026-09-20 22:47:00	2026-09-20 22:47:00
+500	26	Updated	Account Settings	Updated account profile information	127.0.0.1	2026-09-20 22:48:46	2026-09-20 22:48:46
+501	33	Updated	SBFP Participants	Uploaded profile images for: Chad. 2 Santos.	127.0.0.1	2026-09-20 22:49:42	2026-09-20 22:49:42
+502	33	Updated	Attendance	Updated attendance for Meg Chua on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:20	2026-09-20 22:50:20
+503	33	Updated	Attendance	Updated attendance for Angela Dela Cruz on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:24	2026-09-20 22:50:24
+504	33	Updated	Attendance	Updated attendance for Daniel Garcia on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:27	2026-09-20 22:50:27
+505	33	Updated	Attendance	Updated attendance for Al Go on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:30	2026-09-20 22:50:30
+506	33	Updated	Attendance	Updated attendance for Carlo Mendoza on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:33	2026-09-20 22:50:33
+507	33	Updated	Attendance	Updated attendance for Ben Ong on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:36	2026-09-20 22:50:36
+508	33	Updated	Attendance	Updated attendance for Sofia Reyes on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:39	2026-09-20 22:50:39
+509	33	Updated	Attendance	Updated attendance for Chad Santos on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:43	2026-09-20 22:50:43
+510	33	Updated	Attendance	Updated attendance for Chad. 2 Santos on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:50:50	2026-09-20 22:50:50
+511	33	Updated	Attendance	Updated attendance for Juan Santos on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:51:34	2026-09-20 22:51:34
+512	33	Updated	Attendance	Updated attendance for Chad Santos on 2026-09-20 to absent.	127.0.0.1	2026-09-20 22:52:00	2026-09-20 22:52:00
+513	33	Updated	Attendance	Updated attendance for Chad. 2 Santos on 2026-09-20 to absent.	127.0.0.1	2026-09-20 22:52:30	2026-09-20 22:52:30
+514	33	Updated	Attendance	Updated attendance for Chad Santos on 2026-09-20 to unmarked.	127.0.0.1	2026-09-20 22:53:37	2026-09-20 22:53:37
+515	33	Updated	Attendance	Updated attendance for Chad. 2 Santos on 2026-09-20 to unmarked.	127.0.0.1	2026-09-20 22:53:40	2026-09-20 22:53:40
+516	33	Updated	Attendance	Updated attendance for Luz Sy on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:53:51	2026-09-20 22:53:51
+517	33	Updated	Attendance	Updated attendance for Vic Uy on 2026-09-20 to present.	127.0.0.1	2026-09-20 22:53:55	2026-09-20 22:53:55
+518	27	Updated	Accounts	Updated account profile for Encoder U. One	127.0.0.1	2026-09-21 07:55:50	2026-09-21 07:55:50
+519	33	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-09-22 18:19:47	2026-09-22 18:19:47
+520	33	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-09-22 18:36:09	2026-09-22 18:36:09
+521	33	Updated	Students	Renamed advisory section from B to A for 22 student enrollment(s).	127.0.0.1	2026-09-22 18:50:44	2026-09-22 18:50:44
+522	33	Updated	Students	Marked student as withdrawn: Chad. 2 Santos	127.0.0.1	2026-09-22 18:57:22	2026-09-22 18:57:22
+523	33	Updated	Students	Renamed advisory section from A to B for 22 student enrollment(s).	127.0.0.1	2026-09-22 19:04:15	2026-09-22 19:04:15
+524	33	Created	Students	Added student Juan Dela Cruz	127.0.0.1	2026-09-22 19:39:55	2026-09-22 19:39:55
+525	33	Updated	Students	Updated student Juan Dela Cruz	127.0.0.1	2026-09-22 19:40:55	2026-09-22 19:40:55
+526	33	Updated	SBFP Approval	Bulk parent consent changes: Juan Dela Cruz: pending to approved	127.0.0.1	2026-09-22 19:44:21	2026-09-22 19:44:21
+527	33	Updated	SBFP Participants	Uploaded profile images for: Juan Dela Cruz.	127.0.0.1	2026-09-22 19:46:41	2026-09-22 19:46:41
+528	27	Created	Meal Plan	Added meal for 2026-09-22: Egg	127.0.0.1	2026-09-22 19:50:40	2026-09-22 19:50:40
+529	27	Created	Meal Plan	Added meal for 2026-09-22: Milk	127.0.0.1	2026-09-22 19:50:44	2026-09-22 19:50:44
+530	27	Updated	Attendance	Updated attendance for Juan Dela Cruz on 2026-09-22 to present.	127.0.0.1	2026-09-22 20:01:16	2026-09-22 20:01:16
+531	27	Updated	Attendance	Updated attendance for Juan Dela Cruz on 2026-09-22 to absent.	127.0.0.1	2026-09-22 20:03:33	2026-09-22 20:03:33
+532	27	Updated	Attendance	Updated attendance for Juan Dela Cruz on 2026-09-22 to unmarked.	127.0.0.1	2026-09-22 20:03:59	2026-09-22 20:03:59
+533	26	Updated	Students	Updated student Bea Mendoza	127.0.0.1	2026-09-22 23:21:47	2026-09-22 23:21:47
+534	26	Updated	SBFP Approval	Bulk parent consent changes: Bea Mendoza: approved to pending	127.0.0.1	2026-09-22 23:30:37	2026-09-22 23:30:37
+535	26	Updated	Students	Updated student Bea Mendoza	127.0.0.1	2026-09-22 23:31:45	2026-09-22 23:31:45
+536	33	Updated	Students	Marked student as withdrawn: Chad Santos	127.0.0.1	2026-09-23 13:48:59	2026-09-23 13:48:59
+537	33	Updated	Students	Marked student as withdrawn: Juan Dela Cruz	127.0.0.1	2026-09-23 13:49:10	2026-09-23 13:49:10
+538	33	Created	Students	Added student Mark Santos	127.0.0.1	2026-09-23 13:52:10	2026-09-23 13:52:10
+539	33	Updated	Students	Updated student Mark Santos	127.0.0.1	2026-09-23 13:52:26	2026-09-23 13:52:26
+540	33	Updated	Students	Updated student Mark Santos	127.0.0.1	2026-09-23 13:53:22	2026-09-23 13:53:22
+541	26	Created	Students	Added student John Doe	127.0.0.1	2026-09-25 09:39:18	2026-09-25 09:39:18
+542	26	Updated	SBFP Approval	Bulk parent consent changes: John Doe: pending to approved	127.0.0.1	2026-09-25 09:53:45	2026-09-25 09:53:45
+543	27	Created	Meal Plan	Added meal for 2026-09-25: adobo	127.0.0.1	2026-09-25 10:01:40	2026-09-25 10:01:40
+544	27	Created	Attendance	Scanned QR attendance for student John Doe	127.0.0.1	2026-09-25 10:02:21	2026-09-25 10:02:21
 \.
 
 
@@ -4933,6 +6245,12 @@ COPY public.audit_logs (id, user_id, action, module, description, ip_address, cr
 --
 
 COPY public.cache (key, value, expiration) FROM stdin;
+nutrisight-cache-887309d048beef83ad3eabf2a79a64a389ab1c9f:timer	i:1790091252;	1790091252
+nutrisight-cache-887309d048beef83ad3eabf2a79a64a389ab1c9f	i:3;	1790091252
+nutrisight-cache-5c785c036466adea360111aa28563bfd556b5fba:timer	i:1790142961;	1790142961
+nutrisight-cache-5c785c036466adea360111aa28563bfd556b5fba	i:2;	1790142961
+nutrisight-cache-b6692ea5df920cad691c20319a6fffd7a4a766b8:timer	i:1789907413;	1789907413
+nutrisight-cache-b6692ea5df920cad691c20319a6fffd7a4a766b8	i:2;	1789907413
 \.
 
 
@@ -4949,52 +6267,69 @@ COPY public.cache_locks (key, owner, expiration) FROM stdin;
 --
 
 COPY public.enrollments (id, student_id, school_year_id, grade_level, section, status, created_at, updated_at) FROM stdin;
-11	11	5	3	A	enrolled	2026-09-10 14:01:03	2026-09-10 14:01:03
-12	12	5	4	A	enrolled	2026-09-10 14:01:22	2026-09-10 14:01:22
-13	13	5	3	A	enrolled	2026-09-10 14:02:40	2026-09-10 14:02:40
-14	14	5	1	A	enrolled	2026-09-10 14:02:53	2026-09-10 14:02:53
-15	15	5	4	A	enrolled	2026-09-10 14:03:11	2026-09-10 14:03:11
-16	16	5	2	A	enrolled	2026-09-10 14:04:03	2026-09-10 14:04:03
-17	17	5	3	A	enrolled	2026-09-10 14:04:15	2026-09-10 14:04:15
-18	18	5	4	A	enrolled	2026-09-10 14:05:38	2026-09-10 14:05:38
-19	19	5	3	A	enrolled	2026-09-10 14:05:55	2026-09-10 14:05:55
-20	20	5	1	A	enrolled	2026-09-10 14:06:43	2026-09-10 14:06:43
-21	21	5	4	A	enrolled	2026-09-10 14:07:11	2026-09-10 14:07:11
-22	22	5	2	A	enrolled	2026-09-10 14:07:08	2026-09-10 14:07:08
-23	23	5	3	A	enrolled	2026-09-10 14:08:04	2026-09-10 14:08:04
-24	24	5	1	A	enrolled	2026-09-10 14:08:59	2026-09-10 14:08:59
-25	25	5	4	A	enrolled	2026-09-10 14:09:15	2026-09-10 14:09:15
-26	26	5	3	A	enrolled	2026-09-10 14:09:17	2026-09-10 14:09:17
-27	27	5	2	A	enrolled	2026-09-10 14:09:40	2026-09-10 14:09:40
-28	28	5	4	A	enrolled	2026-09-10 14:09:56	2026-09-10 14:09:56
-29	29	5	3	A	enrolled	2026-09-10 14:10:11	2026-09-10 14:10:11
-30	30	5	1	A	enrolled	2026-09-10 14:10:27	2026-09-10 14:10:27
-31	31	5	4	A	enrolled	2026-09-10 14:11:40	2026-09-10 14:11:40
-32	32	5	1	A	enrolled	2026-09-10 14:11:53	2026-09-10 14:11:53
-33	33	5	2	A	enrolled	2026-09-10 14:12:11	2026-09-10 14:12:11
-34	34	5	3	A	enrolled	2026-09-10 14:12:22	2026-09-10 14:12:22
-35	35	5	4	A	enrolled	2026-09-10 14:13:10	2026-09-10 14:13:10
-36	36	5	3	A	enrolled	2026-09-10 14:13:21	2026-09-10 14:13:21
-37	37	5	1	A	enrolled	2026-09-10 14:13:55	2026-09-10 14:13:55
-38	38	5	2	A	enrolled	2026-09-10 14:14:11	2026-09-10 14:14:11
-39	39	5	4	A	enrolled	2026-09-10 14:14:22	2026-09-10 14:14:22
-40	40	5	3	A	enrolled	2026-09-10 14:14:26	2026-09-10 14:14:26
-41	41	5	1	A	enrolled	2026-09-10 14:15:27	2026-09-10 14:15:27
-42	42	5	4	A	enrolled	2026-09-10 14:15:48	2026-09-10 14:15:48
-43	43	5	2	A	enrolled	2026-09-10 14:17:00	2026-09-10 14:17:00
-44	44	5	1	A	enrolled	2026-09-10 14:18:45	2026-09-10 14:18:45
-45	45	5	2	A	enrolled	2026-09-10 14:19:17	2026-09-10 14:19:17
-46	46	5	1	A	enrolled	2026-09-10 14:20:12	2026-09-10 14:20:12
-47	47	5	2	A	enrolled	2026-09-10 14:21:22	2026-09-10 14:21:22
-48	48	5	1	A	enrolled	2026-09-10 14:21:37	2026-09-10 14:21:37
-49	49	5	2	A	enrolled	2026-09-10 14:23:44	2026-09-10 14:23:44
-50	50	5	2	A	enrolled	2026-09-10 14:25:56	2026-09-10 14:25:56
-51	51	5	1	A	enrolled	2026-09-10 20:53:01	2026-09-10 20:53:01
-52	52	5	1	A	enrolled	2026-09-10 20:54:52	2026-09-10 20:54:52
-53	53	5	1	A	enrolled	2026-09-10 21:21:00	2026-09-10 21:21:00
-54	54	5	1	A	enrolled	2026-09-10 21:22:40	2026-09-10 21:22:40
-55	55	5	1	A	enrolled	2026-09-11 00:52:29	2026-09-11 00:52:29
-56	56	5	1	A	enrolled	2026-09-11 01:10:03	2026-09-11 01:10:03
+67	67	6	2	B	enrolled	2026-09-13 23:21:28	2026-09-13 23:21:28
+68	68	6	2	B	enrolled	2026-09-13 23:22:44	2026-09-13 23:22:44
+69	69	6	2	B	enrolled	2026-09-13 23:24:45	2026-09-13 23:24:45
+70	70	6	2	B	enrolled	2026-09-13 23:25:52	2026-09-13 23:25:52
+71	71	6	2	B	enrolled	2026-09-13 23:27:44	2026-09-13 23:27:44
+72	72	6	2	B	enrolled	2026-09-13 23:29:11	2026-09-13 23:29:11
+73	73	6	2	B	enrolled	2026-09-13 23:30:40	2026-09-13 23:30:40
+74	74	6	2	B	enrolled	2026-09-13 23:31:44	2026-09-13 23:31:44
+75	75	6	2	B	enrolled	2026-09-13 23:33:45	2026-09-13 23:33:45
+76	76	6	2	B	enrolled	2026-09-13 23:35:15	2026-09-13 23:35:15
+77	77	6	3	A	enrolled	2026-09-13 23:40:05	2026-09-13 23:40:05
+78	78	6	3	A	enrolled	2026-09-13 23:41:06	2026-09-13 23:41:06
+79	79	6	3	A	enrolled	2026-09-13 23:42:01	2026-09-13 23:42:01
+80	80	6	3	A	enrolled	2026-09-13 23:43:13	2026-09-13 23:43:13
+81	81	6	3	A	enrolled	2026-09-13 23:44:17	2026-09-13 23:44:17
+82	82	6	3	A	enrolled	2026-09-13 23:45:50	2026-09-13 23:45:50
+83	83	6	3	A	enrolled	2026-09-13 23:50:23	2026-09-13 23:50:23
+84	84	6	3	A	enrolled	2026-09-13 23:51:38	2026-09-13 23:51:38
+85	85	6	3	A	enrolled	2026-09-13 23:52:47	2026-09-13 23:52:47
+86	86	6	3	A	enrolled	2026-09-13 23:53:51	2026-09-13 23:53:51
+87	87	6	4	B	enrolled	2026-09-14 00:01:16	2026-09-22 19:04:15
+88	88	6	4	B	enrolled	2026-09-14 00:02:14	2026-09-22 19:04:15
+89	89	6	4	B	enrolled	2026-09-14 00:03:29	2026-09-22 19:04:15
+90	90	6	4	B	enrolled	2026-09-14 00:04:29	2026-09-22 19:04:15
+91	91	6	4	B	enrolled	2026-09-14 00:05:25	2026-09-22 19:04:15
+92	92	6	4	B	enrolled	2026-09-14 00:06:29	2026-09-22 19:04:15
+93	93	6	4	B	enrolled	2026-09-14 00:07:54	2026-09-22 19:04:15
+94	94	6	4	B	enrolled	2026-09-14 00:09:04	2026-09-22 19:04:15
+95	95	6	4	B	enrolled	2026-09-14 00:10:36	2026-09-22 19:04:15
+96	96	6	4	B	enrolled	2026-09-14 00:11:55	2026-09-22 19:04:15
+66	66	6	1	A	enrolled	2026-09-13 23:11:28	2026-09-16 11:01:28
+57	57	6	1	A	enrolled	2026-09-13 22:45:51	2026-09-16 11:02:35
+58	58	6	1	A	enrolled	2026-09-13 22:50:53	2026-09-16 11:02:35
+59	59	6	1	A	enrolled	2026-09-13 22:53:00	2026-09-16 11:02:35
+60	60	6	1	A	enrolled	2026-09-13 22:58:32	2026-09-16 11:02:35
+61	61	6	1	A	enrolled	2026-09-13 23:00:12	2026-09-16 11:02:35
+62	62	6	1	A	enrolled	2026-09-13 23:01:31	2026-09-16 11:02:35
+63	63	6	1	A	enrolled	2026-09-13 23:07:19	2026-09-16 11:02:35
+64	64	6	1	A	enrolled	2026-09-13 23:08:52	2026-09-16 11:02:35
+65	65	6	1	A	enrolled	2026-09-13 23:10:09	2026-09-16 11:02:35
+97	97	6	1	A	enrolled	2026-09-16 11:16:03	2026-09-16 11:16:03
+98	98	6	1	A	enrolled	2026-09-16 13:29:36	2026-09-16 13:29:36
+99	99	6	1	A	enrolled	2026-09-18 10:46:29	2026-09-18 10:46:29
+100	100	6	1	A	enrolled	2026-09-18 13:44:08	2026-09-18 13:44:08
+101	101	6	1	A	enrolled	2026-09-18 15:59:54	2026-09-18 15:59:54
+112	112	6	1	A	enrolled	2026-09-20 17:35:41	2026-09-20 17:35:41
+115	115	6	1	A	enrolled	2026-09-20 20:17:10	2026-09-20 20:17:10
+113	113	6	1	A	withdrawn	2026-09-20 19:55:43	2026-09-20 22:47:00
+102	102	6	4	B	enrolled	2026-09-20 16:34:06	2026-09-22 19:04:15
+103	103	6	4	B	enrolled	2026-09-20 16:36:18	2026-09-22 19:04:15
+104	104	6	4	B	enrolled	2026-09-20 16:38:34	2026-09-22 19:04:15
+105	105	6	4	B	enrolled	2026-09-20 16:39:52	2026-09-22 19:04:15
+106	106	6	4	B	enrolled	2026-09-20 16:40:58	2026-09-22 19:04:15
+107	107	6	4	B	enrolled	2026-09-20 16:42:03	2026-09-22 19:04:15
+108	108	6	4	B	enrolled	2026-09-20 16:43:18	2026-09-22 19:04:15
+109	109	6	4	B	enrolled	2026-09-20 16:44:20	2026-09-22 19:04:15
+110	110	6	4	B	enrolled	2026-09-20 16:45:37	2026-09-22 19:04:15
+111	111	6	4	B	enrolled	2026-09-20 16:47:32	2026-09-22 19:04:15
+116	116	6	4	B	withdrawn	2026-09-20 20:27:24	2026-09-22 19:04:15
+114	114	6	4	B	withdrawn	2026-09-20 20:05:16	2026-09-23 13:48:59
+117	117	6	4	B	withdrawn	2026-09-22 19:39:53	2026-09-23 13:49:10
+118	118	6	4	B	enrolled	2026-09-23 13:52:09	2026-09-23 13:52:09
+119	119	6	1	A	enrolled	2026-09-25 09:39:17	2026-09-25 09:39:17
 \.
 
 
@@ -5019,6 +6354,9 @@ COPY public.job_batches (id, name, total_jobs, pending_jobs, failed_jobs, failed
 --
 
 COPY public.jobs (id, queue, payload, attempts, reserved_at, available_at, created_at) FROM stdin;
+11	default	{"uuid":"ff2689a2-56f8-475a-8bac-8b97452c5d42","displayName":"App\\\\Mail\\\\FeedingDayNotice","job":"Illuminate\\\\Queue\\\\CallQueuedHandler@call","maxTries":3,"maxExceptions":null,"failOnTimeout":false,"backoff":"10,60,300","timeout":null,"retryUntil":null,"deleteWhenMissingModels":false,"data":{"commandName":"Illuminate\\\\Mail\\\\SendQueuedMailable","command":"O:34:\\"Illuminate\\\\Mail\\\\SendQueuedMailable\\":19:{s:8:\\"mailable\\";O:25:\\"App\\\\Mail\\\\FeedingDayNotice\\":5:{s:7:\\"student\\";O:45:\\"Illuminate\\\\Contracts\\\\Database\\\\ModelIdentifier\\":5:{s:5:\\"class\\";s:18:\\"App\\\\Models\\\\Student\\";s:2:\\"id\\";i:35;s:9:\\"relations\\";a:0:{}s:10:\\"connection\\";s:5:\\"pgsql\\";s:15:\\"collectionClass\\";N;}s:4:\\"meal\\";s:12:\\"siomai, rice\\";s:4:\\"date\\";s:10:\\"2026-09-01\\";s:2:\\"to\\";a:1:{i:0;a:2:{s:4:\\"name\\";N;s:7:\\"address\\";s:17:\\"grace.v@gmail.com\\";}}s:6:\\"mailer\\";s:3:\\"log\\";}s:5:\\"tries\\";i:3;s:7:\\"timeout\\";N;s:13:\\"maxExceptions\\";N;s:17:\\"shouldBeEncrypted\\";b:0;s:3:\\"job\\";N;s:10:\\"connection\\";N;s:5:\\"queue\\";N;s:12:\\"messageGroup\\";N;s:12:\\"deduplicator\\";N;s:13:\\"debounceOwner\\";s:0:\\"\\";s:15:\\"uniqueLockOwner\\";s:0:\\"\\";s:5:\\"delay\\";N;s:11:\\"afterCommit\\";N;s:10:\\"middleware\\";a:0:{}s:7:\\"chained\\";a:0:{}s:15:\\"chainConnection\\";N;s:10:\\"chainQueue\\";N;s:19:\\"chainCatchCallbacks\\";N;}","batchId":null},"createdAt":1789106266,"delay":null}	0	\N	1789106267	1789106267
+12	default	{"uuid":"e0e639ac-384c-4807-8382-f4eee4f2213a","displayName":"App\\\\Mail\\\\FeedingDayNotice","job":"Illuminate\\\\Queue\\\\CallQueuedHandler@call","maxTries":3,"maxExceptions":null,"failOnTimeout":false,"backoff":"10,60,300","timeout":null,"retryUntil":null,"deleteWhenMissingModels":false,"data":{"commandName":"Illuminate\\\\Mail\\\\SendQueuedMailable","command":"O:34:\\"Illuminate\\\\Mail\\\\SendQueuedMailable\\":19:{s:8:\\"mailable\\";O:25:\\"App\\\\Mail\\\\FeedingDayNotice\\":5:{s:7:\\"student\\";O:45:\\"Illuminate\\\\Contracts\\\\Database\\\\ModelIdentifier\\":5:{s:5:\\"class\\";s:18:\\"App\\\\Models\\\\Student\\";s:2:\\"id\\";i:35;s:9:\\"relations\\";a:0:{}s:10:\\"connection\\";s:5:\\"pgsql\\";s:15:\\"collectionClass\\";N;}s:4:\\"meal\\";s:19:\\"Chicken Adobo, Milo\\";s:4:\\"date\\";s:10:\\"2026-09-11\\";s:2:\\"to\\";a:1:{i:0;a:2:{s:4:\\"name\\";N;s:7:\\"address\\";s:17:\\"grace.v@gmail.com\\";}}s:6:\\"mailer\\";s:3:\\"log\\";}s:5:\\"tries\\";i:3;s:7:\\"timeout\\";N;s:13:\\"maxExceptions\\";N;s:17:\\"shouldBeEncrypted\\";b:0;s:3:\\"job\\";N;s:10:\\"connection\\";N;s:5:\\"queue\\";N;s:12:\\"messageGroup\\";N;s:12:\\"deduplicator\\";N;s:13:\\"debounceOwner\\";s:0:\\"\\";s:15:\\"uniqueLockOwner\\";s:0:\\"\\";s:5:\\"delay\\";N;s:11:\\"afterCommit\\";N;s:10:\\"middleware\\";a:0:{}s:7:\\"chained\\";a:0:{}s:15:\\"chainConnection\\";N;s:10:\\"chainQueue\\";N;s:19:\\"chainCatchCallbacks\\";N;}","batchId":null},"createdAt":1789106277,"delay":null}	0	\N	1789106277	1789106277
+13	default	{"uuid":"3f31f94e-4289-4d2e-970b-d01d4d6edc2c","displayName":"App\\\\Mail\\\\FeedingDayNotice","job":"Illuminate\\\\Queue\\\\CallQueuedHandler@call","maxTries":3,"maxExceptions":null,"failOnTimeout":false,"backoff":"10,60,300","timeout":null,"retryUntil":null,"deleteWhenMissingModels":false,"data":{"commandName":"Illuminate\\\\Mail\\\\SendQueuedMailable","command":"O:34:\\"Illuminate\\\\Mail\\\\SendQueuedMailable\\":19:{s:8:\\"mailable\\";O:25:\\"App\\\\Mail\\\\FeedingDayNotice\\":5:{s:7:\\"student\\";O:45:\\"Illuminate\\\\Contracts\\\\Database\\\\ModelIdentifier\\":5:{s:5:\\"class\\";s:18:\\"App\\\\Models\\\\Student\\";s:2:\\"id\\";i:35;s:9:\\"relations\\";a:0:{}s:10:\\"connection\\";s:5:\\"pgsql\\";s:15:\\"collectionClass\\";N;}s:4:\\"meal\\";s:12:\\"siomai, rice\\";s:4:\\"date\\";s:10:\\"2026-09-10\\";s:2:\\"to\\";a:1:{i:0;a:2:{s:4:\\"name\\";N;s:7:\\"address\\";s:17:\\"grace.v@gmail.com\\";}}s:6:\\"mailer\\";s:3:\\"log\\";}s:5:\\"tries\\";i:3;s:7:\\"timeout\\";N;s:13:\\"maxExceptions\\";N;s:17:\\"shouldBeEncrypted\\";b:0;s:3:\\"job\\";N;s:10:\\"connection\\";N;s:5:\\"queue\\";N;s:12:\\"messageGroup\\";N;s:12:\\"deduplicator\\";N;s:13:\\"debounceOwner\\";s:0:\\"\\";s:15:\\"uniqueLockOwner\\";s:0:\\"\\";s:5:\\"delay\\";N;s:11:\\"afterCommit\\";N;s:10:\\"middleware\\";a:0:{}s:7:\\"chained\\";a:0:{}s:15:\\"chainConnection\\";N;s:10:\\"chainQueue\\";N;s:19:\\"chainCatchCallbacks\\";N;}","batchId":null},"createdAt":1789106291,"delay":null}	0	\N	1789106291	1789106291
 \.
 
 
@@ -5027,12 +6365,18 @@ COPY public.jobs (id, queue, payload, attempts, reserved_at, available_at, creat
 --
 
 COPY public.meal_plans (id, meal_date, meal_name, recorded_by_user_id, created_at, updated_at) FROM stdin;
-5	2026-09-01	siomai	27	2026-09-10 14:36:52	2026-09-10 16:13:09
-7	2026-09-01	rice	27	2026-09-10 16:13:15	2026-09-10 16:13:15
-6	2026-09-10	siomai	27	2026-09-10 14:37:14	2026-09-10 16:13:35
-8	2026-09-10	rice	27	2026-09-10 16:13:42	2026-09-10 16:13:42
-9	2026-09-11	Chicken Adobo	27	2026-09-11 01:31:02	2026-09-11 01:31:02
-10	2026-09-11	Milo	27	2026-09-11 01:31:09	2026-09-11 01:31:09
+13	2026-09-14	Chicken Adobo	27	2026-09-14 18:38:10	2026-09-14 18:38:10
+14	2026-09-16	Siomai Rice	27	2026-09-16 10:37:39	2026-09-16 10:37:39
+15	2026-09-16	drinks	27	2026-09-16 11:22:28	2026-09-16 11:22:28
+16	2026-09-17	milk	27	2026-09-16 11:22:40	2026-09-16 11:22:40
+17	2026-09-18	adobo	27	2026-09-16 14:11:51	2026-09-16 14:11:51
+18	2026-09-18	milk	27	2026-09-16 14:11:56	2026-09-16 14:11:56
+19	2026-10-01	Crispy pata	27	2026-09-18 08:01:40	2026-09-18 08:01:40
+20	2026-09-19	hotdog	27	2026-09-18 10:52:46	2026-09-18 10:52:46
+21	2026-09-20	Siomai Rice	27	2026-09-20 16:26:04	2026-09-20 16:26:04
+22	2026-09-22	Egg	27	2026-09-22 19:50:40	2026-09-22 19:50:40
+23	2026-09-22	Milk	27	2026-09-22 19:50:44	2026-09-22 19:50:44
+24	2026-09-25	adobo	27	2026-09-25 10:01:40	2026-09-25 10:01:40
 \.
 
 
@@ -5042,6 +6386,35 @@ COPY public.meal_plans (id, meal_date, meal_name, recorded_by_user_id, created_a
 
 COPY public.migrations (id, migration, batch) FROM stdin;
 24	2026_09_10_000000_update_sbfp_approval_and_measurements	1
+25	2026_09_11_000000_add_profile_image_url_to_sbfp_participants_table	2
+26	2026_09_11_190000_allow_multiple_report_periods_per_month	3
+27	0001_01_01_000000_create_users_table	1
+28	0001_01_01_000001_create_cache_table	1
+29	0001_01_01_000002_create_jobs_table	1
+30	2026_09_05_110358_create_school_years_table	1
+31	2026_09_05_110502_create_students_table	1
+32	2026_09_05_110709_create_enrollments_table	1
+33	2026_09_05_110722_create_sbfp_participants_table	1
+34	2026_09_05_110731_create_nutrition_measurements_table	1
+35	2026_09_05_110739_create_student_attendance_records_table	1
+36	2026_09_05_110746_create_student_feeding_records_table	1
+37	2026_09_05_120000_create_audit_logs_table	1
+38	2026_09_07_120000_create_report_periods_table	1
+39	2026_09_07_120001_create_report_period_rows_table	1
+40	2026_09_07_130000_make_school_year_end_date_nullable	1
+41	2026_09_07_140000_add_measurement_period_to_report_periods	1
+42	2026_09_07_140001_update_report_period_uniqueness	1
+43	2026_09_07_150000_add_height_count_to_report_period_rows	1
+44	2026_09_07_160000_enforce_unique_report_terms_and_months	1
+45	2026_09_07_170000_create_attendance_report_months_table	1
+46	2026_09_07_180000_create_attendance_report_sections_table	1
+47	2026_09_08_000000_add_attendance_lookup_indexes	1
+48	2026_09_09_000001_add_guardian_contact_to_students_table	1
+49	2026_09_10_000000_create_meal_plans_table	1
+50	2026_09_13_000000_create_school_year_user_records_table	4
+51	2026_09_14_000001_add_name_parts_to_users_table	5
+52	2026_09_14_000002_sync_legacy_user_names	6
+53	2026_09_20_000001_create_sbfp_parent_approval_requests_table	7
 \.
 
 
@@ -5050,66 +6423,114 @@ COPY public.migrations (id, migration, batch) FROM stdin;
 --
 
 COPY public.nutrition_measurements (id, sbfp_participant_id, height, weight, bmi, bmi_category, hfa, measurement_period, created_at, updated_at) FROM stdin;
-18	14	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:02:53	2026-09-10 14:16:44
-21	17	128	25	15.26	Severely Wasted	Normal	baseline	2026-09-10 14:04:15	2026-09-10 14:04:15
-61	52	165	46	16.90	Wasted	Normal	baseline	2026-09-10 20:54:52	2026-09-10 22:41:32
-64	30	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:24	2026-09-10 21:27:24
-15	11	125	20	12.80	Severely Wasted	Normal	baseline	2026-09-10 14:01:03	2026-09-10 14:26:41
-65	41	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
-16	12	165	85	31.22	Obese	Normal	baseline	2026-09-10 14:01:22	2026-09-10 14:01:22
-38	34	135	42	23.05	Normal	Normal	baseline	2026-09-10 14:12:22	2026-09-10 14:12:22
-17	13	126	22	13.86	Severely Wasted	Normal	baseline	2026-09-10 14:02:40	2026-09-10 14:02:40
-51	47	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:21:22	2026-09-10 14:21:22
-62	53	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 21:21:00	2026-09-10 21:21:00
-66	52	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
-67	37	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
-68	53	165	59	21.67	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
-69	32	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:25	2026-09-10 21:27:25
-70	24	165	58	21.30	Normal	Normal	endline	2026-09-10 21:27:26	2026-09-10 21:27:26
-63	54	165	58	21.30	Normal	Normal	baseline	2026-09-10 21:22:41	2026-09-11 00:57:50
-28	24	115.8	58.9	43.92	Obese	Normal	baseline	2026-09-10 14:08:59	2026-09-11 01:21:54
-71	52	165	46	16.90	Wasted	Normal	midline	2026-09-10 21:53:37	2026-09-10 21:55:21
-72	53	165	46	16.90	Wasted	Normal	midline	2026-09-10 21:53:37	2026-09-10 21:55:21
-19	15	165	85	31.22	Obese	Normal	baseline	2026-09-10 14:03:11	2026-09-10 14:03:11
-20	16	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:04:04	2026-09-10 14:04:04
-22	18	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:05:38	2026-09-10 14:05:38
-23	19	130	27	15.98	Severely Wasted	Normal	baseline	2026-09-10 14:05:55	2026-09-10 14:05:55
-24	20	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:06:43	2026-09-10 14:16:10
-25	21	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:07:11	2026-09-10 14:07:11
-26	22	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:07:08	2026-09-10 14:07:08
-27	23	130	30	17.75	Wasted	Normal	baseline	2026-09-10 14:08:04	2026-09-10 14:08:04
-29	25	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:09:16	2026-09-10 14:09:16
-30	26	132	34	19.51	Normal	Normal	baseline	2026-09-10 14:09:18	2026-09-10 14:09:18
-31	27	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:09:40	2026-09-10 14:09:40
-32	28	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:09:57	2026-09-10 14:09:57
-33	29	134	37	20.61	Normal	Normal	baseline	2026-09-10 14:10:12	2026-09-10 14:10:12
-34	30	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:10:27	2026-09-10 22:41:31
-35	31	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:11:40	2026-09-10 14:11:40
-36	32	117.2	16.1	11.72	Severely Wasted	Normal	baseline	2026-09-10 14:11:53	2026-09-10 14:11:53
-37	33	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:12:11	2026-09-10 14:12:11
-39	35	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:13:10	2026-09-10 14:13:10
-40	36	138	48	25.20	Overweight	Normal	baseline	2026-09-10 14:13:21	2026-09-10 14:13:21
-41	37	115.0	19.5	14.74	Severely Wasted	Normal	baseline	2026-09-10 14:13:55	2026-09-10 14:13:55
-42	38	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:14:11	2026-09-10 14:14:11
-43	39	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:14:22	2026-09-10 14:14:22
-44	40	140	55	28.06	Overweight	Normal	baseline	2026-09-10 14:14:27	2026-09-10 14:14:27
-46	42	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:15:48	2026-09-10 14:15:48
-47	43	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-10 14:17:01	2026-09-10 14:17:01
-48	44	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:18:45	2026-09-10 14:18:45
-49	45	165	46	16.90	Wasted	Normal	baseline	2026-09-10 14:19:17	2026-09-10 14:19:17
-50	46	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:20:13	2026-09-10 14:31:47
-52	48	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:21:37	2026-09-10 14:21:37
-53	49	165	72	26.45	Overweight	Normal	baseline	2026-09-10 14:23:44	2026-09-10 14:23:44
-54	50	165	85	31.22	Obese	Normal	baseline	2026-09-10 14:25:56	2026-09-10 14:25:56
-55	41	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:47	2026-09-10 21:55:21
-57	30	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:20
-59	37	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:21
-60	51	165	58	21.30	Normal	Normal	baseline	2026-09-10 20:53:01	2026-09-10 20:53:01
-45	41	165	58	21.30	Normal	Normal	baseline	2026-09-10 14:15:27	2026-09-11 01:26:18
-56	24	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:22
-58	32	165	46	16.90	Wasted	Normal	midline	2026-09-10 14:28:48	2026-09-10 21:55:21
-74	56	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-11 01:10:03	2026-09-11 01:10:03
-73	55	165	46	16.90	Wasted	Normal	baseline	2026-09-11 00:52:29	2026-09-11 01:26:44
+81	57	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 22:45:51	2026-09-13 22:45:51
+82	58	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 22:50:53	2026-09-13 22:50:53
+83	59	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 22:53:00	2026-09-13 22:53:00
+86	62	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:01:31	2026-09-13 23:01:31
+87	63	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:07:19	2026-09-13 23:07:19
+88	64	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:08:53	2026-09-13 23:08:53
+89	65	165	72	26.45	Overweight	Normal	baseline	2026-09-13 23:10:09	2026-09-13 23:10:09
+90	66	165	85	31.22	Obese	Normal	baseline	2026-09-13 23:11:28	2026-09-13 23:11:28
+91	67	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 23:21:28	2026-09-13 23:21:28
+92	68	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 23:22:44	2026-09-13 23:22:44
+93	69	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 23:24:46	2026-09-13 23:24:46
+96	72	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:29:11	2026-09-13 23:29:11
+97	73	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:30:40	2026-09-13 23:30:40
+98	74	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:31:44	2026-09-13 23:31:44
+99	75	165	72	26.45	Overweight	Normal	baseline	2026-09-13 23:33:45	2026-09-13 23:33:45
+100	76	165	85	31.22	Obese	Normal	baseline	2026-09-13 23:35:15	2026-09-13 23:35:15
+101	77	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 23:40:05	2026-09-13 23:40:05
+102	78	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 23:41:06	2026-09-13 23:41:06
+103	79	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-13 23:42:01	2026-09-13 23:42:01
+106	82	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:45:50	2026-09-13 23:45:50
+107	83	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:50:24	2026-09-13 23:50:24
+108	84	165	58	21.30	Normal	Normal	baseline	2026-09-13 23:51:38	2026-09-13 23:51:38
+109	85	165	72	26.45	Overweight	Normal	baseline	2026-09-13 23:52:47	2026-09-13 23:52:47
+110	86	165	85	31.22	Obese	Normal	baseline	2026-09-13 23:53:51	2026-09-13 23:53:51
+111	87	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-14 00:01:16	2026-09-14 00:01:16
+112	88	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-14 00:02:14	2026-09-14 00:02:14
+113	89	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-14 00:03:29	2026-09-14 00:03:29
+116	92	165	58	21.30	Normal	Normal	baseline	2026-09-14 00:06:29	2026-09-14 00:06:29
+117	93	165	58	21.30	Normal	Normal	baseline	2026-09-14 00:07:54	2026-09-14 00:07:54
+118	94	165	58	21.30	Normal	Normal	baseline	2026-09-14 00:09:04	2026-09-14 00:09:04
+119	95	165	72	26.45	Overweight	Normal	baseline	2026-09-14 00:10:37	2026-09-14 00:10:37
+120	96	165	85	31.22	Obese	Normal	baseline	2026-09-14 00:11:55	2026-09-14 00:11:55
+121	57	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:25:50	2026-09-14 00:25:50
+122	58	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:25:51	2026-09-14 00:25:51
+123	59	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:25:52	2026-09-14 00:25:52
+124	60	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:25:53	2026-09-14 00:25:53
+125	61	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:25:53	2026-09-14 00:25:53
+127	58	165	58	21.30	Normal	Normal	endline	2026-09-14 00:26:54	2026-09-14 00:26:54
+129	60	165	58	21.30	Normal	Normal	endline	2026-09-14 00:26:55	2026-09-14 00:26:55
+131	67	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:29:00	2026-09-14 00:29:00
+132	68	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:29:00	2026-09-14 00:29:00
+133	69	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:29:01	2026-09-14 00:29:01
+134	70	165	58	21.30	Normal	Normal	midline	2026-09-14 00:29:01	2026-09-14 00:29:01
+135	71	165	58	21.30	Normal	Normal	midline	2026-09-14 00:29:01	2026-09-14 00:29:01
+136	67	165	58	21.30	Normal	Normal	endline	2026-09-14 00:30:00	2026-09-14 00:30:00
+137	68	165	58	21.30	Normal	Normal	endline	2026-09-14 00:30:01	2026-09-14 00:30:01
+138	69	165	58	21.30	Normal	Normal	endline	2026-09-14 00:30:01	2026-09-14 00:30:01
+139	70	165	72	26.45	Overweight	Normal	endline	2026-09-14 00:30:02	2026-09-14 00:30:02
+140	71	165	72	26.45	Overweight	Normal	endline	2026-09-14 00:30:02	2026-09-14 00:30:02
+141	77	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:32:50	2026-09-14 00:32:50
+142	78	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:32:51	2026-09-14 00:32:51
+143	79	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:32:51	2026-09-14 00:32:51
+144	80	165	58	21.30	Normal	Normal	midline	2026-09-14 00:32:52	2026-09-14 00:32:52
+145	81	165	58	21.30	Normal	Normal	midline	2026-09-14 00:32:52	2026-09-14 00:32:52
+146	77	165	58	21.30	Normal	Normal	endline	2026-09-14 00:33:25	2026-09-14 00:33:25
+147	78	165	58	21.30	Normal	Normal	endline	2026-09-14 00:33:25	2026-09-14 00:33:25
+148	79	165	58	21.30	Normal	Normal	endline	2026-09-14 00:33:26	2026-09-14 00:33:26
+149	80	165	72	26.45	Overweight	Normal	endline	2026-09-14 00:33:26	2026-09-14 00:33:26
+150	81	165	72	26.45	Overweight	Normal	endline	2026-09-14 00:33:27	2026-09-14 00:33:27
+151	87	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:34:48	2026-09-14 00:34:48
+152	88	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:34:48	2026-09-14 00:34:48
+153	89	165	46	16.90	Wasted	Normal	midline	2026-09-14 00:34:49	2026-09-14 00:34:49
+154	90	165	58	21.30	Normal	Normal	midline	2026-09-14 00:34:49	2026-09-14 00:34:49
+85	61	165	46	16.90	Wasted	Normal	baseline	2026-09-13 23:00:12	2026-09-14 18:35:43
+94	70	165	46	16.90	Wasted	Normal	baseline	2026-09-13 23:25:52	2026-09-14 18:42:17
+95	71	165	46	16.90	Wasted	Normal	baseline	2026-09-13 23:27:44	2026-09-14 18:42:31
+104	80	165	46	16.90	Wasted	Normal	baseline	2026-09-13 23:43:13	2026-09-14 18:46:38
+105	81	165	46	16.90	Wasted	Normal	baseline	2026-09-13 23:44:17	2026-09-14 18:46:54
+114	90	165	46	16.90	Wasted	Normal	baseline	2026-09-14 00:04:29	2026-09-14 18:49:51
+115	91	165	46	16.90	Wasted	Normal	baseline	2026-09-14 00:05:25	2026-09-14 18:50:04
+126	57	165	1	0.37	Severely Wasted	Normal	endline	2026-09-14 00:26:53	2026-09-15 21:00:29
+155	91	165	58	21.30	Normal	Normal	midline	2026-09-14 00:34:50	2026-09-14 00:34:50
+156	87	165	58	21.30	Normal	Normal	endline	2026-09-14 00:35:32	2026-09-14 00:36:10
+157	88	165	58	21.30	Normal	Normal	endline	2026-09-14 00:35:33	2026-09-14 00:36:11
+158	89	165	58	21.30	Normal	Normal	endline	2026-09-14 00:35:33	2026-09-14 00:36:11
+159	90	165	72	26.45	Overweight	Normal	endline	2026-09-14 00:35:34	2026-09-14 00:36:12
+160	91	165	72	26.45	Overweight	Normal	endline	2026-09-14 00:35:34	2026-09-14 00:36:12
+128	59	165	58	21.30	Normal	Normal	endline	2026-09-14 00:26:55	2026-09-15 21:00:30
+130	61	165	58	21.30	Normal	Normal	endline	2026-09-14 00:26:56	2026-09-15 21:00:30
+161	97	115	18.5	13.99	Severely Wasted	Normal	baseline	2026-09-16 11:16:03	2026-09-16 11:16:03
+162	98	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-16 13:29:36	2026-09-16 13:29:36
+163	99	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-18 10:46:29	2026-09-18 10:46:29
+164	100	165	15	5.51	Severely Wasted	Normal	baseline	2026-09-18 13:44:08	2026-09-18 13:44:08
+165	101	160	12	4.69	Severely Wasted	Normal	baseline	2026-09-18 15:59:54	2026-09-18 15:59:54
+166	102	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-20 16:34:06	2026-09-20 16:34:06
+167	103	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-20 16:36:18	2026-09-20 16:36:18
+168	104	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-20 16:38:34	2026-09-20 16:38:34
+169	105	165	46	16.90	Wasted	Normal	baseline	2026-09-20 16:39:52	2026-09-20 16:39:52
+170	106	165	46	16.90	Wasted	Normal	baseline	2026-09-20 16:40:58	2026-09-20 16:40:58
+171	107	165	58	21.30	Normal	Normal	baseline	2026-09-20 16:42:03	2026-09-20 16:42:03
+172	108	165	72	26.45	Overweight	Normal	baseline	2026-09-20 16:43:18	2026-09-20 16:43:18
+173	109	165	85	31.22	Obese	Normal	baseline	2026-09-20 16:44:20	2026-09-20 16:44:20
+174	110	165	58	21.30	Normal	Normal	baseline	2026-09-20 16:45:37	2026-09-20 16:45:37
+175	98	165	47	17.26	Wasted	Normal	midline	2026-09-20 16:46:23	2026-09-20 16:46:23
+176	97	165	46	16.90	Wasted	Normal	midline	2026-09-20 16:46:23	2026-09-20 16:46:23
+177	99	165	47	17.26	Wasted	Normal	midline	2026-09-20 16:46:24	2026-09-20 16:46:24
+178	100	165	47	17.26	Wasted	Normal	midline	2026-09-20 16:46:24	2026-09-20 16:46:24
+179	101	165	47	17.26	Wasted	Normal	midline	2026-09-20 16:46:25	2026-09-20 16:46:25
+180	111	165	58	21.30	Normal	Normal	baseline	2026-09-20 16:47:32	2026-09-20 16:47:32
+181	112	165	40	14.69	Severely Wasted	Normal	baseline	2026-09-20 17:35:41	2026-09-20 17:35:41
+182	113	165	46	16.90	Wasted	Normal	baseline	2026-09-20 19:55:43	2026-09-20 19:55:43
+183	114	165	46	16.90	Wasted	Normal	baseline	2026-09-20 20:05:16	2026-09-20 20:05:39
+184	115	165	46	16.90	Wasted	Normal	baseline	2026-09-20 20:17:10	2026-09-20 20:17:10
+185	116	165	46	16.90	Wasted	Normal	baseline	2026-09-20 20:27:24	2026-09-20 20:27:24
+186	117	231	21	3.94	Severely Wasted	Normal	baseline	2026-09-22 19:39:53	2026-09-22 19:39:53
+84	60	165	46	16.90	Wasted	Normal	baseline	2026-09-13 22:58:32	2026-09-22 23:31:43
+187	118	165	50	18.37	Wasted	Normal	baseline	2026-09-23 13:52:09	2026-09-23 13:52:25
+188	119	165	46	16.90	Wasted	Normal	baseline	2026-09-25 09:39:17	2026-09-25 09:39:17
 \.
 
 
@@ -5118,7 +6539,8 @@ COPY public.nutrition_measurements (id, sbfp_participant_id, height, weight, bmi
 --
 
 COPY public.password_reset_tokens (email, token, created_at) FROM stdin;
-moltenterabyte@gmail.com	$2y$12$JGmlCFXAqPGh7wYYEfc6he1niLHcvnhyqLDwlnsdCeLL.hBkUkWMS	2026-09-10 17:36:39
+nutrisight1@mailto.plus	$2y$12$slunUG6CFp6kseMDqD1woOP5RSJma4qqnBs/rqGdPxrt.ZAOv8fZ2	2026-09-20 21:56:49
+moltenterabyte@gmail.com	$2y$12$oEd/nvXA8ekfKUNJrZkyduAFJaRq6tLmPDgU5QWUvJ6B3ZglCx/Xa	2026-09-21 08:19:28
 \.
 
 
@@ -5127,6 +6549,54 @@ moltenterabyte@gmail.com	$2y$12$JGmlCFXAqPGh7wYYEfc6he1niLHcvnhyqLDwlnsdCeLL.hBk
 --
 
 COPY public.report_period_rows (id, report_period_id, grade_level, sex, enrollment, pupils_weighed, bmi_severely_wasted, bmi_wasted, bmi_normal, bmi_overweight, bmi_obese, hfa_severely_stunted, hfa_stunted, hfa_normal, hfa_tall, created_at, updated_at, pupils_height_taken) FROM stdin;
+1953	5	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1954	5	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1955	5	1	M	4	2	0	2	0	0	0	0	0	2	0	2026-09-17 19:54:42	2026-09-17 19:54:42	2
+1956	5	1	F	1	1	0	1	0	0	0	0	0	1	0	2026-09-17 19:54:42	2026-09-17 19:54:42	1
+1957	5	2	M	3	3	0	2	1	0	0	0	0	3	0	2026-09-17 19:54:42	2026-09-17 19:54:42	3
+1958	5	2	F	1	1	0	1	0	0	0	0	0	1	0	2026-09-17 19:54:42	2026-09-17 19:54:42	1
+1959	5	3	M	1	1	0	1	0	0	0	0	0	1	0	2026-09-17 19:54:42	2026-09-17 19:54:42	1
+1960	5	3	F	1	1	0	1	0	0	0	0	0	1	0	2026-09-17 19:54:42	2026-09-17 19:54:42	1
+1961	5	4	M	3	3	0	2	1	0	0	0	0	3	0	2026-09-17 19:54:42	2026-09-17 19:54:42	3
+1962	5	4	F	2	2	0	1	1	0	0	0	0	2	0	2026-09-17 19:54:42	2026-09-17 19:54:42	2
+1963	5	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1964	5	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1965	5	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1966	5	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1967	5	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+1968	5	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-17 19:54:42	2026-09-17 19:54:42	0
+2209	4	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:15	2026-09-25 10:06:15	0
+2210	4	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:15	2026-09-25 10:06:15	0
+2211	4	1	M	10	10	7	3	0	0	0	0	0	10	0	2026-09-25 10:06:15	2026-09-25 10:06:15	10
+2212	4	1	F	2	2	0	2	0	0	0	0	0	2	0	2026-09-25 10:06:15	2026-09-25 10:06:15	2
+2213	4	2	M	3	3	2	1	0	0	0	0	0	3	0	2026-09-25 10:06:15	2026-09-25 10:06:15	3
+2214	4	2	F	1	1	1	0	0	0	0	0	0	1	0	2026-09-25 10:06:16	2026-09-25 10:06:16	1
+2215	4	3	M	1	1	1	0	0	0	0	0	0	1	0	2026-09-25 10:06:16	2026-09-25 10:06:16	1
+2216	4	3	F	1	1	1	0	0	0	0	0	0	1	0	2026-09-25 10:06:16	2026-09-25 10:06:16	1
+2217	4	4	M	10	10	5	5	0	0	0	0	0	10	0	2026-09-25 10:06:16	2026-09-25 10:06:16	10
+2218	4	4	F	4	4	2	2	0	0	0	0	0	4	0	2026-09-25 10:06:16	2026-09-25 10:06:16	4
+2219	4	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:16	2026-09-25 10:06:16	0
+2220	4	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:16	2026-09-25 10:06:16	0
+2221	4	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:16	2026-09-25 10:06:16	0
+2222	4	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:16	2026-09-25 10:06:16	0
+2223	4	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:16	2026-09-25 10:06:16	0
+2224	4	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-25 10:06:16	2026-09-25 10:06:16	0
+2081	6	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2082	6	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2083	6	1	M	7	2	1	0	1	0	0	0	0	2	0	2026-09-18 16:08:12	2026-09-18 16:08:12	2
+2084	6	1	F	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
+2085	6	2	M	3	3	0	0	2	1	0	0	0	3	0	2026-09-18 16:08:12	2026-09-18 16:08:12	3
+2086	6	2	F	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
+2087	6	3	M	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
+2088	6	3	F	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
+2089	6	4	M	3	3	0	0	2	1	0	0	0	3	0	2026-09-18 16:08:12	2026-09-18 16:08:12	3
+2090	6	4	F	2	2	0	0	1	1	0	0	0	2	0	2026-09-18 16:08:12	2026-09-18 16:08:12	2
+2091	6	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2092	6	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2093	6	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2094	6	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2095	6	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2096	6	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
 \.
 
 
@@ -5135,6 +6605,27 @@ COPY public.report_period_rows (id, report_period_id, grade_level, sex, enrollme
 --
 
 COPY public.report_periods (id, school_year_id, name, month, created_at, updated_at, measurement_period) FROM stdin;
+4	6	Baseline	9	2026-09-13 22:45:51	2026-09-13 22:45:51	baseline
+5	6	Midline	9	2026-09-14 00:25:50	2026-09-14 00:25:50	mid
+6	6	Endline	9	2026-09-14 00:26:53	2026-09-14 00:26:53	end
+\.
+
+
+--
+-- Data for Name: sbfp_parent_approval_requests; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.sbfp_parent_approval_requests (id, sbfp_participant_id, email, token_hash, weight, height, bmi, bmi_category, status, expires_at, sent_at, responded_at, decision_reason, closed_reason, closed_by_user_id, created_at, updated_at) FROM stdin;
+1	112	nutrisight1@mailto.plus	eb28ab840956c394ba3018be75373725fc2b634b11869fd6305109fe638ee0e8	40.00	165.00	14.69	Severely Wasted	approved	2026-09-23 17:35:41	2026-09-20 17:35:41	2026-09-20 17:36:39	\N	\N	\N	2026-09-20 17:35:41	2026-09-20 17:36:39
+2	113	nutrisight1@mailto.plus	9086e6cec37e26979adf6ba0d150461b325f0af5e3e47ec09cb1b4f87b9e969d	46.00	165.00	16.90	Wasted	approved	2026-09-23 19:55:43	2026-09-20 19:55:43	2026-09-20 19:58:07	\N	\N	\N	2026-09-20 19:55:43	2026-09-20 19:58:07
+3	114	Maria@example.com	20293ea64b6caf0c41a796ed09d65b2a021fb82f2a6313b38cbca4611b1ff409	46.00	165.00	16.90	Wasted	superseded	2026-09-23 20:05:16	2026-09-20 20:05:16	\N	\N	manual_staff_decision	33	2026-09-20 20:05:16	2026-09-20 20:05:57
+4	115	moltenterabyte@gmail.com	1234e4afe49036446ee86ad2ffacebc59fa9af51db00b7df064ab3b9be9a6280	46.00	165.00	16.90	Wasted	approved	2026-09-23 20:17:10	2026-09-20 20:17:10	2026-09-20 20:18:10	\N	\N	\N	2026-09-20 20:17:11	2026-09-20 20:18:10
+5	116	santos.richarddavid@gmail.com	16652723add1909a58009a8ac239ff27242bf87063396d9750a22971869fe9b5	46.00	165.00	16.90	Wasted	approved	2026-09-23 20:27:24	2026-09-20 20:27:24	2026-09-20 20:29:21	\N	\N	\N	2026-09-20 20:27:24	2026-09-20 20:29:21
+6	117	delacruz@gmail.com	d12519c6e457612c70f84752fe4391ad62df2250733767c6b8b40b2fcebbfa62	21.00	231.00	3.94	Severely Wasted	superseded	2026-09-25 19:39:53	2026-09-22 19:39:53	\N	\N	manual_staff_decision	33	2026-09-22 19:39:53	2026-09-22 19:44:20
+7	60	moltenterabyte@gmail.com	4a292b097d7614038eed234dd59581cac109fdb428431ed6c5c56f766335be28	46.00	165.00	16.90	Wasted	approved	2026-09-25 23:31:44	2026-09-22 23:31:44	2026-09-22 23:33:17	\N	\N	\N	2026-09-22 23:31:44	2026-09-22 23:33:17
+8	118	santos@gmail.com	3e17804d1a5e2447240ae0d1030990b01478fedca865f9fb490397dd794ea19d	50.00	165.00	18.37	Wasted	superseded	2026-09-26 13:52:25	2026-09-23 13:52:25	\N	\N	guardian_email_changed	33	2026-09-23 13:52:25	2026-09-23 13:53:21
+9	118	santos.richarddavid@gmail.com	fe1304931e9199f90f507eac44bf590683e8992ffbb5a4053e48bd5c6586e94e	50.00	165.00	18.37	Wasted	approved	2026-09-26 13:53:21	2026-09-23 13:53:21	2026-09-23 13:55:09	\N	\N	\N	2026-09-23 13:53:21	2026-09-23 13:55:09
+10	119	moltenterabyte@gmail.com	d1e95fcce61b395dd9f439c93ba142010e150efd4014caf88c4d9fc66be47eb5	46.00	165.00	16.90	Wasted	superseded	2026-09-28 09:39:17	2026-09-25 09:39:17	\N	\N	manual_staff_decision	26	2026-09-25 09:39:17	2026-09-25 09:53:45
 \.
 
 
@@ -5142,53 +6633,96 @@ COPY public.report_periods (id, school_year_id, name, month, created_at, updated
 -- Data for Name: sbfp_participants; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_reason, created_at, updated_at) FROM stdin;
-41	41	approved	\N	2026-09-10 14:15:27	2026-09-11 00:21:05
-37	37	approved	\N	2026-09-10 14:13:55	2026-09-11 00:21:05
-53	53	approved	\N	2026-09-10 21:21:00	2026-09-11 00:21:05
-11	11		\N	2026-09-10 14:01:03	2026-09-10 14:01:03
-12	12		\N	2026-09-10 14:01:22	2026-09-10 14:01:22
-13	13		\N	2026-09-10 14:02:40	2026-09-10 14:02:40
-14	14		\N	2026-09-10 14:02:53	2026-09-10 14:02:53
-15	15		\N	2026-09-10 14:03:11	2026-09-10 14:03:11
-16	16		\N	2026-09-10 14:04:04	2026-09-10 14:04:04
-17	17		\N	2026-09-10 14:04:15	2026-09-10 14:04:15
-18	18		\N	2026-09-10 14:05:38	2026-09-10 14:05:38
-19	19		\N	2026-09-10 14:05:55	2026-09-10 14:05:55
-20	20		\N	2026-09-10 14:06:43	2026-09-10 14:06:43
-21	21		\N	2026-09-10 14:07:11	2026-09-10 14:07:11
-22	22		\N	2026-09-10 14:07:08	2026-09-10 14:07:08
-23	23		\N	2026-09-10 14:08:04	2026-09-10 14:08:04
-25	25		\N	2026-09-10 14:09:15	2026-09-10 14:09:15
-26	26		\N	2026-09-10 14:09:18	2026-09-10 14:09:18
-27	27		\N	2026-09-10 14:09:40	2026-09-10 14:09:40
-28	28		\N	2026-09-10 14:09:57	2026-09-10 14:09:57
-29	29		\N	2026-09-10 14:10:11	2026-09-10 14:10:11
-30	30		medical_condition	2026-09-10 14:10:27	2026-09-10 22:32:03
-33	33		\N	2026-09-10 14:12:11	2026-09-10 14:12:11
-34	34		\N	2026-09-10 14:12:22	2026-09-10 14:12:22
-36	36		\N	2026-09-10 14:13:21	2026-09-10 14:13:21
-38	38		\N	2026-09-10 14:14:11	2026-09-10 14:14:11
-39	39		\N	2026-09-10 14:14:22	2026-09-10 14:14:22
-40	40		\N	2026-09-10 14:14:26	2026-09-10 14:14:26
-43	43		\N	2026-09-10 14:17:00	2026-09-10 14:17:00
-44	44		\N	2026-09-10 14:18:45	2026-09-10 14:18:45
-45	45		\N	2026-09-10 14:19:17	2026-09-10 14:19:17
-46	46		\N	2026-09-10 14:20:12	2026-09-10 14:20:12
-47	47		\N	2026-09-10 14:21:22	2026-09-10 14:21:22
-48	48		\N	2026-09-10 14:21:37	2026-09-10 14:21:37
-49	49		\N	2026-09-10 14:23:44	2026-09-10 14:23:44
-50	50		\N	2026-09-10 14:25:56	2026-09-10 14:25:56
-51	51		\N	2026-09-10 20:53:01	2026-09-10 20:53:01
-52	52	approved	\N	2026-09-10 20:54:52	2026-09-11 00:23:09
-32	32	approved	\N	2026-09-10 14:11:53	2026-09-11 00:23:09
-35	35	approved	\N	2026-09-10 14:13:10	2026-09-11 00:25:49
-42	42	approved	\N	2026-09-10 14:15:48	2026-09-11 00:25:49
-31	31	approved	\N	2026-09-10 14:11:40	2026-09-11 00:25:49
-54	54	approved	\N	2026-09-10 21:22:40	2026-09-11 00:27:13
-55	55	approved	\N	2026-09-11 00:52:29	2026-09-11 00:55:36
-24	24	\N	\N	2026-09-10 14:08:59	2026-09-11 00:55:36
-56	56	approved	\N	2026-09-11 01:10:03	2026-09-11 01:27:30
+COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_reason, created_at, updated_at, profile_image_url) FROM stdin;
+62	62	\N	\N	2026-09-13 23:01:31	2026-09-13 23:01:31	\N
+63	63	\N	\N	2026-09-13 23:07:19	2026-09-13 23:07:19	\N
+64	64	\N	\N	2026-09-13 23:08:53	2026-09-13 23:08:53	\N
+65	65	\N	\N	2026-09-13 23:10:09	2026-09-13 23:10:09	\N
+66	66	\N	\N	2026-09-13 23:11:28	2026-09-13 23:11:28	\N
+98	98	approved	\N	2026-09-16 13:29:36	2026-09-20 16:39:50	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/ZP5mPh30iJEp0DeKQHe4lZgc4PqVTjOoWj17NExu.webp
+58	58	disapproved	unwilling	2026-09-13 22:50:53	2026-09-13 23:12:52	\N
+107	107	\N	\N	2026-09-20 16:42:03	2026-09-20 16:42:03	\N
+72	72	\N	\N	2026-09-13 23:29:11	2026-09-13 23:29:11	\N
+73	73	\N	\N	2026-09-13 23:30:40	2026-09-13 23:30:40	\N
+74	74	\N	\N	2026-09-13 23:31:44	2026-09-13 23:31:44	\N
+75	75	\N	\N	2026-09-13 23:33:45	2026-09-13 23:33:45	\N
+76	76	\N	\N	2026-09-13 23:35:15	2026-09-13 23:35:15	\N
+70	70	disapproved	unwilling	2026-09-13 23:25:52	2026-09-13 23:36:09	\N
+108	108	\N	\N	2026-09-20 16:43:18	2026-09-20 16:43:18	\N
+109	109	\N	\N	2026-09-20 16:44:20	2026-09-20 16:44:20	\N
+60	60	approved	\N	2026-09-13 22:58:32	2026-09-22 23:33:17	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/FRXKIJGoiVcoMGbQ2yluLsmWMsqkk2zhoZe9Jace.jpg
+101	101	approved	\N	2026-09-18 15:59:54	2026-09-20 16:45:07	\N
+82	82	\N	\N	2026-09-13 23:45:50	2026-09-13 23:45:50	\N
+83	83	\N	\N	2026-09-13 23:50:23	2026-09-13 23:50:23	\N
+84	84	\N	\N	2026-09-13 23:51:38	2026-09-13 23:51:38	\N
+85	85	\N	\N	2026-09-13 23:52:47	2026-09-13 23:52:47	\N
+86	86	\N	\N	2026-09-13 23:53:51	2026-09-13 23:53:51	\N
+77	77	approved	\N	2026-09-13 23:40:05	2026-09-13 23:57:36	\N
+78	78	approved	\N	2026-09-13 23:41:06	2026-09-13 23:57:37	\N
+79	79	disapproved	unwilling	2026-09-13 23:42:01	2026-09-13 23:57:37	\N
+80	80	disapproved	unwilling	2026-09-13 23:43:13	2026-09-13 23:57:37	\N
+81	81	disapproved	Milk Protein Allergy	2026-09-13 23:44:17	2026-09-13 23:57:38	\N
+92	92	\N	\N	2026-09-14 00:06:29	2026-09-14 00:06:29	\N
+93	93	\N	\N	2026-09-14 00:07:54	2026-09-14 00:07:54	\N
+94	94	\N	\N	2026-09-14 00:09:04	2026-09-14 00:09:04	\N
+95	95	\N	\N	2026-09-14 00:10:37	2026-09-14 00:10:37	\N
+96	96	\N	\N	2026-09-14 00:11:55	2026-09-14 00:11:55	\N
+110	110	\N	\N	2026-09-20 16:45:37	2026-09-20 16:45:37	\N
+88	88	approved	\N	2026-09-14 00:02:14	2026-09-14 00:12:21	\N
+89	89	approved	\N	2026-09-14 00:03:29	2026-09-14 00:12:22	\N
+90	90	approved	\N	2026-09-14 00:04:29	2026-09-14 00:12:22	\N
+91	91	approved	\N	2026-09-14 00:05:25	2026-09-14 00:12:22	\N
+68	68	approved	\N	2026-09-13 23:22:44	2026-09-14 17:06:32	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/VjLfTpvb0AOrBf6hLIu0OX1p0YJbzrMsYizcNw9q.jpg
+69	69	approved	\N	2026-09-13 23:24:46	2026-09-14 17:21:54	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/dzaDdudo3LawjuXOzfTfkJSsmCqu4aMaVMkMjMix.jpg
+67	67	approved	\N	2026-09-13 23:21:28	2026-09-14 17:22:15	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/BgGAL5UnNlyuTudOGYR0hY0SpmjN5aCXKrq3mSAA.jpg
+71	71	approved	\N	2026-09-13 23:27:44	2026-09-14 17:25:54	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/5uTdfRTwVI753SFkG0R8JrgKsmfbonuuVxKuaUdI.jpg
+57	57	approved	\N	2026-09-13 22:45:51	2026-09-14 17:52:39	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/oS56pwHZO8jAZB2MEwiX6JjcHdJQSzPXaRiLI0PQ.jpg
+87	87	approved	\N	2026-09-14 00:01:16	2026-09-14 18:15:24	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/qa7Gkh6wIUQP4mdZSYTvDBjlpZPvWVakHfymPisr.webp
+111	111	\N	\N	2026-09-20 16:47:32	2026-09-20 16:47:32	\N
+103	103	approved	\N	2026-09-20 16:36:18	2026-09-20 16:54:39	\N
+61	61	approved	\N	2026-09-13 23:00:12	2026-09-16 11:32:43	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/HbUTJJxqFq60fdSb1CuwPw2le4cyqoeqBBDsFuSR.jpg
+118	118	approved	\N	2026-09-23 13:52:09	2026-09-23 13:55:09	\N
+59	59	disapproved	incomplete	2026-09-13 22:53:00	2026-09-18 10:48:37	\N
+100	100	approved	\N	2026-09-18 13:44:08	2026-09-18 13:44:33	\N
+119	119	approved	\N	2026-09-25 09:39:17	2026-09-25 09:53:45	\N
+102	102	approved	\N	2026-09-20 16:34:06	2026-09-20 16:54:39	\N
+105	105	approved	\N	2026-09-20 16:39:52	2026-09-20 16:54:39	\N
+106	106	approved	\N	2026-09-20 16:40:58	2026-09-20 16:54:39	\N
+104	104	approved	\N	2026-09-20 16:38:34	2026-09-20 16:54:39	\N
+112	112	approved	\N	2026-09-20 17:35:41	2026-09-20 17:59:27	\N
+97	97	approved	\N	2026-09-16 11:16:03	2026-09-20 17:59:53	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/9HLeEb92izs2eN1Dbp15CwqpcR3ukJ9IDqOz9MLG.webp
+99	99	approved	\N	2026-09-18 10:46:29	2026-09-20 18:02:38	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/UiKwXOOjBMENDtxGVUtNLjuNAKDf3lykOJ4SRVnH.png
+113	113	approved	\N	2026-09-20 19:55:43	2026-09-20 19:58:06	\N
+114	114	approved	\N	2026-09-20 20:05:16	2026-09-20 20:05:57	\N
+115	115	approved	\N	2026-09-20 20:17:10	2026-09-20 20:27:14	\N
+116	116	approved	\N	2026-09-20 20:27:24	2026-09-20 22:49:42	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/B3oErGYh9BLwSQTrlUhNMPNjXHkCIuOQdLJh189A.jpg
+117	117	approved	\N	2026-09-22 19:39:53	2026-09-22 19:46:41	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/Jx3tunUqDrgT0a10P7r9ci99iq5caYxsX8giKaqi.jpg
+\.
+
+
+--
+-- Data for Name: school_year_user_records; Type: TABLE DATA; Schema: public; Owner: postgres
+--
+
+COPY public.school_year_user_records (id, school_year_id, user_id, role, deped_id, "position", advisory_grade_level, advisory_section, created_at, updated_at) FROM stdin;
+9	6	28	super_admin	100003	Master Teacher II			2026-09-13 22:00:10	2026-09-13 22:00:10
+11	6	32	encoder	100005	Teacher II	3	A	2026-09-13 22:00:10	2026-09-13 22:00:10
+14	7	27	admin	100002	Master Teacher I			2026-09-13 22:01:54	2026-09-13 22:01:54
+15	7	28	super_admin	100003	Master Teacher II			2026-09-13 22:01:55	2026-09-13 22:01:55
+18	7	33	encoder	100006	Teacher III	1	A	2026-09-13 22:01:55	2026-09-14 01:01:31
+13	7	26	encoder	100001	Teacher I	4	B	2026-09-13 22:01:54	2026-09-14 01:03:10
+17	7	32	encoder	100005	Teacher II	2	B	2026-09-13 22:01:55	2026-09-14 01:03:25
+16	7	31	encoder	100004	Teacher I	3	A	2026-09-13 22:01:55	2026-09-14 01:03:48
+7	6	26	encoder	100001	Teacher I	1	A	2026-09-13 22:00:09	2026-09-16 11:02:35
+19	8	26	encoder	100001	Teacher I	4	B	2026-09-18 11:02:11	2026-09-18 11:02:11
+20	8	27	admin	100002	Master Teacher I			2026-09-18 11:02:11	2026-09-18 11:02:11
+21	8	28	super_admin	100003	Master Teacher II			2026-09-18 11:02:11	2026-09-18 11:02:11
+22	8	31	encoder	100004	Teacher I	3	A	2026-09-18 11:02:11	2026-09-18 11:02:11
+23	8	32	encoder	100005	Teacher II	2	B	2026-09-18 11:02:11	2026-09-18 11:02:11
+24	8	33	encoder	100006	Teacher III	1	A	2026-09-18 11:02:11	2026-09-18 11:02:11
+10	6	31	encoder	100010	Teacher I	2	B	2026-09-13 22:00:10	2026-09-20 19:39:40
+8	6	27	admin	100002	Master Teacher I	\N	\N	2026-09-13 22:00:09	2026-09-20 22:06:04
+12	6	33	encoder	100006	Teacher III	4	B	2026-09-13 22:00:10	2026-09-22 19:04:15
 \.
 
 
@@ -5197,7 +6731,9 @@ COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_re
 --
 
 COPY public.school_years (id, year, is_active, start_date, end_date, created_at, updated_at) FROM stdin;
-5	2026-2027	t	2026-06-01	2027-03-26	2026-09-10 13:46:38	2026-09-10 13:46:43
+7	2027-2028	f	2027-06-07	2028-03-31	2026-09-13 22:01:54	2026-09-18 14:02:48
+8	2028-2029	f	2026-09-18	2027-10-28	2026-09-18 11:02:11	2026-09-18 14:02:48
+6	2026-2027	t	2026-06-01	2027-03-26	2026-09-13 22:00:09	2026-09-18 14:02:48
 \.
 
 
@@ -5206,50 +6742,96 @@ COPY public.school_years (id, year, is_active, start_date, end_date, created_at,
 --
 
 COPY public.sessions (id, user_id, ip_address, user_agent, payload, last_activity) FROM stdin;
-Y8BPyizjZI9k0TzOQyNzPtdpaulVhcOdZsSpq5qx	\N	127.0.0.1	Mozilla/5.0 (compatible; domains-distillery/1.0; +https://crawler.validus.ai)	eyJfdG9rZW4iOiJxTGRzaWw1cjJSWEdsUFF1OWhYbG1HWjVxcmVId1hqV25Uemc1OHN1IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063459
-RB15S1e3AySj81WrkIpFnekKeN0h48q1DZyGV7mV	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJpQmFBVW8wd1k3WHhLdTR5OE5ycThxS0t4Wm4xbVJNeEhFVnM4SFVaIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789058764
-4VtORC3NiK0QhAXAinuzaeTs90YREFf0ZLykV8Mo	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36 Edg/125.0.0.0	eyJfdG9rZW4iOiJ0ejRTWGNLWlNZaU03aXNoeUpoMkxuWUx2NGNUYWZTZEYxRzNOcWFkIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789060573
-g0VcRvqWahZPaqlMgPO9SRphZvegFHC3T2Rx52Dw	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJ5VjlPbVZtVWpTcndEbWZ6aUJxMG1LbEpRelgyUGxEaXZBbzI1QVB4IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063659
-FGGsNjuW8WlKungI5Dq6hoZIrgt9cM0bYxEkGhC6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJWWW80WHVwREg2d3JpaTFyOXo1TnBtdlhuVDlraG81OHE2bWZja2pPIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789059490
-XePknWneQUPUs8PRgaFQms2gEzL779SS3hkEFuMC	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJvQVFNSjNneThvRXVyQ3NnUjdSYVFMVDdFNng3NUVqTUtwY1dsbzZaIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063660
-2zVAVaRRp9ako2zT9qvs0E5g2rCiAao4FsvgXB1E	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJDcVZabDkyVkU5VlVscVMxUmFzTGcyc1pUZGNQZXVWREJMN1pTT1pVIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063662
-5naZZpPnYLBwL0mslHv6VC5dT3oPTHAja7WWiPBj	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJvdmZZSDdkS3ZQVlZTbEtBc0tONEExVkRvSDIzTDRFQU4zS3hJdzJ6IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063662
-4vQYYNbHT694qIBMSy05n9f90LxmhcEgsZJsbIYl	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJORlMzU2JzSVVnU1U0bUtrenIwakRpbngxZVRoVHFER293ekFZUlE1IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063663
-Ljp8WCoDrFRyRlwoSWjauXfw80fM9hy2TdpQ9771	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/20.0.1132.57 Safari/537.36	eyJfdG9rZW4iOiJHRWIwVVYyTlllanhRa2dSZG84eXVxNkpRaE9lRnA3NnJSNVFvRzVpIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063702
-pjksuoL75CXxONCkU3xBonUQSn9kdf4jh1ZO8nJd	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJtaExZaXg5QlNoaDkwTUQ2YllRZHBQMUhIQWFPdGJsWnJSRkp0Skt1IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063703
-x3sKPPKzjThVydPle7qotuBzwyaK6B075G1U5rD8	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJXQXhiNlZ5cE02b2xaMFpiQlBTRVgyNVc0aUF2SW5mdnhGTUZkU2pjIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063704
-EWZH4VjVcuXmfrmLnmTatX60Fo8qQ2Ktg74Wcbx8	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiIySXg2alJPNGQzNDNZRmI2Z202YXVadHppWVNqdWFhSkhGanRrNG02IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063707
-9MPurLxqzC5GrwuFo9XLPGjuW7dU86fp1h4Gm7uk	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJEenZXQlowb2RIRWJvN1lZUTJueEVJSGs3czgwVWp2UDFZNk5GSlBWIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063708
-PSsh5l8SYul29QqpBSk6yPUAFd1XiD5xd3gtQefc	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJpZ2RRYThJaUJNMXZnR1pPY2Q4WFdvWmxzUGZlZElnbWx0UTF1c3lUIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789063708
-JnUC8GzxD2uJvds93GTvxUQJa5oVfNdiszAumVI5	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJvY1N6RlhZS1VkOGJMNTFQcUpLV0RpWVlMZlB6QU9BMUVQZWFxZ0hmIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789057314
-9EYd0GxP3eZ8jhnuuT7w8ZlfK6ZCvkLkoVvgbBZe	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJiY2hyOTdQYXFOVXEzb21YN1FiWmZEZlM0cUNURGg2bERaUEx3MVFYIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058120
-8yeXyJcbqvQFBQDMrgvcsvpRdAdv7PXFQsnwWtZA	\N	127.0.0.1	Mozilla/5.0 (compatible; Dataprovider.com)	eyJfdG9rZW4iOiJVY3RWdVFQa1BZYU5BM1FDbFJJVVdKNUo3aTV1SkZzb1l5NmJFaWJOIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058671
-aO1YNQl7Yv2DI6K7vHgd7lnpKOLKVncKlHJpSznT	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 10; SM-G981B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/80.0.3987.162 Mobile Safari/537.36	eyJfdG9rZW4iOiJDNkRmTVF3dWtKbU1mT0E1bVN0WW81aEg1Q0JMQVY0Tmo4dE9SUXd6IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058676
-i4ifGo2Mfku0cRXxj8eymdXDnVAp5mMx8sl0JhLU	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJSZ2U4M1A2N2FNSGpINW9TWE8wSDVnVFNvVTRHM0FNYW9KeVNCa2Q4IiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789063843
-LQNanuodpkBFIX2i7af9gisdavAfnUgG7pywOfKd	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3QUZMSlNMQzIzNGZURXVHSXBoQmwwOXIwMDRHT2tWdWlBOHVlUjNSIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789056590
-H9TPwvLnHVoECusG6NWJNNcilRVUttpgPoq2OvwE	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/134.0.0.0 Safari/537.36 Edg/134.0.0.0	eyJfdG9rZW4iOiJHSlFuWW1vMW1zUnlDb2tLTnBKSVRDZmlYWlR4aGt0bTYyRHdBSEFJIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789059698
-zzDvq34x5EysO9ZZx5HijhkqmuKS2pbMhagrY6QX	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJMVmZhT1M5SGI3NWJUSFdGSTdTN3R1ODZmT3hNd01HazN5c3dKTWtHIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789060941
-ReduukiBL39RGhYucFe7dT2AYEYIckW49ZyABbA4	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIwWkMzQVViWUdKc3FzRGhoVUdZRTdiOXZZZ2s3MXprazJPa0hVRkhmIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789058039
-EiUAosUuR7zLSRX6SlPtbgDO1wS2AFaQPlEadQWT	31	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64; rv:155.0) Gecko/20100101 Firefox/155.0	eyJfdG9rZW4iOiJ4SkVQZnNjSjdldEVGYWpPeDRjbEJoZFZaejhEdlFHMTZoZ052UmpwIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvMTI3LjAuMC4xOjgwMDBcL2VuY29kZXJcL3N0dWRlbnRzXC9zYmZwIiwicm91dGUiOiJlbmNvZGVyLnN0dWRlbnRzLnNiZnAifSwibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiOjMxLCJhY3RpdmVfc2Nob29sX3llYXJfaWQiOjV9	1789058525
-caMaG3mdDBzNXG5NJayk4vfRoxL240GIVq8t66Tl	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI4dmhZMHBIVVFKVkxhYVNGTEpFQ3dlSTRpY295ME9TUFdvVlo0cTl2IiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789064567
-3VC2vbuu8l0fdMxzmA30MW5FyaEBq8WSYRhamv6n	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJNRVJNVTdqdlI3WE91NDFleXVQeGNzblRqa2FKa3IzMkxFNHc2T2ZWIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789061666
-l6YDi9NUa0wjksGcO1KoHE718GcnbbKDKbFYbEJg	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJuN29iMFRDVFpzdTFPZmVjWmVZUUpQUU1iWHZ1Z0t3TlFUeHdQUm0yIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789064599
-RP6E4EoAszYwrMfx4s6Kqy86vNVCyLzGOLQ4foyF	\N	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJaeWp4YzNsemRjYjJjTlFEQ3pPRWVqYzdKdTlxTHNkQ09ONmd6VGhkIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789061878
-8parvY3FWNn25AFiGjeIeRu8cb2NiCT4OOvEixoa	\N	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJ2UVhoUnZPNUZpUkRJaEVMMHFkcXY5SjdPMVhUVmEza0JVeXR5SUt4IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789061884
-qvxfzOvjwXoqw1YuUmHjadOYn1TPkfq4Hk7xdWY3	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI5ZkozYWRwZXVSRU5jSlVxS2J1V291bGNUZmc5akMwbndNUVNQQjBLIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789062391
-3zPcrf3MXwsfMwJK9ApZq8ToKN78sFx8V8KYkWn6	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJONkhVeVJYUVY1RXdNS3I4R1BZNmJiVlY1cUROclJOUXVmYkE1Q0gwIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789059739
-NUkjp6GvZMFw8OvmKw5KuPV2CE0aJnPzgsNLQr8f	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/76.0.3809.100 Safari/537.36	eyJfdG9rZW4iOiJGZ25LMWk1ZlJwMTh1YWdNQ3FmUURXVmMzVHhQTVFqQUZ6RG80SVBrIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789059967
-S1PSiuEHa3LGpkwq8INAojHhUhOWQ2fSgXOx3HhY	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36	eyJfdG9rZW4iOiI5cWxsUEI1TEN1WUZjR3dGcHBpeWsxRUdaa25scDN6d1FJRDU5eHJYIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789065093
-kNcUb1aC6JqUKCjGOy1vg5BSOiss5s6RNQQGHn43	33	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJvN3lGTllidlBkQ3lUaktMdGtUQm5VTjJFZUxLSGpPdE1Jd050allQIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvMTI3LjAuMC4xOjgwMDBcL2VuY29kZXJcL3N0dWRlbnRzXC9zYmZwIiwicm91dGUiOiJlbmNvZGVyLnN0dWRlbnRzLnNiZnAifSwibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiOjMzLCJhY3RpdmVfc2Nob29sX3llYXJfaWQiOjV9	1789057683
-fBIzpucaRxcChrMAPeBptiCR0CT92ciQywcIdrQ8	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJIaFE0aFZDcWVMWUVqcVVDMnlEYnJGS3ZsaXNvUGtXOVJ5b2g3ZzlTIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789063117
-fyXkhlvQYekEdEeJGvB9Ruk7h1SDr62tP2JMRaOb	27	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/152.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJRYkFQZjl0MllNT3daUHc1RGZQUThST1BDSFh3dGFSeTU2Tmw4Ym5mIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbG9jYWxob3N0OjgwMDBcL2FkbWluXC9kYXNoYm9hcmQiLCJyb3V0ZSI6ImFkbWluLmRhc2hib2FyZCJ9LCJsb2dpbl93ZWJfNTliYTM2YWRkYzJiMmY5NDAxNTgwZjAxNGM3ZjU4ZWE0ZTMwOTg5ZCI6MjcsImFjdGl2ZV9zY2hvb2xfeWVhcl9pZCI6NX0=	1789065349
-YyqSRiZeDfriTrXQuDFVTm2WKxEdM8ojtuDzZjsw	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36 Edg/136.0.0.0	eyJfdG9rZW4iOiI0RFhESWhaa0txOElRcjRVMkhqRmtsUFdUb25mRzlGaGNzbXRZYWdwIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaFwvbG9naW4iLCJyb3V0ZSI6ImxvZ2luIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1789063159
-V8yVGHWhBM90rF4LvuIubpyN6bpI4jZjeI01L2RW	\N	127.0.0.1	Mozilla/5.0 (compatible; Dataprovider.com)	eyJfdG9rZW4iOiJxSTJWZ1dDNmpaTjJLMlJGaGhFdGRqZWRRck5HbmNUQlhLMVFRZmhYIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058685
-D6x2YwFg5eNAdb65gqOGk9z5bi7Nnn6cZfU3gmRf	\N	127.0.0.1	Mozilla/5.0 (compatible; Dataprovider.com)	eyJfdG9rZW4iOiJ2N0w4eThOTGtZZUlFTHNaaVJmbm05R3FNSU1vTDBQOUdDZ3NvMm4wIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789058688
-U46G8bZWPCgEXKEmzHX5YIDkLr95gxzlYvan85M6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJwaWFWbHNlZnk1MkpwRWs5aHZUVzVqUU91TzhUVmJBanlIWGJjaHhBIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789060216
-iK10Mol7bJQHx1fcnhslocNmZiwKFWaGYIvd8Ih9	\N	127.0.0.1	Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/131.0.6778.85 Safari/537.36	eyJfdG9rZW4iOiJwdEo5d0ZycTVLUFVnUjF0eFlLWlJPWm5BQ3RuYkZRZ0NDYmZqbnc5IiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789060285
-f6mdT3Ua27dGEuUxZAsIdlS7GxV72aexcmj8FgW3	\N	127.0.0.1	Mozilla/5.0 (Windows NT 6.2; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/32.0.1667.0 Safari/537.36	eyJfdG9rZW4iOiJYZ1dkd3UxdTBTbkhEa2xRUllrdEQyZWVETXFUeDE1c0drczZtQ3ZZIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaCIsInJvdXRlIjoiaG9tZSJ9LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1789062114
-XX9SSvMQL7yihHG9vgGhzly7lE40IdPb7T2FWtWQ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJLYllPYVpsb3JScm9mcm5CV3RMbndQd3E5cTFWUVBUUW9keWoxbWxSIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119fQ==	1789065291
+FIa19Lyu7zhCUjbnE5bAHZGf2SX81wvcznRH0VwT	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJmSUU1SjlYQXRtZXVhTTZRd3laS0VSOXdya29FV3JzNVVCWmlRMWNyIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790295811
+yRxoobzENOYSt8lyg4u1W4lycid71g07YmmhKiPO	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJKTWZCbk1NNWUya0Vodm5aUnBMaEJDUU5KNG5KNWc3cXBJMk9mWDJoIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790295812
+AZ1FYnIcVPeCp5Z6qmWjOk8rRkW0m9VExOS3zvIm	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJFZzlZNGFtNWthZ3NHMThKdE93QmZscXhCMjBNVnVrUHlSZ3ByaWcyIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790302503
+XO0qRKXqK4yckuOSkzOKWlns47fJvfL5kkkI4FoD	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJpRG9KYjI0ZnA0VGx4RDJNNkQxd2l5QmhzQTlrZDJuTU9ydUFlY2ExIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790298838
+wCH307AnP9g5jxDpF8qLh8BNKtllOU2tmwAfUlOg	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3OGlsN0c1TzFEYkhYblkzRlJCdHBTRnJZM0d6QTNlODhCNmFBdldBIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790298875
+f8XFZe5Bm1t9DZjNYlyMoSKmY8rYEqBnFJPK5raY	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJERGFSOVFjcnk1YXhDR3c0ekV4S2Jqa1h3dXJPbXA4TVBpREdPY1owIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790316293
+TI9c2ESLdUMbY8RUi3361AKha25OsWXLHCbZoac1	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJPcWJQTkdhQ3JjTU5xZjhJQnhaekhONWhOanI3RzU1dDhwOVN4eEZ2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790305647
+udUiDgBMgvplNqGJjoqcghAAHSGx0xkOr3tb6Rsg	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJuTXgwcWJlc21hRWxTQkdVMjNJTVk3U05wbzhkeFE1UlJISjVoOGFlIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790309757
+bguW8mUCxw6qgwuZ68G83m6se5lQNxH3QdI8II0u	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3VEdjMDE0R2JydXltTUozaEhzWEN3M3puUmZBQ0NkRmptVlozUU82IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790319918
+oEeoWTGXt79m9XavHSVr6N83uuLfYpgezut6g20D	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJlUjJrZ2RhYUF1U2RHSVZCdXIxSW9PWDNWbXQwSTkwQkdGbzlpczhmIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790323542
+jaxnGvKbbVQTkkOzwNhxmS7limLw8QipgmMGG1QY	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJsNEJ5bjhOOXNRbm1BcHI1NE8wVzZBU043ZnBJNDVFaW1iRkpRQnY4IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790326443
+zRc2vhPVeH41w1vzV9riZzpVxBP3x4RYVrfyIBpk	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ0cnlOYlZveHpIYzBpZVhEaUg5a0p1MXlHYVdoMUxQMW1oNlh0MVBsIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790333698
+HLAqOXuoZ8x1ziEKO7wzo2UkfgAQ5tSXOO0HmwAB	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJMbks3SlpuTHJsb1E5Vzc4WFJOaFpjcndsM3B1WHg1MFpNYXJ2ZDFKIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790337326
+aaeJVvsgsS0Mv9aLi3htp2mRUx0cFcJg3vluaEUv	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJrOHRLZHVSQTBVN3ZyQXV6VE1mRzc4aDRLMnFMemNVRVlncGNCd0ZmIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790301777
+VhfnySEPUxQvNsAClKKI3t8zH4XQAhlSQJdkfXJP	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJuMTNITGxaRzZBV0tsakFDTmh4OFVqcVV4Z1NCd3E2WUJQeGt3dFc2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790301899
+xulRxB8AhtuSp9FJ0gyiQRrXCuuho0KTy0YF1NSH	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJJWHIyTEhOZUV0YUp3MVBFRkdONlZ0R3d6Zk50ckIyZ2VIQzVrd0tIIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790303228
+YZaEMPryHnlMMQnm4vUGptLRqddfIyB7Pq719qn1	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJnNmJ6U1RTWFpXZGRXZHZuZlF4bUMwR0ZCc09qWmtwajRiRGt0S00zIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790306132
+Gd118SIbM6dPqNhREG2OEwmDEcruRszlFaN4IaVy	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiI4UGtQUktuZVRDS2VDWlJLNlB3UUROd05QbTFUcTJEOVZLdEFPV0E2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790309841
+kTVzlmPVH6l8FoodQgZRO3IATUjrH42aoSosiK5e	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJBQ1c1T3JxdUlqQUhCdkdMOGU1M2JmSHBEbTkybW52eGJKbVd2Z0tYIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790313147
+6O6ArsLfHjLXHDawaUgXItC4K32etHpHM9WwCm2y	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJpUlFrcERhRlk0T1pjdEZ4anA3V0draXd1cFdxbElpRUxPU0lVS2N6IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790317017
+MI7EknfB9CnViezOT7TBIcF3FMoyejCYjhRHjbal	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJaM0ZVa3pCT2t2aEVrblhHdEw3V2NYNzlmNUswTGlUUzNWSmVDMWRiIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790320538
+ANM1FdlpRVZyt0NGwkFF6hpragXlIP1cgqHDlIjL	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJ2WXQ5Y1BocWlKNlpnVWZsbjYxQ1pSTXFHY2FSMFh5clFjU29CSWdUIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790320612
+Q8oIGG9mxPJiAoCl93YsMuMkBwdD0sWhjOT4qxd7	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIxclMzcXAzU1N1ak94dXg0SnlDbk5BNlRnUEdrUGhGVzFHVWNjVElWIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790295974
+jn4pUsuN7NkOiYGLO2SI4yZlDGPeYFtrPxZZQefM	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJ4OFdFZHRUTEdjdzZYejZSVm40ejBmODFQY2JFOHJpRTRCOXBsZENvIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790299116
+QofvqYl1DVMb9z5MaCAa7MKIVIfJPE9BzCR73CPX	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJUQXJHQjdqZzdObWRqVnNmRW41V2FkSUZjckdUdFFSUXY1czFBaE5SIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790320644
+Rj5Rp3KUCRMJOacqfKrCmtQbWx7HaGGFONeTqVlw	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiIxV1lScVFrZmd6V3l3bWliVXc1eGo0aHR3QnB3S1NFQU9sMDdPQjYwIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790323771
+nHy5yTYVUN4dQcXlsCmUBW2iSSD7yowWm2WpGrjF	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJCZ05YWnU2UmhUSlk1ektqNmx4NVlKQ093Z0w1V255U0d1eE9tVzJGIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790327169
+zCGpHgYG0bOkfzEr6wSjUcpdxu6pucQXunB5IvTi	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 6.0.1; Nexus 5X Build/MMB29P) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.8010.52 Mobile Safari/537.36 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)	eyJfdG9rZW4iOiJ1c2JOUnJzSWdYWGk3eXY2czVqbWs4Vk5QSWJoMjNlSXZtQ0EzZnA3IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790327207
+W6b2YCRtx8oTevP8jmCa2lKvbgbPBp7IL6TsgvMl	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJac1piaHJLVmIyY2VYZDlNR0tDVWQ5a1czSHh2ellsdncxU055Vko0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790330547
+MZ1oAtzkt92KlyyUiaZDoinNB9g982B3Nhwcw22t	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJJdm91RWFhMTdxWjZIVmhweGJpbGxWcnQ4QlVqNkpqRjNIdHFZQWN6IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790334425
+tXo3fdUYJ9MLrlbgVGBw3jHvA2Cu5ZZ8RhcHqGyK	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJuekhMVndwd1Vibnh1UGZodldpNnQxSkl0SUh6a3JXUVlmN21JQzd0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790338052
+MiikAzJUKpZHaOlJnGrE00uj0SPtYgnaOi5AtRN9	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJBZHcwdXpsSkk4VVRXcE96SlNGcFdTcUlRbzNzQ3E2clZMVjJKQ0oyIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790303956
+PmofOAEjtidCkTsYKp2QFBbuwti3idgoN10UxET9	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJsZUxSSmZNNEViVGNRS3g1OXFPMHpqbmlGanNteXpUbnBpclRrMzBWIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790306759
+tS4QteKcizZ7K603JP9V34If89Xunp4dtOCqLLi6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJTWnBqWVJ2QXlEZW9GU0RHSWYwRDNFMEtwaUlsaTgzMU5zc1Y4N2dvIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790306857
+nCKoEzB2dnB0a7PrvSbleNUc58RhP0i0blB6VhNK	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ4ejVHYnd5MVFLcVoxWXlBdnJNWmpteEZYallKdjZOclZnVzN6QjhsIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790310482
+8pW1ta9sducXw3ogtx02lRIs4ukgwv0b5hcdHsB9	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJVbUwwWktqdFhDTDViWFN0NTBtcndRRlJ0NTJBOGs4SlJmc0FzSW5sIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790313389
+6hnVWiCySxtdyMN9TRDti9wuIWeDveTbsP6xqbgK	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiIwMVBIS0NwU1JhZVl1T3d1eEdqVmY3bmN6UFV5emJpRFlCTmJqWWFYIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790317244
+aaemr9VMCKtMgAtrolibetecpORYL9j3GzYxZhEv	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIySVM4NFFua2RIejIzQW13ejBKMXk4elhhN3oxa3JSWVRqNTFjWWJxIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790321369
+oECLbTwnEldEWZl53OqfMApgsL7zNViJ2OGAFQPZ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJMWjM5YjE1UWJuN0ZnN0dUMEN4QXJqNGY2REZ1NGZZeThyb1lyWkFEIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790296699
+1D7STN5MZhgrx3gIqI4HsY5kPnzzBXa84AsS33gy	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJwOGJEUXJsQkJFZjBHTDhQV3RxTzdsUFplTUhHa2lVOWthMlpianhOIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790299600
+Uk4AzfJT892BqKEP4IEYrC0IFVarPr2wI5KdocIG	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJIRFpCRkVXTFNtUWRuOEU5cktlWURJMk9FMlpuVGpVTk1LWkM3cDh5IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790323903
+RRWfaGe5qeSeKmMeYCvj2HvdLEOBsde86Xpr2A0u	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJGcHBBS3VuMUZTWUdvajhIeHRyN2o0RFAxRWRvam40NlU3TXhkcWlSIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790327895
+timjg2IoGaHroD52NhxDfMA1rdWzboZ9uYIqkIyT	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJzNkVyMDk5SlFRYXBySEd3Tm9NZnlZdHA5YUNraXZZV2l6ZlhLRXQ2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790330799
+O2tOKa7fEoh60IuFULmtapzv4penE0FIyakVzvwM	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJMMHJEelc5b1BJcEk5ZzhtYTlBTUo1eTFXVWw1c3lGdjVMNmhiTEVlIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790330859
+MQbekgwiura9BtsREmXXhf0qiCKIQtidTyTyHONg	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJpOTcyR3JuaXJ0eVBaRmpyWDE0b0tSbzkyWU84WUtpY3d3VUVwbTdWIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790335150
+Gb9NsQNhF49SVc0ThBHHUMR7q1oZ2jaQIGlZwDaI	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3RDZWejdhZ3o3S2Z6WkFaUUo3ZmkwMkUySkRpYkJIQUhYTk8yakRBIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790338778
+jHOGyMkoR1XYFriv4fZcM8IsQ4vgB2Lef81Xj5Qn	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJPVkZXZGlmYVlkVXhRM21XNW9JSXJxY1RiaFZ2cUFvRGE3eEM1TUl3IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790304681
+fp1IHzSavs852wx3w4vRjUup2CGkeY0JHKpK2Y6C	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJlWlZMQ3BacUZJQVZjVWdYc3F2YkRLQkdqQVZ1bHg4bDJHaEZ6SE1MIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790307582
+F2vBNZ9GHwTrEuTw96nJPtgUoAskbuhYNYkumBJC	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJLUEtEZ2lOemZaYnlGOHZFd1VrWDdPUHZlRTRvSDNTdGhxUkJWUWI1IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790311209
+sJa17EkvO3BDDaOP6OPfZpZKjYPv936ceG9KCNDn	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJIa25WTmlsb2djYzU3NGNaVktNTU5PdktLYkw5T1RUQkhuNlB4bjZ1IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790314114
+u9rjS0gJ6ZEcRrEryL1PT4mlPwfpGJKnTWZ2TWYl	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJFTkZMZEZVNWk0Z3l3WUtBdGJNUmROYVQxTjRXcHpYcXlnbGZ0ME9HIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790317743
+ezIotoRPng8POGqxq2zZSTVNpnOcLICmoEG08dr3	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36	eyJfdG9rZW4iOiJUMUNJTDNJY2ZtTVB2RHJjOUgxa0dybVRHTm9QZ0xHN3RDcVBpOUhWIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790317771
+iHMhtEYxLqLrRTcnyvCCuy84AZ1demVzkMRL2dWQ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJJSGZmS3hGWkUyQ3pLQnJaZVhNZVZJOEFIM3hLWXFZSXNYSElyeGtuIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790322094
+XTWTkDkehXy0zHUqXG13WB4TkCujGx01tHBdzdSD	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJkYWhvZmpJR3ZrUU1pOXNVVXZDaTZoamRIYjNMZ0JiOEtiTG9SVksxIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790324266
+I2NYdKruV2DPvyC19vUKX2uulpub3jrLt6GXo1s5	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJTbWdrU3hjdDVieE9RdFVGUlhRblBxbGxZTWtFc3JaVU9RT0E0ZzB0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790328621
+mjTkQZp19wL06zVqE9khY143uuap9L2GnWQzQ4uw	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJ4VHVhNkJrMmg5aGZuRDNTWE9ObnFFTTJITlBST2dCS2VGWGtkU1dCIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790331502
+Dfnvl5LOAHcFYxX066FLkmTr6ZZgCMDBRYnOcLBP	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJaRHRubDFuaTMyUWMwakdQUmJHU1Q0MFVsclNxWkVRV09KV2VUQ1Q2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790331524
+llm0G1LsNUCy7R64xwPheu6WcoyrOGCrnqCqU8wA	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiI5eE5uWGpURXhKTzFzbUx1SVUzODZHb2xQdE5rS2tqUk9QTDhCNTh6IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790335651
+lYUdfpXWR4yrG3I7BRm1tBeccm1YGWriijbiYCbc	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJSRXJqVXYwVE9FR3hzQ2I3WE1hRWNOSmY0YUJLZXhsTVJKTUF2NEROIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790297334
+1wRxgFjFUzn50AREU5CNx2O6MPWQscy8HyLRmUdc	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJSZXhUYlNTSHlUd3pqR0k2NGZObW1EY2xLaGVjb2xGT0RVNUF2WWQ1IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790297424
+jasgd1eGSUse6LYuDHbonBYmy7pH5IuFI3jAIAfZ	\N	127.0.0.1	Mozilla/5.0 (compatible; webatlabot/1.0; +https://webatla.com/bot; abuse@webatla.com)	eyJfdG9rZW4iOiJ0ek9LbHFMM1hCWmI4NVl3R0tzb3psaWdId1B4djdYdGVZZjZpMmlFIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790300125
+NHYpFOVe8AKAPUsfyYGouD6Unwp5KE2Wx9JPxh4R	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJFWk9teW1qVUNEWWN0anA0c2RnRU5VUTVMZVJaY1lFZ2RRVXczSWtkIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJhY3RpdmVfc2Nob29sX3llYXJfaWQiOjYsIl9wcmV2aW91cyI6eyJ1cmwiOiJodHRwOlwvXC9udXRyaXNpZ2h0LnRlY2giLCJyb3V0ZSI6ImhvbWUifX0=	1790305125
+IGFe9vp3bx1hCBgi3sQWkkTXqDLektgk6Md5NyzJ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJxTVdlMUdXaVFxNnV3cFRSWk84blJ4bnpOQzdwRlpMRzdxckFIbGRiIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790308306
+T9fNNCzxexQCZ32v4zwgLyRykQlyuXTKtrClRQp6	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJUT2F4anREQTRNdzZXRFlDUkh3OTZ1TWZwdThodXZhSURPcDZLb0dHIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790311935
+Glear7RMc8a8IMuIxnGoSWQrrx4gm41LCyiAUu4p	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJpZWZjYmpRRVhFaEZjOTBqR3RjbzlPY0FVbGtYdTluTFRCVjlsZGg3IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790314840
+KXLpVhsOV9cZr8vIrDh17aDOekSW6UIQlbNeKchL	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJwRTFqVWZLcHJhU1hXZ1pndUx5cm5oSm5qUjRJc3A2cWYzcTZiRmsyIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790318469
+R70Ox1HZ9uew0sSYN4Ya87i1jGEv8U05HoV17n2y	\N	127.0.0.1	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJoTzNWbElPTGVhbmx2UllNaDlwbkh0S2NjYkRQYTJxTXRqNTZuVzR4IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790322501
+6UaQjl5brvuS88xLMs8AmqudOKDSvYs0dsivet55	\N	127.0.0.1	Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)	eyJfdG9rZW4iOiJpd1Rrb01oY1dpYlZUc29Uanp5SDIyclFpSVBVU0FhclZOVUVVb2tWIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790298115
+lI0DRUnvMBLpb47IpOS5nIb1yORQvhLTIGrUF8ha	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJjODlaU0tjaWdGZHg2MHVBUWxEa01FU3pQTUxrNms4SkpEUXRIQnRTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790324992
+0fd4sMwyUgwqTio2WYLIqMkEZEcXv37nE9M8OI26	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJkc0Zsa25jaHpSQm1BZ3BTYWZGaVBYT0U1MXhCbUppYzVhWkxydGp5IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790329347
+8PHj7Qi7esjmLL1F6jLV01lyt2zjDCDoiF4CCu6B	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJBMHJzWXNrN1g0OWQ2OUJDRVJIN3BHWTdOQkVnV2VwUTJ4cTM3eTRiIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790332250
+GgrMAJXzf8jgeGL4trZomlZVKf2J2oT4D4YWeSmh	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJCcHVObzdJaXFFQm9NdDlKZ3dXc3ZFeWpqOEFJR01rd3JkZmJ5Y0JiIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790335876
+Zp1VzH23ma7bddVhHSgLXo0WKdmbZC0AOxmAMREa	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJEWmxSRkROY09SRUpWWkVMSWlRWTVXeEp6ZHJmMXBtTjllQlBndk92IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790298150
+mvpgUzqbZ8yjQIaz6QGhzfXCLnbwjaLTzvNfrwwR	\N	127.0.0.1	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	eyJfdG9rZW4iOiI3MjM1amFvM2piQXZWOGNYN2FxMUVYdlRzZ1RWU1dyU3lYdUM1N1F0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790335916
+O5FEuvkk5ryrkmtfNxJaUcMS17a2gruUdG0jdYMG	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3Vk9CTGlWdVhJN0pEdDBMRno2WG9sRzNDQVUwdDhTTEpoZldQTlIzIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790300325
+bwOpGd4BuLHmw6Z66h3NxoyYEvVFkWNNLi7Mhc88	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJUakdDWU9UNkM0ZVlDTGNyVzdDNDJQdjA4TFN5dkMyUEdtT1puNUJCIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790305407
+YKE2gGUyFXZ8uXJLKfGvJj965GPujWDNtBRWazuv	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJzakJ6SjhEQ3pTdlA3M1dKTlRvSzFOWDEzY3RRU3BBa0sySEZCaVRnIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790305452
+KQJDtkuCZZvThaFYlHOPTq3PJd8uIULA4WV4IXms	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJOVFVqYmUydDRFNDZQZm85R0J2Z3p2czFseGV6d1N4Z1hzR1ZONmNZIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790309031
+4ISzi5IWY2LgmD3LgVATNxdWU1QcTxxDdQwbRKaB	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJSUXVPTWdnbkRaNTBmbGp1cjBxbm1OWXB0TlhrOEc4WXJxbjdvOXVlIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790312661
+2yvfnJgwB92vGtoXvhavsKeYnvT9agjOHGfEFNP2	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJsVUxOSGhqYjRPdk1VSXA3UU9PV0tYUHpETEE1SE1QRzRDSlVjSlgwIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790312756
+t49zT0lvNPrjJBkyiHqymzy8RgY23jywD20YIARe	\N	127.0.0.1	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJlTk1KcXltNVZIYXNJM2l4ZTRwbmVVY2F5S044U3hRTjhnZ2lyeUt1IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790315450
+wllFEMwRiGqD8T3rN50SDF9aro9HHRzZ1EBpYVym	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJlWGFONHZWQ2g5ZXdhRE9UT043VmNPMnBCOGtGTjFVc1pSNTRSRzVJIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790315567
+ry5xNbbQtwmDiRLGj82r00lbrj6rolhsCZpvapRw	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI3YnJtVDI0b3FZNTJpbDJZeks3SW5VSTEwb1JYdXRIdEhESUNTbEdUIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790319194
+B12IeMPxLbqSUWpU7rXDl60UUpQPhlGyEjxHrxyo	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ3bVlGWHlkckF4ZTJtcW42ek9vNXVxWklPaVJLRmdQYTdZUGVKcVZMIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790322818
+NOJnhnUcHpFa0U5TSvF9WNoL37BpvtEupHvhRqsL	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJLb2ZQd1Fuald6YjE3Y3dVcHBiMHFBRmhnSERpamhJdG56TjZBWUY2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1790298519
+ogTYsOLBcHknkMAZYem8DpbJCdcOyGvS82tTvsQT	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJzSTY5TzFNV01KemlveTFVRmlTQmIxUTB6c0RGU3M1MGx3amRJcFdNIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790301051
+ua1Lkud3RpsGhHiHgF8gOUCUZX1sURoI4wtO4v3v	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJBdFNxT0QwMGIwWlNvUm1tOGxNbGp5OW5neWo3SktYQW80Nkh2Q1JFIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790325717
+e6V0CYFUH9jvCN2AinAjPy3az2V5cNwou50OWFAd	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJOdnFuanVlU2czWmRaa09HMU40bmg2dUNMeXk5NE0xc3drYkJ6M1RJIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790330072
+kwK1PurzNaIrk5RsUzoyJ7fCvONHdnWTF4lX30jL	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJGMEVNczBLenlScTBuYVZHNGxlcGJ2eWhaNTdxWDd3Tk56akdiSFNKIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790332974
+2nFfX8in50e3izqOMYWTj6xsEDXRKxZLdaTzYmu2	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJnNHRFd2Y3UFhZaDdRdXpFUlBTb1NEVTRvN3pYdEZ1Wm9jRUg3cE85IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1790336601
 \.
 
 
@@ -5258,9 +6840,233 @@ XX9SSvMQL7yihHG9vgGhzly7lE40IdPb7T2FWtWQ	\N	127.0.0.1	Mozilla/5.0+(compatible; U
 --
 
 COPY public.student_attendance_records (id, sbfp_participant_id, recorded_by_user_id, attendance_date, status, created_at, updated_at) FROM stdin;
-47	43	27	2026-09-10	present	2026-09-10 18:30:58	2026-09-10 18:30:58
-48	41	26	2026-09-10	present	2026-09-10 19:55:31	2026-09-10 22:17:03
-49	55	27	2026-09-11	present	2026-09-11 01:32:09	2026-09-11 01:32:09
+56	59	26	2026-09-14	present	2026-09-14 18:39:53	2026-09-14 18:39:53
+57	61	26	2026-09-14	present	2026-09-14 18:40:06	2026-09-14 18:40:06
+58	67	31	2026-09-14	present	2026-09-14 18:43:26	2026-09-14 18:43:26
+59	68	31	2026-09-14	present	2026-09-14 18:43:38	2026-09-14 18:43:38
+60	69	31	2026-09-14	present	2026-09-14 18:43:49	2026-09-14 18:43:49
+61	71	31	2026-09-14	present	2026-09-14 18:44:01	2026-09-14 18:44:01
+62	77	32	2026-09-14	present	2026-09-14 18:47:41	2026-09-14 18:47:41
+63	78	32	2026-09-14	present	2026-09-14 18:47:49	2026-09-14 18:47:49
+64	87	33	2026-09-14	present	2026-09-14 18:51:04	2026-09-14 18:51:04
+65	88	33	2026-09-14	present	2026-09-14 18:51:11	2026-09-14 18:51:11
+66	89	33	2026-09-14	present	2026-09-14 18:51:23	2026-09-14 18:51:23
+67	90	33	2026-09-14	absent	2026-09-14 18:51:29	2026-09-14 18:52:40
+68	91	33	2026-09-14	absent	2026-09-14 18:51:37	2026-09-14 18:52:50
+55	57	26	2026-09-14	absent	2026-09-14 18:39:38	2026-09-15 22:52:29
+70	57	26	2026-09-16	absent	2026-09-16 10:37:51	2026-09-16 11:11:19
+71	59	26	2026-09-16	absent	2026-09-16 10:38:36	2026-09-16 11:11:22
+73	60	26	2026-09-16	present	2026-09-16 11:11:49	2026-09-16 11:11:59
+72	61	26	2026-09-16	present	2026-09-16 10:38:50	2026-09-16 11:12:13
+74	97	27	2026-09-16	present	2026-09-16 14:03:28	2026-09-16 14:03:28
+75	60	26	2026-09-14	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+76	97	26	2026-09-14	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+78	67	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+79	68	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+80	69	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+81	71	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+82	77	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+83	78	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+84	87	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+85	88	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+86	89	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+87	90	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+88	91	26	2026-09-16	absent	2026-09-17 13:39:52	2026-09-17 13:39:52
+90	67	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+91	68	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+92	69	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+93	71	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+94	77	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+96	87	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+97	88	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+98	89	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+104	97	26	2026-09-17	absent	2026-09-18 13:57:38	2026-09-18 13:57:38
+99	90	27	2026-09-17	present	2026-09-18 13:57:38	2026-09-18 14:22:23
+106	97	26	2026-09-18	absent	2026-09-17 15:10:59	2026-09-17 15:10:59
+108	78	27	2026-09-17	absent	2026-09-18 15:24:23	2026-09-18 15:24:23
+109	91	27	2026-09-17	absent	2026-09-18 15:24:23	2026-09-18 15:24:23
+110	57	27	2026-09-17	absent	2026-09-18 15:24:23	2026-09-18 15:24:23
+111	61	27	2026-09-17	absent	2026-09-18 15:24:23	2026-09-18 15:24:23
+113	67	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+114	68	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+115	69	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+116	71	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+117	77	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+118	78	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+119	87	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+120	88	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+121	89	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+122	90	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+123	91	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+124	57	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+125	60	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+126	61	27	2026-09-18	absent	2026-09-22 15:26:29	2026-09-22 15:26:29
+102	60	26	2026-09-17	present	2026-09-18 13:57:38	2026-09-17 15:34:38
+129	98	27	2026-09-17	present	2026-09-17 15:36:12	2026-09-17 15:36:12
+77	98	27	2026-09-14	present	2026-09-17 13:39:52	2026-09-17 16:11:19
+89	98	27	2026-09-16	present	2026-09-17 13:39:52	2026-09-17 16:11:34
+127	98	27	2026-09-18	present	2026-09-22 15:26:29	2026-09-17 16:11:50
+130	99	26	2026-09-14	absent	2026-09-18 10:50:32	2026-09-18 10:50:32
+131	99	26	2026-09-16	absent	2026-09-18 10:50:32	2026-09-18 10:50:32
+132	99	26	2026-09-17	absent	2026-09-18 10:50:33	2026-09-18 10:50:33
+133	99	27	2026-09-18	present	2026-09-18 10:54:46	2026-09-18 10:54:46
+134	100	27	2026-09-14	absent	2026-09-18 13:48:34	2026-09-18 13:48:34
+135	100	27	2026-09-16	absent	2026-09-18 13:48:34	2026-09-18 13:48:34
+136	100	27	2026-09-17	absent	2026-09-18 13:48:34	2026-09-18 13:48:34
+137	100	27	2026-09-18	present	2026-09-18 13:50:12	2026-09-18 13:50:12
+138	101	26	2026-09-14	absent	2026-09-18 16:02:14	2026-09-18 16:02:14
+139	101	26	2026-09-16	absent	2026-09-18 16:02:14	2026-09-18 16:02:14
+140	101	26	2026-09-17	absent	2026-09-18 16:02:14	2026-09-18 16:02:14
+141	101	27	2026-09-18	present	2026-09-18 16:05:53	2026-09-18 16:05:53
+142	67	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+143	68	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+144	69	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+145	71	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+146	77	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+147	78	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+148	87	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+149	88	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+150	89	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+151	90	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+152	91	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+153	57	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+154	60	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+155	61	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+156	97	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+157	98	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+158	99	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+159	100	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+160	101	26	2026-09-19	absent	2026-09-20 15:00:48	2026-09-20 15:00:48
+161	57	27	2026-09-20	present	2026-09-20 16:26:13	2026-09-20 16:26:13
+162	60	27	2026-09-20	present	2026-09-20 16:29:57	2026-09-20 16:29:57
+163	102	26	2026-09-14	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+164	103	26	2026-09-14	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+165	104	26	2026-09-14	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+166	105	26	2026-09-14	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+167	106	26	2026-09-14	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+168	102	26	2026-09-16	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+169	103	26	2026-09-16	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+170	104	26	2026-09-16	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+171	105	26	2026-09-16	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+172	106	26	2026-09-16	absent	2026-09-20 17:29:29	2026-09-20 17:29:29
+173	102	26	2026-09-17	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+174	103	26	2026-09-17	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+175	104	26	2026-09-17	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+176	105	26	2026-09-17	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+177	106	26	2026-09-17	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+178	102	26	2026-09-18	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+179	103	26	2026-09-18	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+180	104	26	2026-09-18	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+181	105	26	2026-09-18	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+182	106	26	2026-09-18	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+183	102	26	2026-09-19	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+184	103	26	2026-09-19	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+185	104	26	2026-09-19	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+186	105	26	2026-09-19	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+187	106	26	2026-09-19	absent	2026-09-20 17:29:30	2026-09-20 17:29:30
+188	112	27	2026-09-14	absent	2026-09-20 17:47:42	2026-09-20 17:47:42
+189	112	27	2026-09-16	absent	2026-09-20 17:47:42	2026-09-20 17:47:42
+190	112	27	2026-09-17	absent	2026-09-20 17:47:42	2026-09-20 17:47:42
+191	112	27	2026-09-18	absent	2026-09-20 17:47:42	2026-09-20 17:47:42
+192	112	27	2026-09-19	absent	2026-09-20 17:47:43	2026-09-20 17:47:43
+193	113	27	2026-09-14	absent	2026-09-20 20:03:05	2026-09-20 20:03:05
+194	113	27	2026-09-16	absent	2026-09-20 20:03:05	2026-09-20 20:03:05
+195	113	27	2026-09-17	absent	2026-09-20 20:03:05	2026-09-20 20:03:05
+196	113	27	2026-09-18	absent	2026-09-20 20:03:05	2026-09-20 20:03:05
+197	113	27	2026-09-19	absent	2026-09-20 20:03:05	2026-09-20 20:03:05
+198	114	27	2026-09-14	absent	2026-09-20 20:06:00	2026-09-20 20:06:00
+199	114	27	2026-09-16	absent	2026-09-20 20:06:00	2026-09-20 20:06:00
+200	114	27	2026-09-17	absent	2026-09-20 20:06:00	2026-09-20 20:06:00
+201	114	27	2026-09-18	absent	2026-09-20 20:06:00	2026-09-20 20:06:00
+202	114	27	2026-09-19	absent	2026-09-20 20:06:01	2026-09-20 20:06:01
+203	115	26	2026-09-14	absent	2026-09-20 20:20:32	2026-09-20 20:20:32
+204	115	26	2026-09-16	absent	2026-09-20 20:20:32	2026-09-20 20:20:32
+205	115	26	2026-09-17	absent	2026-09-20 20:20:32	2026-09-20 20:20:32
+206	115	26	2026-09-18	absent	2026-09-20 20:20:32	2026-09-20 20:20:32
+207	115	26	2026-09-19	absent	2026-09-20 20:20:32	2026-09-20 20:20:32
+209	116	27	2026-09-14	absent	2026-09-20 20:31:50	2026-09-20 20:31:50
+210	116	27	2026-09-16	absent	2026-09-20 20:31:50	2026-09-20 20:31:50
+211	116	27	2026-09-17	absent	2026-09-20 20:31:50	2026-09-20 20:31:50
+212	116	27	2026-09-18	absent	2026-09-20 20:31:50	2026-09-20 20:31:50
+213	116	27	2026-09-19	absent	2026-09-20 20:31:50	2026-09-20 20:31:50
+214	90	33	2026-09-20	present	2026-09-20 22:50:18	2026-09-20 22:50:18
+215	103	33	2026-09-20	present	2026-09-20 22:50:23	2026-09-20 22:50:23
+216	104	33	2026-09-20	present	2026-09-20 22:50:26	2026-09-20 22:50:26
+217	87	33	2026-09-20	present	2026-09-20 22:50:29	2026-09-20 22:50:29
+218	106	33	2026-09-20	present	2026-09-20 22:50:32	2026-09-20 22:50:32
+219	89	33	2026-09-20	present	2026-09-20 22:50:35	2026-09-20 22:50:35
+220	105	33	2026-09-20	present	2026-09-20 22:50:38	2026-09-20 22:50:38
+223	102	33	2026-09-20	present	2026-09-20 22:51:33	2026-09-20 22:51:33
+224	88	33	2026-09-20	present	2026-09-20 22:53:49	2026-09-20 22:53:49
+225	91	33	2026-09-20	present	2026-09-20 22:53:54	2026-09-20 22:53:54
+226	98	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+227	101	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+228	77	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+229	78	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+230	68	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+231	69	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+232	67	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+233	71	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+234	61	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+235	100	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+236	112	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+237	97	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+238	99	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+239	113	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+240	114	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+241	115	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+242	116	27	2026-09-20	absent	2026-09-21 07:46:05	2026-09-21 07:46:05
+243	117	33	2026-09-14	absent	2026-09-22 19:47:23	2026-09-22 19:47:23
+244	117	33	2026-09-16	absent	2026-09-22 19:47:23	2026-09-22 19:47:23
+245	117	33	2026-09-17	absent	2026-09-22 19:47:23	2026-09-22 19:47:23
+246	117	33	2026-09-18	absent	2026-09-22 19:47:23	2026-09-22 19:47:23
+247	117	33	2026-09-19	absent	2026-09-22 19:47:23	2026-09-22 19:47:23
+248	117	33	2026-09-20	absent	2026-09-22 19:47:23	2026-09-22 19:47:23
+250	119	27	2026-09-25	present	2026-09-25 10:02:20	2026-09-25 10:02:20
+251	118	28	2026-09-14	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+252	119	28	2026-09-14	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+253	118	28	2026-09-16	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+254	119	28	2026-09-16	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+255	118	28	2026-09-17	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+256	119	28	2026-09-17	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+257	118	28	2026-09-18	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+258	119	28	2026-09-18	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+259	118	28	2026-09-19	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+260	119	28	2026-09-19	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+261	118	28	2026-09-20	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+262	119	28	2026-09-20	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+263	67	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+264	68	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+265	69	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+266	71	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+267	77	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+268	78	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+269	87	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+270	88	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+271	89	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+272	90	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+273	91	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+274	57	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+275	60	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+276	61	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+277	97	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+278	98	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+279	99	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+280	100	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+281	101	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+282	112	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+283	115	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+284	113	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+285	102	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+286	103	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+287	104	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+288	105	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+289	106	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+290	116	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+291	114	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+292	117	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+293	118	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
+294	119	28	2026-09-22	absent	2026-09-25 10:54:38	2026-09-25 10:54:38
 \.
 
 
@@ -5277,52 +7083,69 @@ COPY public.student_feeding_records (id, sbfp_participant_id, recorded_by_user_i
 --
 
 COPY public.students (id, lrn, first_name, last_name, name_extension, middle_name, sex, birth_date, guardian_name, guardian_email, address, created_at, updated_at, guardian_contact) FROM stdin;
-39	101234567808	Angela	Ramos	\N	\N	Male	2026-09-10	Ramos	tony.ramos@gmail.com	505 Sta. Ines, Magalang, Pampanga	2026-09-10 14:14:22	2026-09-10 14:14:22	09561234568
-40	900100000010	Chloe	Aquino	\N	\N	Female	2026-09-30	Michelle Aquino	michelle.aquino@example.com	28 Luna St., Brgy. Balibago, Angeles City	2026-09-10 14:14:26	2026-09-10 14:14:26	09171234510
-14	136542100019	Christian Paul	Aquino	Jr.	\N	Male	2020-01-01	Maria Aquino	m.aquino@example.com	Blk 3 Lot 4, Dau, Mabalacat City, Pampanga	2026-09-10 14:02:53	2026-09-10 14:02:53	09171234561
-16	106214150001	Mateo	Reyes	\N	Pineda	Male	2016-04-12	Maria P. Reyes	m.reyes_updates@gmail.com	Blk 4 Lot 12, Dau, Mabalacat City, Pampanga	2026-09-10 14:04:03	2026-09-10 14:04:03	09171234567
-17	900100000003	Carlo	Reyes	\N	\N	Male	2026-09-12	Ramon Reyes	ramon.reyes@example.com	8 Bonifacio Ave., Brgy. Cutcut, Angeles City	2026-09-10 14:04:15	2026-09-10 14:04:15	09171234503
-18	101234567802	Clara	Santos	\N	\N	Male	2026-09-24	Roberto	roberto.santos@gmail.com	456 Sto. Rosario, Magalang, Pampanga	2026-09-10 14:05:38	2026-09-10 14:05:38	09181234562
-20	136542100024	Samantha Nicole	Dizon	\N	\N	Female	2020-02-01	Roberto Dizon	roberto.dizon@example.com	125 MacArthur Highway, Dau, Mabalacat City, Pampanga	2026-09-10 14:06:43	2026-09-10 14:06:43	09182345672
-21	101234567803	Anthony	Reyes	\N	\N	Male	2026-09-10	Elena	elena.reyes@yahoo.com	789 Sta. Cruz, Magalang, Pampanga	2026-09-10 14:07:10	2026-09-10 14:07:10	09201234563
-22	106214150002	Chloe	Santos	\N	Garcia	Female	2019-09-25	Roberto G. Santos	guardiannichloe@gmail.com	45 Sampaguita St., Marisol Village, Angeles City	2026-09-10 14:07:08	2026-09-10 14:07:08	09189876543
-23	900100000005	Ethan	Mendoza	\N	\N	Male	2026-09-21	Mark Mendoza	mark.mendoza@example.com	17 Santos St., Brgy. Pulung Cacutud, Angeles City	2026-09-10 14:08:04	2026-09-10 14:08:04	09171234505
-24	136542100031	Lucas Miguel	Ramos	\N	\N	Male	2020-03-01	Elena Ramos	\N	Purok 2, Mabiga, Mabalacat City, Pampanga	2026-09-10 14:08:59	2026-09-10 14:08:59	09193456783
-25	101234567804	Princess	bautista	Aquino	\N	Male	2026-09-10	Aquino	luz.aquino@gmail.com	101 San Nicolas, Magalang, Pampanga	2026-09-10 14:09:15	2026-09-10 14:09:15	09221234564
-26	900100000006	Andrea	Flores	\N	\N	Female	2026-09-22	Rosa Flores	rosa.flores@example.com	42 Del Pilar St., Brgy. Balibago, Angeles City	2026-09-10 14:09:17	2026-09-10 14:09:17	09171234506
-27	106214150003	Juan	Mendoza	Jr.	Bautista	Male	2015-11-08	Juan B. Mendoza Sr.	jmendoza.senior@yahoo.com	112 MacArthur Highway, Dau, Mabalacat City, Pampanga	2026-09-10 14:09:40	2026-09-10 14:09:40	09195551234
-28	101234567805	Princess	bautista	Aquino	\N	Male	2026-09-10	Aquino	luz.aquino@gmail.com	101 San Nicolas, Magalang, Pampanga	2026-09-10 14:09:56	2026-09-10 14:09:56	09221234564
-29	900100000007	Miguel	Navarro	\N	\N	Male	2026-09-23	Antonio Navarro	antonio.navarro@example.com	19 Bonifacio St., Brgy. Angeles, Angeles City	2026-09-10 14:10:11	2026-09-10 14:10:11	09171234507
-30	136542100045	Beatrice	Santos	\N	\N	Female	2020-04-01	Marco Santos	marco.santos@example.com	45 Sampaguita St., Camachiles, Mabalacat City, Pampanga	2026-09-10 14:10:27	2026-09-10 14:10:27	09204567894
-32	136542100052	Gabriel James	Garcia	\N	\N	Male	2020-05-01	Ana Garcia	\N	Phase 1, Dapdap, Mabalacat City, Pampanga	2026-09-10 14:11:53	2026-09-10 14:11:53	09215678905
-33	106214150004	Sophia	Cruz	\N	\N	Female	2017-02-14	Elena Cruz	elena.cruz_88@gmail.com	Blk 2 Lot 8, Camella Homes, Angeles City	2026-09-10 14:12:11	2026-09-10 14:12:11	09203337777
-34	900100000008	Lara	Castillo	\N	\N	Female	2026-09-24	Grace Castillo	grace.castillo@example.com	7 Mabini Ave., Brgy. Malabanias, Angeles City	2026-09-10 14:12:22	2026-09-10 14:12:22	09171234508
-35	101234567807	Joshua	Villanueva	\N	\N	Male	2026-09-10	Grace	grace.v@gmail.com	404 San Francisco, Magalang, Pampangac	2026-09-10 14:13:10	2026-09-10 14:13:10	09451234567
-36	900100000009	Daniel	Bautista	\N	\N	Male	2026-09-25	Pedro Bautista	pedro.bautista@example.com	55 Rizal St., Brgy. Anunas, Angeles City	2026-09-10 14:13:21	2026-09-10 14:13:21	09171234509
-37	136542100068	Sofia	Mendoza	\N	\N	Female	2020-06-01	Carlos Mendoza	c.mendoza@example.com	88 Rizal St., Poblacion, Mabalacat City, Pampanga	2026-09-10 14:13:55	2026-09-10 14:13:55	09226789016
-38	106214150005	Gabriel	Tolentino	\N	Flores	Male	2019-07-30	Anna F. Tolentino	nanaynigabriel@gmail.com	88 Lakandula St., Dau, Mabalacat City, Pampanga	2026-09-10 14:14:11	2026-09-10 14:14:11	09154448899
-42	101234567809	Christian	Garcia	\N	\N	Male	2026-09-10	Sonia	sonia.garcia@gmail.com	: 606 San Ildefonso, Magalang, Pampanga	2026-09-10 14:15:48	2026-09-10 14:15:48	09671234569
-15	101234567891	Cruz	Juan	\N	\N	Male	2026-09-10	juan	juan@gmail.com	707 Bucanan, Magalang, Pampanga	2026-09-10 14:03:11	2026-09-10 14:16:31	09981234570
-44	136542100089	Mia Sophia	Torres	\N	\N	Female	2020-08-01	Jorge Torres	jorge.torres@example.com	Blk 8 Lot 2, Duquit, Mabalacat City, Pampanga	2026-09-10 14:18:45	2026-09-10 14:18:45	09248901238
-45	106214150007	Luis	Ocampo	III	Rivera	Male	2026-09-10	Luis R. Ocampo Jr.	locampo.jr@gmail.com	Blk 7 Lot 22, Fiesta Communities, Mabalacat City, Pampanga	2026-09-10 14:19:17	2026-09-10 14:19:17	09981112222
-47	106214150008	Mia	David	\N	Dizon	Female	2026-09-10	Teresa D. David	nanaynimia@gmail.com	56 Magsaysay St., Dau, Mabalacat City, Pampanga	2026-09-10 14:21:22	2026-09-10 14:21:22	09456669999
-48	136542100101	Zoey Hannah	Bautista	\N	\N	Female	2020-10-01	Ramon Bautista	ramon.bautista@example.com	34 Magsaysay Ave, Dau, Mabalacat City, Pampanga	2026-09-10 14:21:36	2026-09-10 14:21:36	09260123450
-49	106214150009	Ethan	Aguilar	\N	Mercado	Male	2026-09-10	Richard M. Aguilar	raguilar1985@yahoo.com	201 Plaridel St., Angeles City	2026-09-10 14:23:44	2026-09-10 14:23:44	09327771111
-12	11	Laxamana	Alyamce	jr	\N	Male	2022-02-02	Alyance	santos.richarddavid@gmail.com	angeles	2026-09-10 14:01:22	2026-09-10 14:25:34	00000000000001
-50	106214150010	Zoe	Navarro	\N	Torres	Female	2026-09-10	Patricia T. Navarro	patty.navarro@gmail.com	Blk 1 Lot 5, Xevera, Mabalacat City, Pampanga	2026-09-10 14:25:56	2026-09-10 14:25:56	09278885555
-11	900100000001	Juan	Santos	\N	\N	Male	2026-09-10	Roberto Santos	pilipod789@bowlfuel.com	12 Mabini St., Brgy. San Jose, Angeles City	2026-09-10 14:01:02	2026-09-10 14:26:41	09171234501
-43	106214150006	Isabella	Villanueva	\N	Castro	Female	2014-02-24	Carlos C. Villanueva	zora20.pro@gmail.com	14 Narra Ave., Marisol Village, Angeles City	2026-09-10 14:17:00	2026-09-10 14:26:47	09172223344
-31	101234567806	Bianca	Mendoza	\N	\N	Male	2026-09-10	Mendoza	santos.richarddavid@gmail.com	303 San Pedro I, Magalang, Pampanga	2026-09-10 14:11:40	2026-09-10 14:27:11	09351234566
-46	136542100095	Ethan Noah	Castro	\N	\N	Male	2020-09-01	Carmen Castro	moltenterabyte@gmail.com	Purok 5, Sapang Balen, Mabalacat City, Pampanga	2026-09-10 14:20:12	2026-09-10 14:31:47	09259012349
-13	900100000002	Maria	Dela Cruz	\N	\N	Female	2026-09-11	Elena Dela Cruz	nicdaojanrey07@gmail.com	24 Rizal St., Brgy. Balibago, Angeles City	2026-09-10 14:02:40	2026-09-10 16:04:49	09171234502
-19	900100000004	Sofia	Garcia	\N	\N	Female	2026-09-20	Teresa Garcia	nicdaojanrey07@gmail.com	31 Luna St., Brgy. Pandan, Angeles City	2026-09-10 14:05:55	2026-09-10 16:26:08	09171234504
-51	136542100084	Rafael	Gomez	\N	\N	Male	2020-11-01	Marites Gomez	m.gomez@example.com	Blk 2 Lot 10, Dau, Mabalacat City, Pampanga	2026-09-10 20:53:01	2026-09-10 20:53:01	09271234561
-52	136542100092	Bianca Louise	Morales	\N	\N	Female	2020-12-01	Ernesto Morales	ernesto.morales@example.com	56 Lakandula St., Dau, Mabalacat City, Pampanga	2026-09-10 20:54:52	2026-09-10 20:54:52	09282345672
-53	136542100115	Nathan	Rivera	\N	\N	Male	2021-01-01	Tessie Rivera	t.rivera@example.com	Phase 3, Mabiga, Mabalacat City, Pampanga	2026-09-10 21:21:00	2026-09-10 21:21:00	09293456783
-54	136542100128	Andrea	Pascual	\N	\N	Female	2021-02-01	Danilo Pascual	danilo.pascual@example.com	78 MacAthur Highway, Dau, Mabalacat City, Pampanga	2026-09-10 21:22:40	2026-09-10 21:22:40	09304567894
-56	106088100093	Steve	Jobs	\N	\N	Male	2020-02-03	jobs alex	\N	usa	2026-09-11 01:10:03	2026-09-11 01:10:03	09913201459
-41	136542100073	Liam Ethan	Villanueva	\N	\N	Male	2020-07-01	Rosa Villanueva	\N	2 Bonifacio St., Dau, Mabalacat City, Pampanga	2026-09-10 14:15:27	2026-09-11 01:26:17	09237890127
-55	106088100092	Alu	Card	\N	\N	Male	2020-01-02	Dracula	moltenterabyte@gmail.com	Castlevania	2026-09-11 00:52:29	2026-09-11 01:26:44	09913201457
+62	136542100006	Lea	Bautista	\N	S.	Female	2020-01-06	Ramon Bautista	r.bautista@example.com	11 Roxas St, Brgy Mabiga, Mabalacat City	2026-09-13 23:01:31	2026-09-13 23:01:31	09171117777
+63	136542100007	Paul	Torres	\N	D.	Male	2020-01-07	Lita Torres	lita.t@example.com	22 Quezon St, Brgy Mabiga, Mabalacat City	2026-09-13 23:07:19	2026-09-13 23:07:19	09171118888
+64	136542100008	Kim	Villanueva	\N	R.	Female	2020-01-08	Raul Villanueva	raul.v@example.com	33 Osmena St, Brgy Mabiga, Mabalacat City	2026-09-13 23:08:52	2026-09-13 23:08:52	09171119999
+65	136542100009	Ian	Ramos	\N	L.	Male	2020-01-09	Nina Ramos	nina.r@example.com	44 Laurel St, Brgy Mabiga, Mabalacat City	2026-09-13 23:10:09	2026-09-13 23:10:09	09171110000
+66	136542100010	Mia	Castro	\N	P.	Female	2026-01-10	Tomas Castro	tomas.c@example.com	55 Magsaysay St, Brgy Mabiga, Mabalacat City	2026-09-13 23:11:27	2026-09-13 23:11:27	09171111111
+72	136542100016	Zoe	Rivera	\N	F.	Female	2020-01-16	Ruel Rivera	ruel.r@example.com	21 Marcos St, Brgy Mabiga, Mabalacat City	2026-09-13 23:29:11	2026-09-13 23:29:11	09172227777
+73	136542100017	Leo	Ocampo	\N	G.	Male	2020-01-17	Lina Ocampo	lina.o@example.com	32 Garcia St, Brgy Mabiga, Mabalacat City	2026-09-13 23:30:40	2026-09-13 23:30:40	09172228888
+74	136542100018	May	Aguilar	\N	H.	Female	2020-01-18	Rico Aguilar	rico.a@example.com	43 Quirino St, Brgy Mabiga, Mabalacat City	2026-09-13 23:31:44	2026-09-13 23:31:44	09172229999
+75	136542100019	Ken	Suarez	\N	I.	Male	2020-01-19	Gina Suarez	gina.s@example.com	54 Roxas St, Brgy Mabiga, Mabalacat City	2026-09-13 23:33:45	2026-09-13 23:33:45	09172220000
+76	136542100020	Joy	Ferrer	\N	J.	Female	2020-01-20	Lito Ferrer	lito.f@example.com	65 Osmena St, Brgy Mabiga, Mabalacat City	2026-09-13 23:35:14	2026-09-13 23:35:14	09172222222
+82	136542100026	Ria	Sunga	\N	P.	Female	2020-01-26	Fred Sunga	fred.s@example.com	31 Estrada St, Brgy Mabiga, Mabalacat City	2026-09-13 23:45:50	2026-09-13 23:45:50	09173337777
+83	136542100027	Ted	Manalo	\N	Q.	Male	2020-01-27	Gaya Manalo	gaya.m@example.com	42 Arroyo St, Brgy Mabiga, Mabalacat City	2026-09-13 23:50:23	2026-09-13 23:50:23	09173338888
+84	136542100028	Amy	Valdes	\N	R.	Female	2020-01-28	Hugo Valdes	hugo.v@example.com	53 Duterte St, Brgy Mabiga, Mabalacat City	2026-09-13 23:51:38	2026-09-13 23:51:38	09173339999
+85	136542100029	Dan	Lim	\N	S.	Male	2020-01-29	Ines Lim	ines.l@example.com	64 Marcos St, Brgy Mabiga, Mabalacat City	2026-09-13 23:52:47	2026-09-13 23:52:47	09173330000
+86	136542100030	Fe	Tan	\N	T.	Female	2020-01-30	Jose Tan	jose.t@example.com	75 Garcia St, Brgy Mabiga, Mabalacat City	2026-09-13 23:53:51	2026-09-13 23:53:51	09173333333
+92	136542100036	Sol	Yap	\N	Z.	Female	2020-02-05	Pio Yap	pio.y@example.com	41 Magsaysay St, Brgy Mabiga, Mabalacat City	2026-09-14 00:06:29	2026-09-14 00:06:29	09174447777
+93	136542100037	Rey	Co	\N	A.	Male	2020-02-06	Quin Co	quin.c@example.com	52 Aquino St, Brgy Mabiga, Mabalacat City	2026-09-14 00:07:54	2026-09-14 00:07:54	09174448888
+94	136542100038	Paz	Lee	\N	B.	Female	2020-02-07	Romy Lee	romy.l@example.com	63 Macapagal St, Brgy Mabiga, Mabalacat City	2026-09-14 00:09:04	2026-09-14 00:09:04	09174449999
+95	136542100039	Tom	Ang	\N	C.	Male	2020-02-08	Sisa Ang	sisa.a@example.com	74 Estrada St, Brgy Mabiga, Mabalacat City	2026-09-14 00:10:36	2026-09-14 00:10:36	09174440000
+96	136542100040	Mae	Dy	\N	D.	Female	2020-02-09	Tito Dy	tito.d@example.com	85 Arroyo St, Brgy Mabiga, Mabalacat City	2026-09-14 00:11:55	2026-09-14 00:11:55	09174444444
+57	136542100001	Juan	Santos	Jr.	Perez	Male	2020-01-01	Maria Santos	nutrisight1@mailto.plus	12 Rizal St, Brgy Mabiga, Mabalacat City	2026-09-13 22:45:50	2026-09-14 18:31:12	09171112222
+59	136542100003	Luis	Garcia	III	M.	Male	2020-01-03	Elena Garcia	nutrisight1@mailto.plus	56 Luna St, Brgy Mabiga, Mabalacat City	2026-09-13 22:53:00	2026-09-14 18:35:26	09171114444
+61	136542100005	Mark	Cruz	\N	V.	Male	2020-01-05	Sofia Cruz	nutrisight1@mailto.plus	90 Aguinaldo St, Brgy Mabiga, Mabalacat City	2026-09-13 23:00:12	2026-09-14 18:35:43	09171116666
+58	136542100002	Ana	Reyes	Cruz	\N	Female	2020-01-02	Jose Reyes	nutrisight1@mailto.plus	34 Mabini St, Brgy Mabiga, Mabalacat City	2026-09-13 22:50:53	2026-09-14 18:35:10	09171113333
+67	136542100011	Carlos	Dizon	\N	A.	Male	2020-01-11	Clara Dizon	nutrisight1@mailto.plus	66 Aquino St, Brgy Mabiga, Mabalacat City	2026-09-13 23:21:28	2026-09-14 18:41:20	09172221111
+68	136542100012	Rosa	Pineda	\N	B.	Female	2020-01-12	Juan Pineda	nutrisight1@mailto.plus	77 Macapagal St, Brgy Mabiga, Mabalacat City	2026-09-13 23:22:43	2026-09-14 18:41:42	09172223333
+69	136542100013	Roy	Gutierrez	\N	C.	Male	2020-01-13	Alma Gutierrez	nutrisight1@mailto.plus	88 Estrada St, Brgy Mabiga, Mabalacat City	2026-09-13 23:24:45	2026-09-14 18:42:01	09172224444
+70	136542100014	Eve	Navarro	\N	D.	Female	2020-01-14	Nilo Navarro	nutrisight1@mailto.plus	99 Arroyo St, Brgy Mabiga, Mabalacat City	2026-09-13 23:25:52	2026-09-14 18:42:17	09172225555
+71	136542100015	Jay	Mercado	Jr.	E.	Male	2019-01-15	Sara Mercado	nutrisight1@mailto.plus	10 Duterte St, Brgy Mabiga, Mabalacat City	2026-09-13 23:27:44	2026-09-14 18:42:31	09172226666
+77	136542100021	Sam	David	\N	K.	Male	2020-01-21	Nita David	nutrisight1@mailto.plus	76 Quezon St, Brgy Mabiga, Mabalacat City	2026-09-13 23:40:04	2026-09-14 18:45:56	09173331111
+78	136542100022	Ivy	Lopez	\N	L.	Female	2020-01-22	Bert Lopez	nutrisight1@mailto.plus	87 Laurel St, Brgy Mabiga, Mabalacat City	2026-09-13 23:41:05	2026-09-14 18:46:11	09173332222
+79	136542100023	Gil	Perez	\N	M.	Male	2020-01-23	Cora Perez	nutrisight1@mailto.plus	98 Magsaysay St, Brgy Mabiga, Mabalacat City	2026-09-13 23:42:01	2026-09-14 18:46:25	09173334444
+80	136542100024	Pat	Gomez	\N	N.	Female	2020-01-24	Dino Gomez	nutrisight1@mailto.plus	19 Aquino St, Brgy Mabiga, Mabalacat City	2026-09-13 23:43:13	2026-09-14 18:46:38	09173335555
+81	136542100025	Ray	Yabut	\N	O.	Male	2020-01-25	Elma Yabut	nutrisight1@mailto.plus	20 Macapagal St, Brgy Mabiga, Mabalacat City	2026-09-13 23:44:17	2026-09-14 18:46:54	09173336666
+87	136542100031	Al	Go	\N	U.	Male	2020-01-31	Kim Go	nutrisight1@mailto.plus	86 Quirino St, Brgy Mabiga, Mabalacat City	2026-09-14 00:01:16	2026-09-14 18:48:50	09174441111
+88	136542100032	Luz	Sy	\N	V.	Female	2020-02-01	Lino Sy	nutrisight1@mailto.plus	97 Roxas St, Brgy Mabiga, Mabalacat City	2026-09-14 00:02:14	2026-09-14 18:49:06	09174442222
+89	136542100033	Ben	Ong	III	W.	Male	2020-02-02	Mila Ong	nutrisight1@mailto.plus	18 Osmena St, Brgy Mabiga, Mabalacat City	2026-09-14 00:03:28	2026-09-14 18:49:25	09174443333
+90	136542100034	Meg	Chua	\N	X.	Female	2020-02-03	Nando Chua	nutrisight1@mailto.plus	29 Quezon St, Brgy Mabiga, Mabalacat City	2026-09-14 00:04:29	2026-09-14 18:49:51	09174445555
+91	136542100035	Vic	Uy	\N	Y.	Male	2020-02-05	Olga Uy	nutrisight1@mailto.plus	30 Laurel St, Brgy Mabiga, Mabalacat City	2026-09-14 00:05:25	2026-09-14 18:50:04	09174446666
+98	28477422	Richard	Santos	\N	Berto	Male	2004-08-14	Maria Clark	mariaclark@gmail.com	1234mabalacatcity	2026-09-16 13:29:36	2026-09-16 13:29:36	09123456789
+97	6	chin	lee	\N	\N	Male	2026-09-02	chan	santos.richarddavid@gmail.com	Angeles	2026-09-16 11:16:03	2026-09-16 14:00:58	09631212312
+99	23142343423	Janrey	Nicdao	\N	\N	Male	2026-09-18	Elena Garcia	zora20.pro@gmail.com	12313Mabalacat	2026-09-18 10:46:29	2026-09-18 10:46:29	09351111111
+100	471414141	Matthew	Magtoto	\N	\N	Male	2026-09-18	Dracula	moltenterabyte@gmail.com	45454	2026-09-18 13:44:08	2026-09-18 13:44:08	09913201460
+101	4864648645	Richard	Mungcal	\N	\N	Male	2026-09-18	parent	nicdaojanrey07@gmail.com	123123	2026-09-18 15:59:54	2026-09-18 15:59:54	2552525
+102	100123456789	Juan	Santos	\N	\N	Male	2026-09-02	Maria Santos	maria.santos@example.com	123 Sample St., Brgy. Balibago, Angeles City	2026-09-20 16:34:06	2026-09-20 16:34:06	09170000001
+103	100234567891	Angela	Dela Cruz	\N	\N	Female	2026-09-02	Roberto Dela Cruz	roberto.delacruz@example.com	45 Mabini St., Brgy. Pulung Cacutud, Angeles City	2026-09-20 16:36:18	2026-09-20 16:36:18	09170000002
+104	100345678912	Daniel	Garcia	\N	\N	Male	2026-09-01	Elena Garcia	elena.garcia@example.com	78 Rizal St., Brgy. Cutcut, Angeles City	2026-09-20 16:38:33	2026-09-20 16:38:33	09170000003
+105	100456789123	Sofia	Reyes	\N	\N	Female	2026-09-17	Roberto Reyes	roberto.reyes@example.com	16 Sampaguita St., Brgy. Anunas, Angeles City	2026-09-20 16:39:52	2026-09-20 16:39:52	09170000004
+106	100567891234	Carlo	Mendoza	\N	\N	Male	2026-09-04	Teresa Mendoza	teresa.mendoza@example.com	92 MacArthur Hwy., Brgy. Balibago, Angeles City	2026-09-20 16:40:58	2026-09-20 16:40:58	09170000005
+107	100678912345	Mia	Aquino	\N	\N	Female	2026-09-04	Daniel Aquino	daniel.aquino@example.com	31 Narra St., Brgy. Pampang, Angeles City	2026-09-20 16:42:03	2026-09-20 16:42:03	09170000006
+108	100789123456	LIam	Navarro	\N	\N	Male	2026-09-04	Carla Navarro	carla.navarro@example.com	54 Acacia St., Brgy. Sapang Bato, Angeles City	2026-09-20 16:43:18	2026-09-20 16:43:18	09170000007
+109	100891234567	Ella	Florez	\N	\N	Female	2026-09-03	Mark Flores	mark.flores@example.com	27 Dahlia St., Brgy. Lourdes North West, Angeles City	2026-09-20 16:44:20	2026-09-20 16:44:20	09170000008
+110	100912345678	Noah	Castillo	\N	\N	Male	2026-09-04	Linda Castillo	linda.castillo@example.com	63 Bonifacio St., Brgy. Sto. Domingo, Angeles City	2026-09-20 16:45:37	2026-09-20 16:45:37	09170000009
+111	101123456789	Chloe	Ramos	\N	\N	Female	2026-09-02	Victor Ramos	victor.ramos@example.com	18 Luna St., Brgy. Balibago, Angeles City	2026-09-20 16:47:32	2026-09-20 16:47:32	09170000010
+112	112233445566	Cacalde	Nicdao	\N	\N	Male	2020-01-01	Miss Nicdao	nutrisight1@mailto.plus	Camachiles, Mabalacat City, Pampanga	2026-09-20 17:35:41	2026-09-20 17:35:41	09913201460
+113	106088100100	Juan	Tamad	\N	\N	Male	2019-01-01	John Lazy	nutrisight1@mailto.plus	Slacker Street, Mabalacat City, Pampanga	2026-09-20 19:55:43	2026-09-20 19:55:43	09913201459
+114	101123456754	Chad	Santos	\N	\N	Male	2026-09-03	Maria Santos	santos.richarddavid@gmail.com	121213 Angeles	2026-09-20 20:05:16	2026-09-20 20:05:39	09670909111
+115	106088100111	Maria	Masipag	\N	\N	Female	2019-02-01	Mary Productive	moltenterabyte@gmail.com	Masipag Street, Angeles City, Pampanga	2026-09-20 20:17:10	2026-09-20 20:17:10	09237890127
+116	17878792278	Chad. 2	Santos	Richard Santos	\N	Male	2026-09-17	Maria	santos.richarddavid@gmail.com	Angeles	2026-09-20 20:27:24	2026-09-20 20:27:24	0999786889
+117	136542100000	Juan	Dela Cruz	jr	Santos	Male	2018-10-09	eqe	santos.richarddavid@gmail.com	121212Angeles City	2026-09-22 19:39:53	2026-09-22 19:40:55	09671212121
+60	136542100004	Bea	Mendoza	\N	T.	Female	2020-01-04	Pedro Mendoza	moltenterabyte@gmail.com	78 Bonifacio St, Brgy Mabiga, Mabalacat City	2026-09-13 22:58:32	2026-09-22 23:31:43	09171115555
+118	12121212121	Mark	Santos	\N	\N	Male	2020-01-27	Maria Santos	santos.richarddavid@gmail.com	1212Angeles City	2026-09-23 13:52:09	2026-09-23 13:53:21	09671212121
+119	10000000000100	John	Doe	\N	\N	Male	2020-06-01	Jane Doe	moltenterabyte@gmail.com	123 Angeles City, Pampanga	2026-09-25 09:39:17	2026-09-25 09:39:17	09913201457
 \.
 
 
@@ -5330,13 +7153,13 @@ COPY public.students (id, lrn, first_name, last_name, name_extension, middle_nam
 -- Data for Name: users; Type: TABLE DATA; Schema: public; Owner: postgres
 --
 
-COPY public.users (id, name, email, email_verified_at, password, sex, role, birthdate, "position", advisory_grade_level, advisory_section, deped_id, is_active, deleted_at, remember_token, created_at, updated_at) FROM stdin;
-31	Encoder User 1	encoder1@nutrisight.test	\N	$2y$12$yzY6QCYIQhK48/gwHiv/qOewAsL.OXnfnCRG4YEkOQYPctn/d0jvi	Male	encoder	2000-01-01	Teacher I	2	A	100004	t	\N	\N	2026-09-10 13:50:02	2026-09-10 13:50:02
-32	Encoder User 2	encoder2@nutrisight.test	\N	$2y$12$0DsbesTQS.QMYmylmQVtreTHoY82OTiiDQeT5CB7fXni9lVB5OPyu	Male	encoder	2000-02-01	Teacher II	3	A	100005	t	\N	\N	2026-09-10 13:51:08	2026-09-10 13:51:08
-27	Admin User	admin@nutrisight.test	\N	$2y$12$19uTY9FJg8y8fVUpmGwWted5raqTaSUOykDGCH0UDQvrAnBGA/aTa	Male	admin	1990-01-01	Master Teacher I			100002	t	\N	\N	2026-09-09 22:17:27	2026-09-09 22:17:27
-28	Super Admin User	superadmin@nutrisight.test	\N	$2y$12$.6Wie9iA5YVa.UOsMtBXTumQ.qLtJZo7K0wrx7PeU86pBf7JXmLny	Male	super_admin	1985-01-01	Master Teacher II			100003	t	\N	\N	2026-09-09 22:17:27	2026-09-09 22:17:27
-33	Encoder User 3	encoder3@nutrisight.test	\N	$2y$12$bN908bEtRhoUEH.ss9pQ.eNG.dUvWOaJqxb3RzCBTgOldFwasrTte	Male	encoder	2000-03-01	Teacher III	4	A	100006	t	\N	YM54LCozIr6xZhYlexELpBCrEG55SxxAB0mFR2t0YTVospEOXQSbdqRH6Mo3	2026-09-10 13:52:15	2026-09-10 13:52:15
-26	Encoder User	encoder@nutrisight.test	\N	$2y$12$hVafs1iVkdk6Pjv.67yl..fM123/jteMu3F4.6tfp2sYvAvL9U0Nm	Female	encoder	1995-01-01	Teacher I	1	A	100001	t	\N	kKrCrTmDaLXlgp8t7kMeBnYXUSQjo7jWkNil3D8JOnoO8QFaUMeCXxuteMJj	2026-09-09 22:17:26	2026-09-10 17:32:27
+COPY public.users (id, name, email, email_verified_at, password, sex, role, birthdate, "position", advisory_grade_level, advisory_section, deped_id, is_active, deleted_at, remember_token, created_at, updated_at, first_name, middle_name, last_name, name_extension) FROM stdin;
+31	Encoder U. One	moltenterabyte@gmail.com	\N	$2y$12$yzY6QCYIQhK48/gwHiv/qOewAsL.OXnfnCRG4YEkOQYPctn/d0jvi	Male	encoder	2000-01-01	Teacher I	2	B	100010	t	\N	\N	2026-09-10 13:50:02	2026-09-21 07:55:50	Encoder	User	One	\N
+33	Encoder U. 3	encoder3@nutrisight.test	\N	$2y$12$bN908bEtRhoUEH.ss9pQ.eNG.dUvWOaJqxb3RzCBTgOldFwasrTte	Male	encoder	2000-03-01	Teacher III	1	A	100006	t	\N	sxOH5h61XAb8sfGhAK4CDxdZiefPr9yo6DqDXlVN43Sxd42Yx59farLcKMIZ	2026-09-10 13:52:15	2026-09-14 01:01:30	Encoder	User	3	\N
+26	Encoder User One	encoder@nutrisight.test	\N	$2y$12$hVafs1iVkdk6Pjv.67yl..fM123/jteMu3F4.6tfp2sYvAvL9U0Nm	Female	encoder	1995-01-01	Teacher I	1	A	100001	t	\N	ZHl03BwVIr2tzQJjb1xax6kp3wGRbQVZMPhJJjzaF23sx4zytUMFggrd0EZH	2026-09-09 22:17:26	2026-09-20 22:48:46	Encoder	\N	User One	\N
+27	Admin User	admin@nutrisight.test	\N	$2y$12$19uTY9FJg8y8fVUpmGwWted5raqTaSUOykDGCH0UDQvrAnBGA/aTa	Male	admin	1990-01-01	Master Teacher I	\N	\N	100002	t	\N	rUnwpubX6ZJwKYdRNPa1jyPRp0NobQoFHdI5D2QUsukZPTiCxiCSuKFBfLgp	2026-09-09 22:17:27	2026-09-20 22:06:17	Admin	\N	User	\N
+28	Super A. User	superadmin@nutrisight.test	\N	$2y$12$.6Wie9iA5YVa.UOsMtBXTumQ.qLtJZo7K0wrx7PeU86pBf7JXmLny	Male	super_admin	1985-01-01	Master Teacher II			100003	t	\N	HL6luddr5EkeNGh084WviylA3DZUy428gUwHeDQ1NkfDGGdbDxQuL09V6rRR	2026-09-09 22:17:27	2026-09-09 22:17:27	Super	Admin	User	\N
+32	Encoder U. 2	encoder2@nutrisight.test	\N	$2y$12$0DsbesTQS.QMYmylmQVtreTHoY82OTiiDQeT5CB7fXni9lVB5OPyu	Male	encoder	2000-02-01	Teacher II	2	B	100005	t	\N	\N	2026-09-10 13:51:08	2026-09-14 01:03:25	Encoder	User	2	\N
 \.
 
 
@@ -5427,6 +7250,9 @@ COPY realtime.schema_migrations (version, inserted_at) FROM stdin;
 20260707120000	2026-07-21 05:37:26
 20260709120000	2026-07-21 05:37:26
 20260714120000	2026-09-04 12:13:49
+20260827120000	2026-09-16 02:51:58
+20260914120000	2026-09-22 10:20:12
+20260916120000	2026-09-22 10:20:12
 \.
 
 
@@ -5442,7 +7268,7 @@ COPY realtime.subscription (id, subscription_id, entity, filters, claims, create
 -- Data for Name: buckets; Type: TABLE DATA; Schema: storage; Owner: supabase_storage_admin
 --
 
-COPY storage.buckets (id, name, owner, created_at, updated_at, public, avif_autodetection, file_size_limit, allowed_mime_types, owner_id, type, versioning_status) FROM stdin;
+COPY storage.buckets (id, name, owner, created_at, updated_at, public, avif_autodetection, file_size_limit, allowed_mime_types, owner_id, type, versioning_status, lifecycle_configuration, lifecycle_configuration_generation) FROM stdin;
 \.
 
 
@@ -5532,9 +7358,14 @@ COPY storage.migrations (id, name, hash, executed_at) FROM stdin;
 62	object-versioning-core	0b855f00ff3be0bfca91efee02a9858912491a9a	2026-08-27 04:23:08.567448
 63	fix-search-name-relative-to-prefix	c7485e417624f795ce8bb2da21927f48e088904d	2026-08-27 04:23:08.61763
 64	fix-search-by-timestamp-sqli	0af424ecd388a39bb1645184b222185a12149675	2026-08-27 04:23:08.632055
-65	objects-key-version-index	603c1c55658e982d35839001e2c2b59a50703904	2026-09-08 00:21:10.93124
 66	objects-current-version-index	191466c93aa2c46a00e36505577c5fcab8d7cb4b	2026-09-08 00:21:10.940668
 67	objects-null-version-index	15bfe8c35b66642b6c78ba60060fa8793bd2207a	2026-09-08 00:21:10.949585
+65	objects-key-version-index	da319c4b89ba800ce795d1b699f3a70675138058	2026-09-08 00:21:10.93124
+68	bucket-lifecycle-configuration	3c08f6f889922f399519722a932b51007c11bebc	2026-09-22 10:20:18.486425
+69	validate-bucket-lifecycle-constraints	4febacaaaa0e61e2b783bef081fe03a287e65eb3	2026-09-22 10:20:18.52959
+70	list-objects-with-versions	5c17c3777616cd8d7b18b82835525fa3205af57b	2026-09-22 10:20:18.533423
+71	objects-delete-marker-index	6d14858e66c66f8d6accf8a2630aefd1527fddba	2026-09-22 10:20:18.580593
+72	drop-bucketid-objname-index	302beb09e1b469d7d4db19566f2389d280b64aa3	2026-09-22 10:20:18.592467
 \.
 
 
@@ -5589,7 +7420,7 @@ SELECT pg_catalog.setval('auth.refresh_tokens_id_seq', 1, false);
 -- Name: attendance_report_months_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.attendance_report_months_id_seq', 1, true);
+SELECT pg_catalog.setval('public.attendance_report_months_id_seq', 3, true);
 
 
 --
@@ -5603,14 +7434,14 @@ SELECT pg_catalog.setval('public.attendance_report_sections_id_seq', 1, false);
 -- Name: audit_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.audit_logs_id_seq', 208, true);
+SELECT pg_catalog.setval('public.audit_logs_id_seq', 544, true);
 
 
 --
 -- Name: enrollments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.enrollments_id_seq', 56, true);
+SELECT pg_catalog.setval('public.enrollments_id_seq', 119, true);
 
 
 --
@@ -5624,63 +7455,77 @@ SELECT pg_catalog.setval('public.failed_jobs_id_seq', 1, false);
 -- Name: jobs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.jobs_id_seq', 10, true);
+SELECT pg_catalog.setval('public.jobs_id_seq', 13, true);
 
 
 --
 -- Name: meal_plans_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.meal_plans_id_seq', 10, true);
+SELECT pg_catalog.setval('public.meal_plans_id_seq', 24, true);
 
 
 --
 -- Name: migrations_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.migrations_id_seq', 24, true);
+SELECT pg_catalog.setval('public.migrations_id_seq', 53, true);
 
 
 --
 -- Name: nutrition_measurements_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.nutrition_measurements_id_seq', 74, true);
+SELECT pg_catalog.setval('public.nutrition_measurements_id_seq', 188, true);
 
 
 --
 -- Name: report_period_rows_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.report_period_rows_id_seq', 1, false);
+SELECT pg_catalog.setval('public.report_period_rows_id_seq', 2224, true);
 
 
 --
 -- Name: report_periods_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.report_periods_id_seq', 1, false);
+SELECT pg_catalog.setval('public.report_periods_id_seq', 6, true);
+
+
+--
+-- Name: sbfp_parent_approval_requests_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.sbfp_parent_approval_requests_id_seq', 10, true);
 
 
 --
 -- Name: sbfp_participants_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.sbfp_participants_id_seq', 56, true);
+SELECT pg_catalog.setval('public.sbfp_participants_id_seq', 119, true);
+
+
+--
+-- Name: school_year_user_records_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
+--
+
+SELECT pg_catalog.setval('public.school_year_user_records_id_seq', 24, true);
 
 
 --
 -- Name: school_years_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.school_years_id_seq', 5, true);
+SELECT pg_catalog.setval('public.school_years_id_seq', 8, true);
 
 
 --
 -- Name: student_attendance_records_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.student_attendance_records_id_seq', 49, true);
+SELECT pg_catalog.setval('public.student_attendance_records_id_seq', 294, true);
 
 
 --
@@ -5694,7 +7539,7 @@ SELECT pg_catalog.setval('public.student_feeding_records_id_seq', 1, false);
 -- Name: students_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.students_id_seq', 56, true);
+SELECT pg_catalog.setval('public.students_id_seq', 119, true);
 
 
 --
@@ -5808,6 +7653,38 @@ ALTER TABLE ONLY auth.mfa_factors
 
 
 --
+-- Name: mfa_recovery_code_sets mfa_recovery_code_sets_mfa_factor_id_key; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_code_sets
+    ADD CONSTRAINT mfa_recovery_code_sets_mfa_factor_id_key UNIQUE (mfa_factor_id);
+
+
+--
+-- Name: mfa_recovery_code_sets mfa_recovery_code_sets_pkey; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_code_sets
+    ADD CONSTRAINT mfa_recovery_code_sets_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: mfa_recovery_code_sets mfa_recovery_code_sets_user_id_key; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_code_sets
+    ADD CONSTRAINT mfa_recovery_code_sets_user_id_key UNIQUE (user_id);
+
+
+--
+-- Name: mfa_recovery_codes mfa_recovery_codes_pkey; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_codes
+    ADD CONSTRAINT mfa_recovery_codes_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: oauth_authorizations oauth_authorizations_authorization_code_key; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
 --
 
@@ -5917,6 +7794,22 @@ ALTER TABLE ONLY auth.saml_relay_states
 
 ALTER TABLE ONLY auth.schema_migrations
     ADD CONSTRAINT schema_migrations_pkey PRIMARY KEY (version);
+
+
+--
+-- Name: scim_tokens scim_tokens_pkey; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.scim_tokens
+    ADD CONSTRAINT scim_tokens_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: scim_users scim_users_pkey; Type: CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.scim_users
+    ADD CONSTRAINT scim_users_pkey PRIMARY KEY (id);
 
 
 --
@@ -6136,11 +8029,19 @@ ALTER TABLE ONLY public.report_periods
 
 
 --
--- Name: report_periods report_periods_school_year_id_month_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+-- Name: sbfp_parent_approval_requests sbfp_parent_approval_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
 --
 
-ALTER TABLE ONLY public.report_periods
-    ADD CONSTRAINT report_periods_school_year_id_month_unique UNIQUE (school_year_id, month);
+ALTER TABLE ONLY public.sbfp_parent_approval_requests
+    ADD CONSTRAINT sbfp_parent_approval_requests_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sbfp_parent_approval_requests sbfp_parent_approval_requests_token_hash_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sbfp_parent_approval_requests
+    ADD CONSTRAINT sbfp_parent_approval_requests_token_hash_unique UNIQUE (token_hash);
 
 
 --
@@ -6149,6 +8050,30 @@ ALTER TABLE ONLY public.report_periods
 
 ALTER TABLE ONLY public.sbfp_participants
     ADD CONSTRAINT sbfp_participants_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: sbfp_participants sbfp_participants_profile_image_url_key; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sbfp_participants
+    ADD CONSTRAINT sbfp_participants_profile_image_url_key UNIQUE (profile_image_url);
+
+
+--
+-- Name: school_year_user_records school_year_user_records_pkey; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.school_year_user_records
+    ADD CONSTRAINT school_year_user_records_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: school_year_user_records school_year_user_records_school_year_id_user_id_unique; Type: CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.school_year_user_records
+    ADD CONSTRAINT school_year_user_records_school_year_id_user_id_unique UNIQUE (school_year_id, user_id);
 
 
 --
@@ -6497,6 +8422,13 @@ CREATE INDEX mfa_factors_user_id_idx ON auth.mfa_factors USING btree (user_id);
 
 
 --
+-- Name: mfa_recovery_codes_set_id_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX mfa_recovery_codes_set_id_idx ON auth.mfa_recovery_codes USING btree (mfa_recovery_code_set_id);
+
+
+--
 -- Name: oauth_auth_pending_exp_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
 --
 
@@ -6627,6 +8559,97 @@ CREATE INDEX saml_relay_states_for_email_idx ON auth.saml_relay_states USING btr
 --
 
 CREATE INDEX saml_relay_states_sso_provider_id_idx ON auth.saml_relay_states USING btree (sso_provider_id);
+
+
+--
+-- Name: scim_tokens_expires_at_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_tokens_expires_at_idx ON auth.scim_tokens USING btree (expires_at);
+
+
+--
+-- Name: scim_tokens_revoked_at_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_tokens_revoked_at_idx ON auth.scim_tokens USING btree (revoked_at);
+
+
+--
+-- Name: scim_tokens_sso_provider_id_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_tokens_sso_provider_id_idx ON auth.scim_tokens USING btree (sso_provider_id);
+
+
+--
+-- Name: scim_tokens_token_hash_key; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE UNIQUE INDEX scim_tokens_token_hash_key ON auth.scim_tokens USING btree (token_hash);
+
+
+--
+-- Name: scim_users_created_at_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_created_at_idx ON auth.scim_users USING btree (sso_provider_id, created_at, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: scim_users_deleted_at_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_deleted_at_idx ON auth.scim_users USING btree (deleted_at);
+
+
+--
+-- Name: scim_users_external_id_key; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE UNIQUE INDEX scim_users_external_id_key ON auth.scim_users USING btree (sso_provider_id, external_id) WHERE ((external_id IS NOT NULL) AND (deleted_at IS NULL));
+
+
+--
+-- Name: scim_users_id_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_id_idx ON auth.scim_users USING btree (sso_provider_id, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: scim_users_sso_provider_id_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_sso_provider_id_idx ON auth.scim_users USING btree (sso_provider_id);
+
+
+--
+-- Name: scim_users_updated_at_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_updated_at_idx ON auth.scim_users USING btree (sso_provider_id, updated_at, id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: scim_users_user_id_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_user_id_idx ON auth.scim_users USING btree (user_id);
+
+
+--
+-- Name: scim_users_user_name_idx; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE INDEX scim_users_user_name_idx ON auth.scim_users USING btree (sso_provider_id, user_name COLLATE "C", id) WHERE (deleted_at IS NULL);
+
+
+--
+-- Name: scim_users_user_name_key; Type: INDEX; Schema: auth; Owner: supabase_auth_admin
+--
+
+CREATE UNIQUE INDEX scim_users_user_name_key ON auth.scim_users USING btree (sso_provider_id, user_name) WHERE (deleted_at IS NULL);
 
 
 --
@@ -6798,6 +8821,20 @@ CREATE INDEX meal_plans_meal_date_index ON public.meal_plans USING btree (meal_d
 
 
 --
+-- Name: sbfp_parent_approval_requests_sbfp_participant_id_status_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX sbfp_parent_approval_requests_sbfp_participant_id_status_index ON public.sbfp_parent_approval_requests USING btree (sbfp_participant_id, status);
+
+
+--
+-- Name: school_year_user_records_school_year_id_role_index; Type: INDEX; Schema: public; Owner: postgres
+--
+
+CREATE INDEX school_year_user_records_school_year_id_role_index ON public.school_year_user_records USING btree (school_year_id, role);
+
+
+--
 -- Name: sessions_last_activity_index; Type: INDEX; Schema: public; Owner: postgres
 --
 
@@ -6847,13 +8884,6 @@ CREATE UNIQUE INDEX bname ON storage.buckets USING btree (name);
 
 
 --
--- Name: bucketid_objname; Type: INDEX; Schema: storage; Owner: supabase_storage_admin
---
-
-CREATE UNIQUE INDEX bucketid_objname ON storage.objects USING btree (bucket_id, name);
-
-
---
 -- Name: buckets_analytics_unique_name_idx; Type: INDEX; Schema: storage; Owner: supabase_storage_admin
 --
 
@@ -6886,6 +8916,13 @@ CREATE INDEX idx_objects_bucket_id_name_lower ON storage.objects USING btree (bu
 --
 
 CREATE UNIQUE INDEX idx_objects_current_version ON storage.objects USING btree (bucket_id, name COLLATE "C") WHERE (archived_at IS NULL);
+
+
+--
+-- Name: idx_objects_delete_markers; Type: INDEX; Schema: storage; Owner: supabase_storage_admin
+--
+
+CREATE INDEX idx_objects_delete_markers ON storage.objects USING btree (bucket_id, name COLLATE "C") WHERE is_delete_marker;
 
 
 --
@@ -6928,6 +8965,27 @@ CREATE TRIGGER tr_check_filters BEFORE INSERT OR UPDATE ON realtime.subscription
 --
 
 CREATE TRIGGER enforce_bucket_name_length_trigger BEFORE INSERT OR UPDATE OF name ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.enforce_bucket_name_length();
+
+
+--
+-- Name: buckets protect_bucket_control_insert; Type: TRIGGER; Schema: storage; Owner: supabase_storage_admin
+--
+
+CREATE TRIGGER protect_bucket_control_insert BEFORE INSERT ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.protect_bucket_control_columns('service_role');
+
+
+--
+-- Name: buckets protect_bucket_control_update; Type: TRIGGER; Schema: storage; Owner: supabase_storage_admin
+--
+
+CREATE TRIGGER protect_bucket_control_update BEFORE UPDATE OF lifecycle_configuration, lifecycle_configuration_generation ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.protect_bucket_control_columns();
+
+
+--
+-- Name: buckets protect_bucket_control_update_role; Type: TRIGGER; Schema: storage; Owner: supabase_storage_admin
+--
+
+CREATE TRIGGER protect_bucket_control_update_role AFTER UPDATE OF lifecycle_configuration, lifecycle_configuration_generation ON storage.buckets FOR EACH ROW EXECUTE FUNCTION storage.enforce_bucket_lifecycle_service_role('service_role');
 
 
 --
@@ -6981,6 +9039,30 @@ ALTER TABLE ONLY auth.mfa_challenges
 
 ALTER TABLE ONLY auth.mfa_factors
     ADD CONSTRAINT mfa_factors_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mfa_recovery_code_sets mfa_recovery_code_sets_mfa_factor_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_code_sets
+    ADD CONSTRAINT mfa_recovery_code_sets_mfa_factor_id_fkey FOREIGN KEY (mfa_factor_id) REFERENCES auth.mfa_factors(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mfa_recovery_code_sets mfa_recovery_code_sets_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_code_sets
+    ADD CONSTRAINT mfa_recovery_code_sets_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
+-- Name: mfa_recovery_codes mfa_recovery_codes_mfa_recovery_code_set_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.mfa_recovery_codes
+    ADD CONSTRAINT mfa_recovery_codes_mfa_recovery_code_set_id_fkey FOREIGN KEY (mfa_recovery_code_set_id) REFERENCES auth.mfa_recovery_code_sets(id) ON DELETE CASCADE;
 
 
 --
@@ -7053,6 +9135,30 @@ ALTER TABLE ONLY auth.saml_relay_states
 
 ALTER TABLE ONLY auth.saml_relay_states
     ADD CONSTRAINT saml_relay_states_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: scim_tokens scim_tokens_sso_provider_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.scim_tokens
+    ADD CONSTRAINT scim_tokens_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: scim_users scim_users_sso_provider_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.scim_users
+    ADD CONSTRAINT scim_users_sso_provider_id_fkey FOREIGN KEY (sso_provider_id) REFERENCES auth.sso_providers(id) ON DELETE CASCADE;
+
+
+--
+-- Name: scim_users scim_users_user_id_fkey; Type: FK CONSTRAINT; Schema: auth; Owner: supabase_auth_admin
+--
+
+ALTER TABLE ONLY auth.scim_users
+    ADD CONSTRAINT scim_users_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE SET NULL;
 
 
 --
@@ -7168,11 +9274,43 @@ ALTER TABLE ONLY public.report_periods
 
 
 --
+-- Name: sbfp_parent_approval_requests sbfp_parent_approval_requests_closed_by_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sbfp_parent_approval_requests
+    ADD CONSTRAINT sbfp_parent_approval_requests_closed_by_user_id_foreign FOREIGN KEY (closed_by_user_id) REFERENCES public.users(id) ON DELETE SET NULL;
+
+
+--
+-- Name: sbfp_parent_approval_requests sbfp_parent_approval_requests_sbfp_participant_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.sbfp_parent_approval_requests
+    ADD CONSTRAINT sbfp_parent_approval_requests_sbfp_participant_id_foreign FOREIGN KEY (sbfp_participant_id) REFERENCES public.sbfp_participants(id) ON DELETE CASCADE;
+
+
+--
 -- Name: sbfp_participants sbfp_participants_enrollment_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
 --
 
 ALTER TABLE ONLY public.sbfp_participants
     ADD CONSTRAINT sbfp_participants_enrollment_id_foreign FOREIGN KEY (enrollment_id) REFERENCES public.enrollments(id) ON DELETE CASCADE;
+
+
+--
+-- Name: school_year_user_records school_year_user_records_school_year_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.school_year_user_records
+    ADD CONSTRAINT school_year_user_records_school_year_id_foreign FOREIGN KEY (school_year_id) REFERENCES public.school_years(id) ON DELETE CASCADE;
+
+
+--
+-- Name: school_year_user_records school_year_user_records_user_id_foreign; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.school_year_user_records
+    ADD CONSTRAINT school_year_user_records_user_id_foreign FOREIGN KEY (user_id) REFERENCES public.users(id) ON DELETE CASCADE;
 
 
 --
@@ -8253,6 +10391,22 @@ GRANT ALL ON TABLE auth.mfa_factors TO dashboard_user;
 
 
 --
+-- Name: TABLE mfa_recovery_code_sets; Type: ACL; Schema: auth; Owner: supabase_auth_admin
+--
+
+GRANT ALL ON TABLE auth.mfa_recovery_code_sets TO postgres;
+GRANT ALL ON TABLE auth.mfa_recovery_code_sets TO dashboard_user;
+
+
+--
+-- Name: TABLE mfa_recovery_codes; Type: ACL; Schema: auth; Owner: supabase_auth_admin
+--
+
+GRANT ALL ON TABLE auth.mfa_recovery_codes TO postgres;
+GRANT ALL ON TABLE auth.mfa_recovery_codes TO dashboard_user;
+
+
+--
 -- Name: TABLE oauth_authorizations; Type: ACL; Schema: auth; Owner: supabase_auth_admin
 --
 
@@ -8333,6 +10487,22 @@ GRANT ALL ON TABLE auth.saml_relay_states TO dashboard_user;
 --
 
 GRANT SELECT ON TABLE auth.schema_migrations TO postgres WITH GRANT OPTION;
+
+
+--
+-- Name: TABLE scim_tokens; Type: ACL; Schema: auth; Owner: supabase_auth_admin
+--
+
+GRANT ALL ON TABLE auth.scim_tokens TO postgres;
+GRANT ALL ON TABLE auth.scim_tokens TO dashboard_user;
+
+
+--
+-- Name: TABLE scim_users; Type: ACL; Schema: auth; Owner: supabase_auth_admin
+--
+
+GRANT ALL ON TABLE auth.scim_users TO postgres;
+GRANT ALL ON TABLE auth.scim_users TO dashboard_user;
 
 
 --
@@ -8640,6 +10810,24 @@ GRANT ALL ON SEQUENCE public.report_periods_id_seq TO service_role;
 
 
 --
+-- Name: TABLE sbfp_parent_approval_requests; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.sbfp_parent_approval_requests TO anon;
+GRANT ALL ON TABLE public.sbfp_parent_approval_requests TO authenticated;
+GRANT ALL ON TABLE public.sbfp_parent_approval_requests TO service_role;
+
+
+--
+-- Name: SEQUENCE sbfp_parent_approval_requests_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.sbfp_parent_approval_requests_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.sbfp_parent_approval_requests_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.sbfp_parent_approval_requests_id_seq TO service_role;
+
+
+--
 -- Name: TABLE sbfp_participants; Type: ACL; Schema: public; Owner: postgres
 --
 
@@ -8655,6 +10843,24 @@ GRANT ALL ON TABLE public.sbfp_participants TO service_role;
 GRANT ALL ON SEQUENCE public.sbfp_participants_id_seq TO anon;
 GRANT ALL ON SEQUENCE public.sbfp_participants_id_seq TO authenticated;
 GRANT ALL ON SEQUENCE public.sbfp_participants_id_seq TO service_role;
+
+
+--
+-- Name: TABLE school_year_user_records; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON TABLE public.school_year_user_records TO anon;
+GRANT ALL ON TABLE public.school_year_user_records TO authenticated;
+GRANT ALL ON TABLE public.school_year_user_records TO service_role;
+
+
+--
+-- Name: SEQUENCE school_year_user_records_id_seq; Type: ACL; Schema: public; Owner: postgres
+--
+
+GRANT ALL ON SEQUENCE public.school_year_user_records_id_seq TO anon;
+GRANT ALL ON SEQUENCE public.school_year_user_records_id_seq TO authenticated;
+GRANT ALL ON SEQUENCE public.school_year_user_records_id_seq TO service_role;
 
 
 --
@@ -8760,7 +10966,8 @@ GRANT ALL ON SEQUENCE public.users_id_seq TO service_role;
 -- Name: TABLE messages; Type: ACL; Schema: realtime; Owner: supabase_realtime_admin
 --
 
-GRANT ALL ON TABLE realtime.messages TO postgres;
+GRANT REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLE realtime.messages TO postgres;
+GRANT SELECT,INSERT ON TABLE realtime.messages TO postgres WITH GRANT OPTION;
 GRANT ALL ON TABLE realtime.messages TO dashboard_user;
 GRANT SELECT,INSERT,UPDATE ON TABLE realtime.messages TO anon;
 GRANT SELECT,INSERT,UPDATE ON TABLE realtime.messages TO authenticated;
@@ -9059,7 +11266,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA realtime GRANT ALL ON
 -- Name: DEFAULT PRIVILEGES FOR TABLES; Type: DEFAULT ACL; Schema: realtime; Owner: supabase_admin
 --
 
-ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA realtime GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA realtime GRANT REFERENCES,DELETE,TRIGGER,TRUNCATE,MAINTAIN,UPDATE ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA realtime GRANT SELECT,INSERT ON TABLES TO postgres WITH GRANT OPTION;
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_admin IN SCHEMA realtime GRANT ALL ON TABLES TO dashboard_user;
 
 
@@ -9161,5 +11369,5 @@ ALTER EVENT TRIGGER pgrst_drop_watch OWNER TO supabase_admin;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict rlSBJUvrj7unBZNqtdIiTwnXEowFdZuUpLpIAEGbtcnNQNqtqFclJgZLqHUaeK4
+\unrestrict WXeOeT3LWrqCXWLoOB9AsC6qR0sKKtsneEc7gApjyxi0uFiAtP5750Dp0nBC0X4
 

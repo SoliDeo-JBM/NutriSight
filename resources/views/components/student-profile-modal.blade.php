@@ -32,7 +32,7 @@
                     <img :src="profile.profile_image_url || '{{ asset('images/anonymous-profile.svg') }}'" :alt="profile.name" class="h-12 w-12 shrink-0 rounded-full border border-gray-200 object-cover sm:h-14 sm:w-14">
                     <div class="min-w-0">
                         <h2 id="student-profile-title" class="break-words text-base font-bold text-gray-900 sm:text-lg" x-text="profile.name"></h2>
-                        <p class="mt-1 text-xs text-gray-500">Student profile</p>
+                        <p class="mt-1 text-xs text-gray-500">Learner profile</p>
                     </div>
                 </div>
                 <button type="button" @click="closeProfile()" class="text-gray-400 hover:text-gray-700" aria-label="Close profile">

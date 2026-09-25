@@ -10,5 +10,5 @@ Artisan::command('inspire', function () {
 
 Artisan::command('attendance:mark-absent', function () {
     $marked = app(AttendanceService::class)->markPastMealDaysAbsent();
-    $this->info("Marked {$marked} student attendance record(s) absent.");
-})->purpose('Mark approved SBFP students absent for past meal days without attendance');
+    $this->info("Marked {$marked} learner attendance record(s) absent.");
+})->purpose('Mark approved SBFP learners absent for past meal days without attendance');

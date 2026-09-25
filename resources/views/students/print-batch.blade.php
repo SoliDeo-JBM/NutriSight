@@ -232,7 +232,7 @@
 
 <body>
     <div class="toolbar no-print">
-        <h1>SBFP Student Landscape IDs</h1>
+        <h1>SBFP Learner Landscape IDs</h1>
         <button class="print-button" onclick="window.print()">Print All IDs</button>
     </div>
 

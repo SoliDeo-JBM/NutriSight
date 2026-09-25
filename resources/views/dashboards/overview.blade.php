@@ -28,7 +28,7 @@
                 <div class="xl:col-span-2 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
                     <div class="flex items-center justify-between gap-4">
                         <div>
-                            <h3 class="text-lg font-semibold text-slate-900">Student profiling preview</h3>
+                            <h3 class="text-lg font-semibold text-slate-900">Learner profiling preview</h3>
                             <p class="text-sm text-slate-500">Fake records seeded for BMI, sectioning, and nutritional monitoring.</p>
                         </div>
                         <span class="rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-800">
@@ -40,7 +40,7 @@
                         <table class="min-w-full divide-y divide-slate-200 text-sm">
                             <thead class="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
                                 <tr>
-                                    <th class="px-4 py-3">Student</th>
+                                    <th class="px-4 py-3">Learner</th>
                                     <th class="px-4 py-3">Grade / Section</th>
                                     <th class="px-4 py-3">BMI</th>
                                     <th class="px-4 py-3">Status</th>
