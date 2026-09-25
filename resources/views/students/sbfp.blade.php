@@ -29,7 +29,7 @@
                     <i class="fas fa-plus"></i> Add Period
                 </button>
                 <button type="button" @click="openApprovalModal()" class="shrink-0 bg-slate-700 text-white px-4 py-2 rounded text-sm hover:bg-slate-800 whitespace-nowrap inline-flex items-center gap-2">
-                    <i class="fas fa-clipboard-check"></i> Parent's Approval
+                    <i class="fas fa-clipboard-check"></i> Approvals
                 </button>
                 <x-sbfp-profile-image-modal :participants="$profileImageParticipants" :action="route('encoder.students.sbfp.profile-images')" />
                 <a href="{{ route('encoder.students.print-batch') }}" target="_blank" class="shrink-0 bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 whitespace-nowrap inline-flex items-center gap-2">
@@ -63,7 +63,7 @@
 
                 <!-- Approval Status Filter -->
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-2">Parent Approval</label>
+                        <label class="block text-sm font-semibold text-gray-700 mb-2">Approval</label>
                     <select name="approval_status" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">All Statuses</option>
                         @foreach($approvalStatuses as $key => $label)
@@ -105,7 +105,7 @@
                         <th class="px-4 py-3 border">Age</th>
                         <th class="px-4 py-3 border">Sex</th>
                         <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
-                        <th class="px-4 py-3 border">Parent's Approval</th>
+                        <th class="px-4 py-3 border">Approval</th>
                         <th class="px-4 py-3 border text-center">Learner QR Code</th>
                     </tr>
                     <tr>
@@ -238,10 +238,10 @@
         @endif
     </div>
 
-    <!-- Parent Approval Modal -->
+    <!-- Approvals Modal -->
     <div x-show="showApprovalModal" x-transition class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" style="display: none;">
         <div class="bg-white rounded-lg shadow-lg p-8 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
-            <h3 class="text-lg font-bold mb-1">Parent's Approval</h3>
+            <h3 class="text-lg font-bold mb-1">Approvals</h3>
             <p class="text-sm text-gray-500 mb-4">Update approval answers for the advisory SBFP participants.</p>
             <form action="{{ route('encoder.students.approval.bulk') }}" method="POST" data-loading-message="Updating learner approvals..." @submit.prevent="requestConfirmation($event, 'approval')">
                 @csrf
@@ -251,7 +251,7 @@
                         <thead class="bg-gray-100 text-gray-700">
                             <tr>
                                 <th class="px-3 py-2 border text-left">Learner</th>
-                                <th class="px-3 py-2 border">Parent's Approval</th>
+                                <th class="px-3 py-2 border">Approval</th>
                                 <th class="px-3 py-2 border">Reason if Disapproved</th>
                             </tr>
                         </thead>

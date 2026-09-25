@@ -24,6 +24,10 @@
 
         <p>We appreciate your continuous support in ensuring our learners receive proper nutrition for better health and academic performance.</p>
 
+        <div style="background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 6px; padding: 10px 12px; margin-top: 20px; color: #475569; font-size: 12px;">
+            <strong>Privacy Notice:</strong> This message contains personal and health-related information shared for School-Based Feeding Program coordination and your child's welfare. Under Republic Act No. 10173, the Data Privacy Act of 2012, please keep this information confidential, do not forward it, and contact Marisol Bliss Elementary School if you received it in error.
+        </div>
+
         <p style="margin-top: 24px;">Warm regards,</p>
         <p style="margin: 0;"><strong>School-Based Feeding Program Coordinator</strong><br>Marisol Bliss Elementary School</p>
     </div>

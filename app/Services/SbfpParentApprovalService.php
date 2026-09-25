@@ -47,10 +47,9 @@ class SbfpParentApprovalService
             return null;
         }
 
-        $token = Str::random(64);
         $request = $participant->approvalRequests()->create([
             'email' => $email,
-            'token_hash' => hash('sha256', $token),
+            'token_hash' => hash('sha256', Str::random(64)),
             'weight' => $measurement->weight,
             'height' => $measurement->height,
             'bmi' => $measurement->bmi,
@@ -60,7 +59,7 @@ class SbfpParentApprovalService
             'sent_at' => $now,
         ]);
 
-        Mail::to($email)->queue(new ApprovalRequestMail($request, $token));
+        Mail::to($email)->queue(new ApprovalRequestMail($request));
 
         return $request;
     }

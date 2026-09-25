@@ -22,7 +22,6 @@ class SbfpParentApprovalRequest extends Mailable implements ShouldQueue
 
     public function __construct(
         public ApprovalRequest $approvalRequest,
-        public string $token,
     ) {
         $this->afterCommit();
     }
@@ -30,7 +29,7 @@ class SbfpParentApprovalRequest extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'Parent approval needed for SBFP participation',
+            subject: 'Your child is now part of the School-Based Feeding Program',
         );
     }
 
@@ -38,12 +37,6 @@ class SbfpParentApprovalRequest extends Mailable implements ShouldQueue
     {
         return new Content(
             view: 'emails.sbfp-parent-approval',
-            with: [
-                'approvalUrl' => route('parent.sbfp.approval.show', [
-                    'approvalRequest' => $this->approvalRequest,
-                    'token' => $this->token,
-                ]),
-            ],
         );
     }
 

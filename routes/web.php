@@ -20,12 +20,6 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/', [DashboardController::class, 'landing'])->name('home');
-Route::get('/parent/sbfp-approval/{approvalRequest}/{token}', [App\Http\Controllers\SbfpParentApprovalController::class, 'show'])
-    ->middleware('throttle:10,1')
-    ->name('parent.sbfp.approval.show');
-Route::post('/parent/sbfp-approval/{approvalRequest}/{token}', [App\Http\Controllers\SbfpParentApprovalController::class, 'respond'])
-    ->middleware('throttle:5,1')
-    ->name('parent.sbfp.approval.respond');
 
 /*
 |--------------------------------------------------------------------------
