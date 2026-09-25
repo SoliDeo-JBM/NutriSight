@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Student;
+use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -24,13 +25,15 @@ class FeedingDayNotice extends Mailable implements ShouldQueue
     public $meal;
     public $date;
     public $notes;
+    public $scannedAt;
 
-    public function __construct(Student $student, string $meal, string $date, ?string $notes = null)
+    public function __construct(Student $student, string $meal, string $date, ?string $notes = null, ?CarbonInterface $scannedAt = null)
     {
         $this->student = $student;
         $this->meal = $meal;
         $this->date = $date;
         $this->notes = $notes;
+        $this->scannedAt = $scannedAt;
     }
 
     public function envelope(): Envelope

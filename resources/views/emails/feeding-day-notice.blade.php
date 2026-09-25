@@ -17,6 +17,9 @@
 
         <div style="background: #f8fafc; border-left: 4px solid #22c55e; padding: 12px 16px; margin: 16px 0;">
             <p style="margin: 0 0 8px 0;"><strong>Attendance date:</strong> {{ $date }}</p>
+            @if($scannedAt)
+                <p style="margin: 0 0 8px 0;"><strong>Scanned at:</strong> {{ $scannedAt->copy()->timezone(config('app.timezone'))->format('F j, Y \a\t g:i A') }}</p>
+            @endif
             @if($notes)
                 <p style="margin: 0;"><strong>Teacher's Notes:</strong> {{ $notes }}</p>
             @endif

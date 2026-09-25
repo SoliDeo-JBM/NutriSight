@@ -183,14 +183,14 @@ class AttendanceController extends Controller
             ], 409);
         }
 
-        StudentAttendanceRecord::create([
+        $attendanceRecord = StudentAttendanceRecord::create([
             'sbfp_participant_id' => $participant->id,
             'recorded_by_user_id' => Auth::id(),
             'attendance_date' => $today,
             'status' => 'present',
         ]);
 
-        $this->sendAttendanceNotice($student, $today, $meals->implode(', '));
+        $this->sendAttendanceNotice($student, $today, $meals->implode(', '), $attendanceRecord->created_at);
 
         AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
 
@@ -257,7 +257,7 @@ class AttendanceController extends Controller
         return back()->with('success', 'Attendance updated.');
     }
 
-    private function sendAttendanceNotice(Student $student, string $date, string $meal): void
+    private function sendAttendanceNotice(Student $student, string $date, string $meal, ?\Carbon\CarbonInterface $scannedAt = null): void
     {
         if (!$student->guardian_email) {
             Log::info('Automatic SBFP attendance email skipped because guardian email is missing.', [
@@ -272,7 +272,8 @@ class AttendanceController extends Controller
                 $student,
                 $meal,
                 Carbon::parse($date)->toDateString(),
-                null
+                null,
+                $scannedAt
             ));
             Log::info('Automatic SBFP attendance email accepted by SMTP transport.', [
                 'student_id' => $student->id,

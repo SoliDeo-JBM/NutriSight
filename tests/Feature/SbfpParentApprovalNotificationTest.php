@@ -10,6 +10,7 @@ use App\Models\SchoolYear;
 use App\Models\SbfpParticipant;
 use App\Models\Student;
 use App\Services\SbfpParentApprovalService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -83,10 +84,16 @@ class SbfpParentApprovalNotificationTest extends TestCase
             'last_name' => 'Dela Cruz',
         ]);
 
-        $body = (new FeedingDayNotice($student, 'Champorado', '2026-09-25'))->render();
+        $body = (new FeedingDayNotice($student, 'Champorado', '2026-09-25', null, Carbon::parse('2026-09-25 10:42:00')))->render();
 
         $this->assertStringContainsString('Republic Act No. 10173', $body);
         $this->assertStringContainsString('Data Privacy Act of 2012', $body);
         $this->assertStringContainsString('School-Based Feeding Program coordination', $body);
+        $this->assertStringContainsString('Scanned at:', $body);
+        $this->assertStringContainsString('September 25, 2026 at 10:42 AM', $body);
+
+        $manualBody = (new FeedingDayNotice($student, 'Champorado', '2026-09-25'))->render();
+
+        $this->assertStringNotContainsString('Scanned at:', $manualBody);
     }
 }
