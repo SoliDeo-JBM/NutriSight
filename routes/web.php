@@ -166,6 +166,12 @@ Route::middleware(['auth', 'active'])->group(function () {
 
     Route::middleware('role:encoder')->prefix('encoder')->name('encoder.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'encoder'])->name('dashboard');
+        Route::prefix('reports/sbfp')->name('reports.sbfp.')->group(function () {
+            Route::get('/assessment', [App\Http\Controllers\ReportsController::class, 'sbfpAssessment'])->name('assessment');
+            Route::get('/assessment/excel', [App\Http\Controllers\ReportsController::class, 'exportAssessmentExcel'])->name('assessment.excel');
+            Route::get('/assessment/docx', [App\Http\Controllers\ReportsController::class, 'exportAssessmentDocx'])->name('assessment.docx');
+            Route::get('/assessment/pdf', [App\Http\Controllers\ReportsController::class, 'exportAssessmentPdf'])->name('assessment.pdf');
+        });
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
         Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->name('students.change-section');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');

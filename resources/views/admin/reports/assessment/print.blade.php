@@ -155,6 +155,9 @@
         <img class="export-logo right" src="{{ \App\Services\SchoolLogoService::depedPath() }}" alt="Department of Education seal">
         <h1>SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT</h1>
         <p class="subtitle">Marisol Bliss Elementary School | SY {{ $assessment['school_year'] }}</p>
+        @if($scopeLabel)
+            <p class="subtitle">{{ $scopeLabel }}</p>
+        @endif
     </div>
 
 

@@ -674,21 +674,26 @@ class ReportsController extends Controller
     public function sbfpAssessment()
     {
         $schoolYear = SchoolYearManager::activeSchoolYear();
-        $assessment = $this->assessmentData($schoolYear);
+        $assessment = $this->assessmentData($schoolYear, $this->assessmentScopeForCurrentUser());
+        $reportRoutePrefix = auth()->user()?->isEncoder() ? 'encoder.reports.sbfp' : 'admin.reports.sbfp';
+        $reportBackRoute = auth()->user()?->isEncoder() ? 'encoder.dashboard' : 'admin.reports.sbfp.index';
+        $scopeLabel = $this->assessmentScopeLabel();
 
-        return view('admin.reports.assessment.index', compact('schoolYear', 'assessment'));
+        return view('admin.reports.assessment.index', compact('schoolYear', 'assessment', 'reportRoutePrefix', 'reportBackRoute', 'scopeLabel'));
     }
 
     public function exportAssessmentExcel()
     {
         [$adminName, $superAdminName] = $this->reportSignatories();
-        return Excel::download(new AssessmentReportWorkbookExport($this->assessmentData(SchoolYearManager::activeSchoolYear()), $adminName, $superAdminName), 'sbfp-assessment.xlsx');
+        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear(), $this->assessmentScopeForCurrentUser());
+        return Excel::download(new AssessmentReportWorkbookExport($assessment, $adminName, $superAdminName, $this->assessmentScopeLabel()), 'sbfp-assessment.xlsx');
     }
 
     public function exportAssessmentDocx()
     {
-        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
+        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear(), $this->assessmentScopeForCurrentUser());
         [$adminName, $superAdminName] = $this->reportSignatories();
+        $scopeLabel = $this->assessmentScopeLabel();
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 600]);
         $header = $section->addHeader();
@@ -705,6 +710,10 @@ class ReportsController extends Controller
         $headerText->addText('SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT', ['bold' => true, 'size' => 14]);
         $headerText->addTextBreak();
         $headerText->addText("Marisol Bliss Elementary School | SY {$assessment['school_year']}");
+        if ($scopeLabel) {
+            $headerText->addTextBreak();
+            $headerText->addText($scopeLabel);
+        }
         $depedLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($depedLogoCell);
         $depedLogoCell->getStyle()->setVAlign('center');
@@ -746,15 +755,16 @@ class ReportsController extends Controller
     public function exportAssessmentPdf()
     {
         $schoolYear = SchoolYearManager::activeSchoolYear();
-        $assessment = $this->assessmentData($schoolYear);
+        $assessment = $this->assessmentData($schoolYear, $this->assessmentScopeForCurrentUser());
         [$adminName, $superAdminName] = $this->reportSignatories();
+        $scopeLabel = $this->assessmentScopeLabel();
 
-        return Pdf::loadView('admin.reports.assessment.print', compact('schoolYear', 'assessment', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('sbfp-assessment.pdf');
+        return Pdf::loadView('admin.reports.assessment.print', compact('schoolYear', 'assessment', 'adminName', 'superAdminName', 'scopeLabel'))->setPaper('a4', 'landscape')->download('sbfp-assessment.pdf');
     }
 
     public function exportAssessmentSql(): Response
     {
-        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear());
+        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear(), $this->assessmentScopeForCurrentUser());
         $columns = implode(', ', array_map(fn($column) => '`' . $column . '`', AssessmentReportExport::columnKeys()));
         $values = implode(', ', array_map(fn($value) => DB::getPdo()->quote((string) $value), AssessmentReportExport::values($assessment)));
         $sql = "-- NutriSight SBFP Assessment report export\nINSERT INTO `sbfp_assessment_report_exports` ({$columns}) VALUES ({$values});\n";
@@ -811,15 +821,64 @@ class ReportsController extends Controller
             ->setBorderColor('FFFFFF');
     }
 
-    private function assessmentData(?SchoolYear $schoolYear): array
+    private function assessmentScopeForCurrentUser(): ?array
+    {
+        $user = auth()->user();
+
+        if (!$user?->isEncoder()) {
+            return null;
+        }
+
+        if ($user->advisory_grade_level === null || trim((string) $user->advisory_section) === '') {
+            return ['unassigned' => true];
+        }
+
+        return [
+            'grade_level' => $user->advisory_grade_level,
+            'section' => $user->advisory_section,
+        ];
+    }
+
+    private function assessmentScopeLabel(): ?string
+    {
+        $user = auth()->user();
+
+        if (!$user?->isEncoder()) {
+            return null;
+        }
+
+        if ($user->advisory_grade_level === null || trim((string) $user->advisory_section) === '') {
+            return 'No advisory grade and section assigned';
+        }
+
+        return 'Grade ' . $user->advisory_grade_level . ' - Section ' . trim($user->advisory_section);
+    }
+
+    private function assessmentData(?SchoolYear $schoolYear, ?array $enrollmentScope = null): array
     {
         $students = Student::with([
-            'enrollments' => function ($query) use ($schoolYear) {
+            'enrollments' => function ($query) use ($schoolYear, $enrollmentScope) {
                 $query->where('school_year_id', $schoolYear?->id)
+                    ->when($enrollmentScope !== null, function ($query) use ($enrollmentScope) {
+                        if (($enrollmentScope['unassigned'] ?? false) === true) {
+                            $query->whereRaw('1 = 0');
+                        } else {
+                            $query->where('grade_level', $enrollmentScope['grade_level'])
+                                ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($enrollmentScope['section']))]);
+                        }
+                    })
                     ->with(['sbfpParticipant.nutritionMeasurements', 'sbfpParticipant.attendanceRecords']);
             },
-        ])->whereHas('enrollments', function ($query) use ($schoolYear) {
+        ])->whereHas('enrollments', function ($query) use ($schoolYear, $enrollmentScope) {
             $query->where('school_year_id', $schoolYear?->id)
+                ->when($enrollmentScope !== null, function ($query) use ($enrollmentScope) {
+                    if (($enrollmentScope['unassigned'] ?? false) === true) {
+                        $query->whereRaw('1 = 0');
+                    } else {
+                        $query->where('grade_level', $enrollmentScope['grade_level'])
+                            ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($enrollmentScope['section']))]);
+                    }
+                })
                 ->whereHas('sbfpParticipant', fn($participant) => $participant->where('parent_consent', 'approved'));
         })->get();
 

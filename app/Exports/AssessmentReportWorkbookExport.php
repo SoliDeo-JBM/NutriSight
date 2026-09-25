@@ -14,14 +14,14 @@ use App\Services\SchoolLogoService;
 
 class AssessmentReportWorkbookExport implements Export, WithMultipleSheets
 {
-    public function __construct(private readonly array $assessment, private readonly string $adminName = 'Full Name of the Admin', private readonly string $superAdminName = 'Full Name of the Super Admin') {}
+    public function __construct(private readonly array $assessment, private readonly string $adminName = 'Full Name of the Admin', private readonly string $superAdminName = 'Full Name of the Super Admin', private readonly ?string $scopeLabel = null) {}
 
     public function sheets(): array
     {
         $assessment = $this->assessment;
 
         return [
-            new AssessmentReportSheet('Summary', AssessmentReportExport::columnHeadings(), [AssessmentReportExport::values($assessment)], $this->assessment, $this->adminName, $this->superAdminName),
+            new AssessmentReportSheet('Summary', AssessmentReportExport::columnHeadings(), [AssessmentReportExport::values($assessment)], $this->assessment, $this->adminName, $this->superAdminName, $this->scopeLabel),
             new AssessmentReportSheet('Attendance Demographics', ['Sex', 'Age', 'Complete Attendance', 'Complete %', 'With Absences', 'Absence %'], $this->attendanceRows($assessment['attendance_demographics'])),
             new AssessmentReportSheet('Learners', ['Sex', 'Age', 'Learners', 'Percentage'], $this->participantRows($assessment['participant_demographics'])),
             new AssessmentReportSheet('Endline Recovery', ['Sex', 'Age', 'Recovered to Normal', 'Recovered %', 'Still Needing Support', 'Support %'], $this->recoveryRows($assessment['recovery_demographics'])),
@@ -88,6 +88,7 @@ class AssessmentReportSheet implements FromArray, WithEvents, WithHeadings, With
         private readonly array $assessment = [],
         private readonly string $adminName = 'Full Name of the Admin',
         private readonly string $superAdminName = 'Full Name of the Super Admin',
+        private readonly ?string $scopeLabel = null,
     ) {}
 
     public function array(): array
@@ -118,6 +119,7 @@ class AssessmentReportSheet implements FromArray, WithEvents, WithHeadings, With
             $sheet->mergeCells('A2:K2');
             $sheet->mergeCells('A3:K3');
             $sheet->mergeCells('A4:K4');
+            $sheet->mergeCells('A5:K5');
             $lastRow = count($this->rows) + 6;
             $signatureRow = $lastRow + 2;
             foreach ([
@@ -136,6 +138,9 @@ class AssessmentReportSheet implements FromArray, WithEvents, WithHeadings, With
             $sheet->setCellValue('A2', 'Bureau of Learner Support Services');
             $sheet->setCellValue('A3', 'SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT');
             $sheet->setCellValue('A4', 'Marisol Bliss Elementary School | SY ' . ($this->assessment['school_year'] ?? ''));
+            if ($this->scopeLabel) {
+                $sheet->setCellValue('A5', $this->scopeLabel);
+            }
             $sheet->setCellValue('A' . $signatureRow, 'Prepared by:');
             $sheet->setCellValue('G' . $signatureRow, 'Noted by:');
             $sheet->setCellValue('A' . ($signatureRow + 1), '____________________________');

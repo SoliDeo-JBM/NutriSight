@@ -39,6 +39,18 @@
         </div>
     </div>
 
+    <a href="{{ route('encoder.reports.sbfp.assessment') }}" class="block bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition mb-8">
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+                <h2 class="text-lg font-semibold text-emerald-600">SBFP Assessment Report</h2>
+                <p class="text-gray-600">Review attendance and nutrition progress for your assigned grade and section.</p>
+            </div>
+            <span class="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
+                Open Report <i class="fas fa-arrow-right"></i>
+            </span>
+        </div>
+    </a>
+
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <a href="{{ route('encoder.students.index') }}" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">
             <h2 class="text-lg font-semibold mb-2 text-blue-600">Advisory Learner List</h2>

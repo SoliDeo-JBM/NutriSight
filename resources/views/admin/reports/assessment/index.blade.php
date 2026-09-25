@@ -53,11 +53,14 @@
 </style>
 <div class="flex flex-col gap-5">
     <div class="no-print flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div><a href="{{ route('admin.reports.sbfp.index') }}" class="report-back-link"><i class="fas fa-arrow-left"></i><span>Back</span></a>
+        <div><a href="{{ route($reportBackRoute) }}" class="report-back-link"><i class="fas fa-arrow-left"></i><span>Back</span></a>
             <h1 class="mt-3 text-xl font-bold text-gray-900">SBFP Assessment Report - SY {{ $assessment['school_year'] }}</h1>
+            @if($scopeLabel)
+                <p class="mt-1 text-xs font-semibold text-blue-700">Scope: {{ $scopeLabel }}</p>
+            @endif
             <p class="text-xs text-gray-500">PROGRAM IMPACT | ATTENDANCE AND NUTRITION PROGRESS</p>
         </div>
-        <div class="flex flex-wrap gap-2"><a href="{{ request()->fullUrl() }}" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-600 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"><i class="fas fa-arrows-rotate"></i> Refresh</a><a href="{{ route('admin.reports.sbfp.assessment.excel') }}" data-loading-link data-loading-message="Preparing Excel report..." class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><i class="fas fa-file-excel"></i> Excel</a><a href="{{ route('admin.reports.sbfp.assessment.docx') }}" data-loading-link data-loading-message="Preparing Word report..." class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"><i class="fas fa-file-word"></i> Word</a><a href="{{ route('admin.reports.sbfp.assessment.pdf') }}" data-loading-link data-loading-message="Preparing PDF report..." class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"><i class="fas fa-file-pdf"></i> PDF</a></div>
+        <div class="flex flex-wrap gap-2"><a href="{{ request()->fullUrl() }}" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-600 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"><i class="fas fa-arrows-rotate"></i> Refresh</a><a href="{{ route($reportRoutePrefix . '.assessment.excel') }}" data-loading-link data-loading-message="Preparing Excel report..." class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><i class="fas fa-file-excel"></i> Excel</a><a href="{{ route($reportRoutePrefix . '.assessment.docx') }}" data-loading-link data-loading-message="Preparing Word report..." class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"><i class="fas fa-file-word"></i> Word</a><a href="{{ route($reportRoutePrefix . '.assessment.pdf') }}" data-loading-link data-loading-message="Preparing PDF report..." class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"><i class="fas fa-file-pdf"></i> PDF</a></div>
     </div>
     <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
         <section class="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">

@@ -41,6 +41,14 @@ class RolePageSmokeTest extends TestCase
 
         $this->actingAs($user)->get('/encoder/students/sbfp')->assertOk();
         $this->actingAs($user)->get('/encoder/dashboard')->assertOk();
+
+        $this->actingAs($user)
+            ->get('/encoder/reports/sbfp/assessment')
+            ->assertOk()
+            ->assertSee('Grade 1 - Section A')
+            ->assertSee(route('encoder.reports.sbfp.assessment.excel'))
+            ->assertSee(route('encoder.reports.sbfp.assessment.docx'))
+            ->assertSee(route('encoder.reports.sbfp.assessment.pdf'));
     }
 
     private function createActiveSchoolYear(User $user): void
