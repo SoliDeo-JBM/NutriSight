@@ -43,6 +43,7 @@ class MealPlanController extends Controller
         $validated = $request->validate([
             'meal_date' => ['required', 'date'],
             'meal_name' => ['required', 'string', 'max:255'],
+            'meal_period' => ['required', 'in:' . implode(',', MealPlan::PERIODS)],
         ]);
 
         MealPlan::create($validated + ['recorded_by_user_id' => Auth::id()]);
@@ -55,6 +56,7 @@ class MealPlanController extends Controller
     {
         $validated = $request->validate([
             'meal_name' => ['required', 'string', 'max:255'],
+            'meal_period' => ['required', 'in:' . implode(',', MealPlan::PERIODS)],
         ]);
 
         $mealPlan->update($validated);

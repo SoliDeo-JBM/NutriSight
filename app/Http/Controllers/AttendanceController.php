@@ -40,11 +40,13 @@ class AttendanceController extends Controller
             'date' => ['nullable', 'date_format:Y-m-d'],
             'grade_level' => ['nullable', 'integer', 'between:0,7'],
             'section' => ['nullable', 'string', 'max:100'],
+            'meal_period' => ['nullable', 'in:' . implode(',', MealPlan::PERIODS)],
         ]);
 
         $date = $request->filled('date')
             ? Carbon::parse($request->input('date'))->toDateString()
             : Carbon::today()->toDateString();
+        $mealPeriod = $request->input('meal_period', MealPlan::PERIOD_MORNING);
 
         /** @var \App\Models\User|null $user */
         $user = Auth::user();
@@ -101,6 +103,7 @@ class AttendanceController extends Controller
         // Get attendance logs for the date keyed by sbfp_participant_id
         $participantIds = $sbfpStudents->pluck('enrollments')->flatten()->pluck('sbfpParticipant.id')->filter();
         $attendanceLogs = StudentAttendanceRecord::where('attendance_date', $date)
+            ->where('meal_period', $mealPeriod)
             ->whereIn('sbfp_participant_id', $participantIds)
             ->get()
             ->keyBy('sbfp_participant_id');
@@ -113,14 +116,20 @@ class AttendanceController extends Controller
 
         $gradeLevels = $encoderScope ? collect() : \App\Models\Enrollment::where('school_year_id', $activeSyId)->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = $encoderScope ? collect() : \App\Models\Enrollment::where('school_year_id', $activeSyId)->distinct()->orderBy('section')->pluck('section');
-        $hasMeal = MealPlan::whereDate('meal_date', $date)->exists();
+        $hasMeal = MealPlan::whereDate('meal_date', $date)
+            ->where('meal_period', $mealPeriod)
+            ->exists();
 
-        return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'loggedDates', 'routePrefix', 'gradeLevels', 'sections', 'hasMeal'));
+        return view('attendance.index', compact('sbfpStudents', 'attendanceLogs', 'date', 'mealPeriod', 'loggedDates', 'routePrefix', 'gradeLevels', 'sections', 'hasMeal'));
     }
 
     public function scan(Request $request)
     {
-        $request->validate(['lrn' => 'required']);
+        $validated = $request->validate([
+            'lrn' => ['required'],
+            'meal_period' => ['required', 'in:' . implode(',', MealPlan::PERIODS)],
+        ]);
+        $mealPeriod = $validated['meal_period'];
 
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $student = Student::with(['enrollments' => function ($q) use ($activeSyId) {
@@ -159,10 +168,12 @@ class AttendanceController extends Controller
         }
 
         $today = now()->toDateString();
-        $meals = MealPlan::whereDate('meal_date', $today)->pluck('meal_name');
+        $meals = MealPlan::whereDate('meal_date', $today)
+            ->where('meal_period', $mealPeriod)
+            ->pluck('meal_name');
         if ($meals->isEmpty()) {
             return response()->json([
-                'error' => 'Add meal first before taking attendance.',
+                'error' => 'Add a ' . $mealPeriod . ' meal first before taking attendance.',
                 'student_name' => $studentName,
                 'grade_level' => $enrollment->grade_level,
                 'section' => $enrollment->section
@@ -171,6 +182,7 @@ class AttendanceController extends Controller
 
         $existingLog = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
             ->where('attendance_date', $today)
+            ->where('meal_period', $mealPeriod)
             ->first();
 
         $this->ensureAttendanceMonth($participant->enrollment->school_year_id, $today);
@@ -187,10 +199,11 @@ class AttendanceController extends Controller
             'sbfp_participant_id' => $participant->id,
             'recorded_by_user_id' => Auth::id(),
             'attendance_date' => $today,
+            'meal_period' => $mealPeriod,
             'status' => 'present',
         ]);
 
-        $this->sendAttendanceNotice($student, $today, $meals->implode(', '), $attendanceRecord->created_at);
+        $this->sendAttendanceNotice($student, $today, $meals->implode(', '), $attendanceRecord->created_at, $mealPeriod);
 
         AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
 
@@ -207,26 +220,33 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'sbfp_participant_id' => 'required|exists:sbfp_participants,id',
             'date' => 'required|date',
-            'status' => 'required|in:present,absent,unmarked'
+            'status' => 'required|in:present,absent,unmarked',
+            'meal_period' => ['nullable', 'in:' . implode(',', MealPlan::PERIODS)],
         ]);
+        $mealPeriod = $validated['meal_period'] ?? MealPlan::PERIOD_MORNING;
 
         $participant = SbfpParticipant::with('enrollment.student')->findOrFail($validated['sbfp_participant_id']);
-        $hasMeal = MealPlan::whereDate('meal_date', $validated['date'])->exists();
+        $hasMeal = MealPlan::whereDate('meal_date', $validated['date'])
+            ->where('meal_period', $mealPeriod)
+            ->exists();
         if (in_array($validated['status'], ['present', 'absent'], true) && !$hasMeal) {
-            return back()->with('error', 'Add meal first before recording attendance.');
+            return back()->with('error', 'Add a ' . $mealPeriod . ' meal first before recording attendance.');
         }
 
         $existingRecord = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
             ->whereDate('attendance_date', $validated['date'])
+            ->where('meal_period', $mealPeriod)
             ->first();
 
+        $attendanceRecord = null;
         if ($validated['status'] === 'unmarked') {
             $existingRecord?->delete();
         } else {
-            StudentAttendanceRecord::updateOrCreate(
+            $attendanceRecord = StudentAttendanceRecord::updateOrCreate(
                 [
                     'sbfp_participant_id' => $validated['sbfp_participant_id'],
                     'attendance_date' => $validated['date'],
+                    'meal_period' => $mealPeriod,
                 ],
                 [
                     'recorded_by_user_id' => Auth::id(),
@@ -243,8 +263,11 @@ class AttendanceController extends Controller
             $validated['status'] === 'present'
             && (!$existingRecord || $existingRecord->status !== 'present')
         ) {
-            $meal = MealPlan::whereDate('meal_date', $validated['date'])->pluck('meal_name')->implode(', ');
-            $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal);
+            $meal = MealPlan::whereDate('meal_date', $validated['date'])
+                ->where('meal_period', $mealPeriod)
+                ->pluck('meal_name')
+                ->implode(', ');
+            $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal, null, $mealPeriod);
         }
 
         $studentName = trim($participant->enrollment->student->first_name . ' ' . $participant->enrollment->student->last_name);
@@ -257,7 +280,7 @@ class AttendanceController extends Controller
         return back()->with('success', 'Attendance updated.');
     }
 
-    private function sendAttendanceNotice(Student $student, string $date, string $meal, ?\Carbon\CarbonInterface $scannedAt = null): void
+    private function sendAttendanceNotice(Student $student, string $date, string $meal, ?\Carbon\CarbonInterface $scannedAt = null, string $mealPeriod = MealPlan::PERIOD_MORNING): void
     {
         if (!$student->guardian_email) {
             Log::info('Automatic SBFP attendance email skipped because guardian email is missing.', [
@@ -273,7 +296,8 @@ class AttendanceController extends Controller
                 $meal,
                 Carbon::parse($date)->toDateString(),
                 null,
-                $scannedAt
+                $scannedAt,
+                $mealPeriod
             ));
             Log::info('Automatic SBFP attendance email accepted by SMTP transport.', [
                 'student_id' => $student->id,

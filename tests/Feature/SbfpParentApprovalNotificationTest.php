@@ -84,13 +84,16 @@ class SbfpParentApprovalNotificationTest extends TestCase
             'last_name' => 'Dela Cruz',
         ]);
 
-        $body = (new FeedingDayNotice($student, 'Champorado', '2026-09-25', null, Carbon::parse('2026-09-25 10:42:00')))->render();
+        $notice = new FeedingDayNotice($student, 'Champorado', '2026-09-25', null, Carbon::parse('2026-09-25 10:42:00'), 'afternoon');
+        $body = $notice->render();
 
         $this->assertStringContainsString('Republic Act No. 10173', $body);
         $this->assertStringContainsString('Data Privacy Act of 2012', $body);
         $this->assertStringContainsString('School-Based Feeding Program coordination', $body);
+        $this->assertStringContainsString('Afternoon', $body);
         $this->assertStringContainsString('Scanned at:', $body);
         $this->assertStringContainsString('September 25, 2026 at 10:42 AM', $body);
+        $this->assertStringContainsString('SBFP Afternoon attendance notice', $notice->envelope()->subject);
 
         $manualBody = (new FeedingDayNotice($student, 'Champorado', '2026-09-25'))->render();
 

@@ -26,20 +26,22 @@ class FeedingDayNotice extends Mailable implements ShouldQueue
     public $date;
     public $notes;
     public $scannedAt;
+    public $mealPeriod;
 
-    public function __construct(Student $student, string $meal, string $date, ?string $notes = null, ?CarbonInterface $scannedAt = null)
+    public function __construct(Student $student, string $meal, string $date, ?string $notes = null, ?CarbonInterface $scannedAt = null, string $mealPeriod = 'morning')
     {
         $this->student = $student;
         $this->meal = $meal;
         $this->date = $date;
         $this->notes = $notes;
         $this->scannedAt = $scannedAt;
+        $this->mealPeriod = $mealPeriod;
     }
 
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: 'SBFP attendance notice for ' . $this->student->first_name . ' ' . $this->student->last_name,
+            subject: 'SBFP ' . ucfirst($this->mealPeriod) . ' attendance notice for ' . $this->student->first_name . ' ' . $this->student->last_name,
         );
     }
 

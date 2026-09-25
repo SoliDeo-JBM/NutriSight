@@ -169,8 +169,9 @@ class ReportsController extends Controller
             ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
             ->map(function (Student $student) use ($schoolYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
-                $present = $records->filter(fn($record) => in_array(strtolower((string) $record->status), ['present', 'p', 'served']))->count();
-                return ['name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'present' => $present, 'recorded' => $records->count()];
+                $dailyRecords = $records->groupBy(fn($record) => $record->attendance_date?->toDateString());
+                $present = $dailyRecords->filter(fn($dayRecords) => $dayRecords->contains(fn($record) => in_array(strtolower((string) $record->status), ['present', 'p', 'served'])))->count();
+                return ['name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'present' => $present, 'recorded' => $dailyRecords->count()];
             });
         return view('admin.reports.attendance.summary', compact('schoolYear', 'students'));
     }
@@ -201,8 +202,10 @@ class ReportsController extends Controller
                 $days = [];
                 $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $calendarYear));
                 for ($day = 1; $day <= $daysInMonth; $day++) {
-                    $record = $records->first(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
-                    $days[$day] = $record?->status;
+                    $dayRecords = $records->filter(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
+                    $days[$day] = $dayRecords->contains(fn($item) => in_array(strtolower((string) $item->status), ['present', 'p', 'served']))
+                        ? 'present'
+                        : ($dayRecords->contains(fn($item) => in_array(strtolower((string) $item->status), ['absent', 'a'])) ? 'absent' : null);
                 }
                 return ['number' => $index + 1, 'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'grade_level' => $student->enrollments->first()?->grade_level, 'section' => $student->enrollments->first()?->section, 'days' => $days];
             });

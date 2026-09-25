@@ -916,6 +916,7 @@ class StudentController extends Controller
             'meal' => 'required|string',
             'date' => 'required|date',
             'notes' => 'nullable|string',
+            'meal_period' => 'nullable|in:morning,afternoon',
         ]);
 
         if (!$student->guardian_email) {
@@ -923,7 +924,7 @@ class StudentController extends Controller
         }
 
         \Illuminate\Support\Facades\Mail::to($student->guardian_email)->send(
-            new \App\Mail\FeedingDayNotice($student, $validated['meal'], $validated['date'], $validated['notes'])
+            new \App\Mail\FeedingDayNotice($student, $validated['meal'], $validated['date'], $validated['notes'], null, $validated['meal_period'] ?? 'morning')
         );
 
         AuditLogger::log('Created', 'Email', 'Sent feeding day email notice to guardian of ' . $student->first_name . ' ' . $student->last_name);

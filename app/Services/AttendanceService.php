@@ -20,16 +20,17 @@ class AttendanceService
             return 0;
         }
 
-        $mealDates = MealPlan::query()
+        $mealSessions = MealPlan::query()
             ->whereDate('meal_date', '<', Carbon::today())
             ->whereDate('meal_date', '>=', $schoolYear->start_date)
             ->when($schoolYear->end_date, fn ($query) => $query->whereDate('meal_date', '<=', $schoolYear->end_date))
-            ->selectRaw('DATE(meal_date) as attendance_date')
+            ->selectRaw('DATE(meal_date) as attendance_date, meal_period')
             ->distinct()
             ->orderBy('attendance_date')
-            ->pluck('attendance_date');
+            ->orderBy('meal_period')
+            ->get();
 
-        if ($mealDates->isEmpty()) {
+        if ($mealSessions->isEmpty()) {
             return 0;
         }
 
@@ -40,9 +41,10 @@ class AttendanceService
 
         $markedCount = 0;
 
-        foreach ($mealDates as $mealDate) {
+        foreach ($mealSessions as $mealSession) {
             $existingIds = StudentAttendanceRecord::query()
-                ->whereDate('attendance_date', $mealDate)
+            ->whereDate('attendance_date', $mealSession->attendance_date)
+            ->where('meal_period', $mealSession->meal_period)
                 ->whereIn('sbfp_participant_id', $participantIds)
                 ->pluck('sbfp_participant_id');
 
@@ -55,7 +57,8 @@ class AttendanceService
             $rows = $missingIds->map(fn ($participantId) => [
                 'sbfp_participant_id' => $participantId,
                 'recorded_by_user_id' => $recordedByUserId,
-                'attendance_date' => $mealDate,
+                'attendance_date' => $mealSession->attendance_date,
+                'meal_period' => $mealSession->meal_period,
                 'status' => 'absent',
                 'created_at' => $now,
                 'updated_at' => $now,

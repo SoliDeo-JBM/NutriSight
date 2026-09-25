@@ -1,6 +1,7 @@
 <x-modal name="attendance-scanner" :show="false" focusable>
     <div class="p-6" x-data="{
         scanValue: '',
+        mealPeriod: 'morning',
         studentName: '',
         studentDetails: '',
         statusMessage: '',
@@ -18,7 +19,7 @@
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': '{{ csrf_token() }}'
                 },
-                body: JSON.stringify({ lrn: lrnToScan })
+                body: JSON.stringify({ lrn: lrnToScan, meal_period: this.mealPeriod })
             })
             .then(async response => {
                 let data = {};
@@ -60,6 +61,12 @@
         }
     }">
         <h2 class="text-lg font-medium text-gray-900 mb-4"><i class="fas fa-qrcode text-orange-600 mr-2"></i> Scan Learner QR Code</h2>
+
+        <label for="scanner-meal-period" class="block text-sm font-semibold text-gray-700 mb-1">Feeding period</label>
+        <select id="scanner-meal-period" x-model="mealPeriod" class="w-full mb-4 border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500 p-2.5 text-sm">
+            <option value="morning">Morning</option>
+            <option value="afternoon">Afternoon</option>
+        </select>
         
         <input type="text" 
                x-ref="scannerInput"

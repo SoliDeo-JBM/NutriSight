@@ -13,6 +13,13 @@
                 <label for="attendance-date" class="mb-1 block text-xs font-semibold text-slate-600">Feeding date</label>
                 <input id="attendance-date" type="date" name="date" value="{{ $date }}" onchange="this.form.submit()" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">
             </div>
+            <div>
+                <label for="attendance-period" class="mb-1 block text-xs font-semibold text-slate-600">Feeding period</label>
+                <select id="attendance-period" name="meal_period" onchange="this.form.submit()" class="rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm">
+                    <option value="morning" @selected($mealPeriod === 'morning')>Morning</option>
+                    <option value="afternoon" @selected($mealPeriod === 'afternoon')>Afternoon</option>
+                </select>
+            </div>
             @if($routePrefix !== 'encoder')
             <div>
                 <label for="attendance-grade" class="mb-1 block text-xs font-semibold text-slate-600">Grade</label>
@@ -58,7 +65,7 @@
 
     @if(!$hasMeal)
     <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-        No meal is scheduled for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}. Add a meal before marking a learner present or absent.
+        No {{ $mealPeriod }} meal is scheduled for {{ \Carbon\Carbon::parse($date)->format('F j, Y') }}. Add a meal before marking a learner present or absent.
     </div>
     @endif
 
@@ -91,7 +98,7 @@
                     <td class="px-4 py-3">{{ $enrollment?->section }}</td>
                     <td class="px-4 py-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $status === 'present' ? 'bg-emerald-100 text-emerald-800' : ($status === 'absent' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600') }}">{{ ucfirst($status) }}</span></td>
                     <td class="min-w-[220px] px-2 py-3">
-                        <form action="{{ route($routePrefix . '.attendance.update') }}" method="POST" class="mx-auto grid max-w-[220px] grid-cols-[1fr_1fr_32px] items-center gap-1">@csrf<input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}"><input type="hidden" name="date" value="{{ $date }}"><button type="submit" name="status" value="present" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-emerald-100' }} disabled:cursor-not-allowed disabled:opacity-50">Present</button><button type="submit" name="status" value="absent" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'absent' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-rose-100' }} disabled:cursor-not-allowed disabled:opacity-50">Absent</button><button type="submit" name="status" value="unmarked" data-confirm-message="Clear this learner's attendance status for the selected date?" title="Clear attendance status" aria-label="Clear attendance status" class="h-8 w-8 rounded-md bg-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">X</button></form>
+                        <form action="{{ route($routePrefix . '.attendance.update') }}" method="POST" class="mx-auto grid max-w-[220px] grid-cols-[1fr_1fr_32px] items-center gap-1">@csrf<input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}"><input type="hidden" name="date" value="{{ $date }}"><input type="hidden" name="meal_period" value="{{ $mealPeriod }}"><button type="submit" name="status" value="present" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-emerald-100' }} disabled:cursor-not-allowed disabled:opacity-50">Present</button><button type="submit" name="status" value="absent" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'absent' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-rose-100' }} disabled:cursor-not-allowed disabled:opacity-50">Absent</button><button type="submit" name="status" value="unmarked" data-confirm-message="Clear this learner's attendance status for the selected date and period?" title="Clear attendance status" aria-label="Clear attendance status" class="h-8 w-8 rounded-md bg-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">X</button></form>
                     </td>
                 </tr>
                 @empty

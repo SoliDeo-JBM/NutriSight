@@ -55,43 +55,95 @@ $startOfMonth = $currentDate->copy()->startOfMonth();
         </div>
     </div>
 
-    <div class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 flex flex-col min-h-[550px]">
-        <h2 class="text-lg font-bold mb-4">Meal for {{ $date }}</h2>
-        <form action="{{ route('admin.meal-plans.store') }}" method="POST" class="mb-4 p-3 border rounded-lg bg-gray-50">
+    @php
+    $morningMeals = $mealPlans->where('meal_period', 'morning');
+    $afternoonMeals = $mealPlans->where('meal_period', 'afternoon');
+    @endphp
+    <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200 flex flex-col min-h-[550px]">
+        <div class="flex items-start justify-between gap-3 mb-5">
+            <div>
+                <p class="text-xs font-bold uppercase tracking-wider text-emerald-600">Daily menu</p>
+                <h2 class="text-xl font-bold text-gray-900 mt-1">Meal for {{ \Carbon\Carbon::parse($date)->format('M j, Y') }}</h2>
+            </div>
+            <span class="shrink-0 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600">
+                {{ $mealPlans->count() }} {{ $mealPlans->count() === 1 ? 'meal' : 'meals' }}
+            </span>
+        </div>
+
+        <form action="{{ route('admin.meal-plans.store') }}" method="POST" class="mb-6 rounded-lg border border-emerald-200 bg-emerald-50/60 p-4">
             @csrf
             <input type="hidden" name="meal_date" value="{{ $date }}">
-            <label for="meal_name" class="block text-xs font-semibold text-gray-600 mb-1">Add meal</label>
-            <div class="flex gap-2">
-                <input id="meal_name" name="meal_name" required maxlength="255" class="min-w-0 flex-1 border-gray-300 rounded text-sm" placeholder="Meal name">
-                <button class="px-3 py-2 rounded bg-blue-600 text-white text-sm font-semibold hover:bg-blue-700"><i class="fas fa-plus mr-1"></i>Add</button>
+            <div class="mb-3 flex items-center gap-2">
+                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-emerald-600 text-white"><i class="fas fa-plus text-xs"></i></span>
+                <label for="meal_period" class="text-sm font-bold text-slate-800">Add a feeding session</label>
+            </div>
+            <div class="space-y-3">
+                <div>
+                    <label for="meal_period" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Session</label>
+                    <select id="meal_period" name="meal_period" required class="w-full rounded-md border-gray-300 bg-white text-sm focus:border-emerald-500 focus:ring-emerald-500">
+                    <option value="morning">Morning</option>
+                    <option value="afternoon">Afternoon</option>
+                    </select>
+                </div>
+                <div>
+                    <label for="meal_name" class="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Meal name</label>
+                    <input id="meal_name" name="meal_name" required maxlength="255" class="w-full rounded-md border-gray-300 bg-white text-sm focus:border-emerald-500 focus:ring-emerald-500" placeholder="e.g. Adobo with rice">
+                </div>
+                <button class="w-full rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-emerald-700"><i class="fas fa-plus mr-1"></i>Add meal</button>
             </div>
             @error('meal_name')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
             @error('meal_date')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
+            @error('meal_period')<p class="text-red-600 text-xs mt-1">{{ $message }}</p>@enderror
         </form>
 
-        <div class="flex-1 overflow-y-auto space-y-3 pr-1">
-            @forelse($mealPlans as $mealPlan)
-            <div x-data="{ editing: false }" class="p-3 border rounded-lg bg-gray-50">
-                <div class="flex items-center justify-between gap-3">
-                    <div x-show="!editing" class="font-semibold text-sm min-w-0 break-words">{{ $mealPlan->meal_name }}</div>
-                    <form action="{{ route('admin.meal-plans.update', $mealPlan) }}" method="POST" class="flex items-center gap-2 flex-1" x-show="editing">
-                        @csrf @method('PUT')
-                        <input name="meal_name" value="{{ $mealPlan->meal_name }}" required maxlength="255" class="min-w-0 flex-1 border-gray-300 rounded text-xs">
-                        <button type="submit" class="px-2 py-1 rounded bg-blue-600 text-white text-xs font-semibold">Confirm</button>
-                        <button type="button" @click="editing = false" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-semibold">Cancel</button>
-                    </form>
-                    <div x-show="!editing" class="flex items-center gap-2 shrink-0">
-                        <button type="button" @click="editing = true" class="px-2 py-1 rounded bg-gray-200 text-gray-700 text-xs font-semibold">Edit</button>
-                        <form action="{{ route('admin.meal-plans.destroy', $mealPlan) }}" method="POST" data-confirm-message="Delete this meal plan permanently? This action cannot be undone.">
-                            @csrf @method('DELETE')
-                            <button class="px-2 py-1 rounded bg-red-100 text-red-700 text-xs font-semibold">Delete</button>
+        <div class="flex-1 overflow-y-auto space-y-5 pr-1">
+            @foreach([
+                ['key' => 'morning', 'label' => 'Morning', 'icon' => 'fa-sun', 'accent' => 'emerald', 'meals' => $morningMeals],
+                ['key' => 'afternoon', 'label' => 'Afternoon', 'icon' => 'fa-cloud-sun', 'accent' => 'amber', 'meals' => $afternoonMeals],
+            ] as $session)
+            <section>
+                <div class="mb-2 flex items-center justify-between">
+                    <h3 class="flex items-center gap-2 text-sm font-bold text-slate-800">
+                        <span class="flex h-7 w-7 items-center justify-center rounded-full {{ $session['accent'] === 'emerald' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700' }}"><i class="fas {{ $session['icon'] }} text-xs"></i></span>
+                        {{ $session['label'] }} meal
+                    </h3>
+                    <span class="text-xs text-slate-400">{{ $session['meals']->count() }}</span>
+                </div>
+                <div class="space-y-2">
+                    @forelse($session['meals'] as $mealPlan)
+                    <div x-data="{ editing: false }" class="rounded-lg border border-slate-200 bg-white p-3 shadow-sm">
+                        <div x-show="!editing" class="flex items-center justify-between gap-3">
+                            <div class="min-w-0">
+                                <p class="break-words text-sm font-semibold text-slate-800">{{ $mealPlan->meal_name }}</p>
+                                <p class="mt-1 text-xs text-slate-400">Added {{ $mealPlan->created_at?->format('g:i A') }}</p>
+                            </div>
+                            <div class="flex shrink-0 items-center gap-1">
+                                <button type="button" @click="editing = true" title="Edit meal" aria-label="Edit meal" class="flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-800"><i class="fas fa-pen text-xs"></i></button>
+                                <form action="{{ route('admin.meal-plans.destroy', $mealPlan) }}" method="POST" data-confirm-message="Delete this meal plan permanently? This action cannot be undone.">
+                                    @csrf @method('DELETE')
+                                    <button title="Delete meal" aria-label="Delete meal" class="flex h-8 w-8 items-center justify-center rounded-md text-rose-500 hover:bg-rose-50 hover:text-rose-700"><i class="fas fa-trash text-xs"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                        <form action="{{ route('admin.meal-plans.update', $mealPlan) }}" method="POST" class="space-y-2" x-show="editing" x-cloak>
+                            @csrf @method('PUT')
+                            <select name="meal_period" required class="w-full rounded-md border-gray-300 text-sm">
+                                <option value="morning" @selected($mealPlan->meal_period === 'morning')>Morning</option>
+                                <option value="afternoon" @selected($mealPlan->meal_period === 'afternoon')>Afternoon</option>
+                            </select>
+                            <input name="meal_name" value="{{ $mealPlan->meal_name }}" required maxlength="255" class="w-full rounded-md border-gray-300 text-sm">
+                            <div class="flex gap-2">
+                                <button type="submit" class="flex-1 rounded-md bg-slate-800 px-3 py-2 text-xs font-bold text-white hover:bg-slate-700">Save changes</button>
+                                <button type="button" @click="editing = false" class="rounded-md bg-slate-100 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-200">Cancel</button>
+                            </div>
                         </form>
                     </div>
+                    @empty
+                    <div class="rounded-lg border border-dashed border-slate-200 px-3 py-4 text-center text-xs text-slate-400">No {{ strtolower($session['label']) }} meal planned.</div>
+                    @endforelse
                 </div>
-            </div>
-            @empty
-            <p class="text-gray-500 text-center py-6 text-sm">No meal assigned. Add meal first.</p>
-            @endforelse
+            </section>
+            @endforeach
         </div>
     </div>
 </div>
