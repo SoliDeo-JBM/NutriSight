@@ -59,7 +59,7 @@ $startOfMonth = $currentDate->copy()->startOfMonth();
     $morningMeals = $mealPlans->where('meal_period', 'morning');
     $afternoonMeals = $mealPlans->where('meal_period', 'afternoon');
     @endphp
-    <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200 flex flex-col min-h-[550px]">
+    <div class="bg-white p-5 rounded-lg shadow-sm border border-gray-200 flex h-[550px] min-h-0 flex-col overflow-hidden">
         <div class="flex items-start justify-between gap-3 mb-5">
             <div>
                 <p class="text-xs font-bold uppercase tracking-wider text-emerald-600">Daily menu</p>

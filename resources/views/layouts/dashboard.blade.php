@@ -141,11 +141,14 @@
                 <button type="button" class="hamburger-btn" onclick="toggleSidebar()">
                     <i class="fas fa-bars"></i>
                 </button>
-                <div class="welcome-text">Welcome, {{ Auth::user()->name }}</div>
+                <div class="welcome-text">
+                    <span class="welcome-greeting">Welcome,</span>
+                    <span class="welcome-name">{{ Auth::user()->name }}</span>
+                </div>
             </div>
             <div class="header-right flex items-center gap-3">
-                <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" class="text-xs bg-blue-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-blue-700 transition">
-                    <i class="fas fa-qrcode mr-1"></i> Scan Attendance
+                <button type="button" x-data @click="$dispatch('open-modal', 'attendance-scanner')" title="Scan attendance" aria-label="Scan attendance" class="attendance-scan-button text-xs bg-blue-600 text-white rounded px-3 py-1.5 font-semibold hover:bg-blue-700 transition">
+                    <i class="fas fa-qrcode mr-1"></i><span class="scan-attendance-label">Scan Attendance</span>
                 </button>
                 <form method="POST" action="{{ route('school-years.switch') }}" class="school-year-picker">
                     @csrf
