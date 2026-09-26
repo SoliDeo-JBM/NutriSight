@@ -20,7 +20,7 @@
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Advisory SBFP List</h1>
-            <p class="text-sm text-gray-500 mt-1">Learners automatically included due to Wasted / Severely Wasted BMI or explicit parent approval.</p>
+            <p class="text-sm text-gray-500 mt-1">Kinder and Grade 1 learners are automatically approved; Grades 2+ require eligible BMI and approval.</p>
             <div class="mt-4 flex flex-nowrap items-center gap-3 overflow-x-auto pb-1">
                 <button type="button" @click="openEditPeriodModal()" class="shrink-0 bg-amber-600 text-white px-4 py-2 rounded text-sm hover:bg-amber-700 whitespace-nowrap inline-flex items-center gap-2">
                     <i class="fas fa-pen"></i> Edit Period
@@ -260,6 +260,7 @@
                         <tbody>
                             @foreach($students ?? [] as $student)
                             @php $approval = $student->parent_approval_status ?: 'pending'; @endphp
+                            @php $automaticApproval = in_array((int) $student->enrollments->first()?->grade_level, [0, 1], true); @endphp
                             @php
                             $storedReason = $student->disapproval_reason;
                             $reasonChoice = in_array($storedReason, ['unwilling', 'medical_condition'], true) ? $storedReason : ($storedReason ? 'custom' : '');
@@ -267,19 +268,28 @@
                             <tr data-approval-row data-current="{{ $approval }}" data-current-reason="{{ $storedReason }}">
                                 <td class="px-3 py-2 border whitespace-nowrap"><input type="hidden" name="approvals[{{ $student->id }}][student_id]" value="{{ $student->id }}">{{ $student->last_name }}, {{ $student->first_name }}</td>
                                 <td class="px-3 py-2 border">
+                                    @if($automaticApproval)
+                                    <span class="font-semibold text-green-700">Automatically Approved</span>
+                                    <input type="hidden" name="approvals[{{ $student->id }}][parent_consent]" value="approved">
+                                    @else
                                     <div class="flex flex-nowrap gap-4 whitespace-nowrap">
                                         @foreach(['pending' => 'Pending', 'approved' => 'Approved', 'disapproved' => 'Disapproved'] as $value => $label)
                                         <label><input type="radio" name="approvals[{{ $student->id }}][parent_consent]" value="{{ $value }}" {{ $approval === $value ? 'checked' : '' }} data-approval-status> {{ $label }}</label>
                                         @endforeach
                                     </div>
+                                    @endif
                                 </td>
                                 <td class="px-3 py-2 border">
+                                    @if($automaticApproval)
+                                    <span class="text-gray-400 text-xs">Not applicable</span>
+                                    @else
                                     <div class="flex flex-wrap items-center gap-3">
                                         <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="unwilling" {{ $reasonChoice === 'unwilling' ? 'checked' : '' }}> Unwilling</label>
                                         <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="medical_condition" {{ $reasonChoice === 'medical_condition' ? 'checked' : '' }}> Medical condition</label>
                                         <label><input type="radio" name="approvals[{{ $student->id }}][disapproval_reason]" value="custom" {{ $reasonChoice === 'custom' ? 'checked' : '' }}> Specify</label>
                                         <input type="text" name="approvals[{{ $student->id }}][reason_details]" value="{{ $reasonChoice === 'custom' ? $student->disapproval_reason : '' }}" placeholder="Specify reason" class="border rounded px-2 py-1 text-xs">
                                     </div>
+                                    @endif
                                 </td>
                             </tr>
                             @endforeach

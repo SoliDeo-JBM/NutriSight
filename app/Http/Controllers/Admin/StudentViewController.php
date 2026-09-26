@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Student;
 use App\Models\Enrollment;
 use App\Services\SchoolYearManager;
+use App\Services\SbfpParentApprovalService;
 use Illuminate\Http\Request;
 
 class StudentViewController extends Controller
@@ -116,7 +117,7 @@ class StudentViewController extends Controller
             ->whereHas('enrollments', function ($q) use ($activeSyId) {
                 $q->where('school_year_id', $activeSyId)->active()
                     ->where(function ($eligibilityQuery) {
-                        $eligibilityQuery->where('grade_level', 0)
+                        $eligibilityQuery->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
                             ->orWhereHas('sbfpParticipant', function ($participantQuery) {
                                 $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
                                     $measurementQuery->where('measurement_period', 'baseline')

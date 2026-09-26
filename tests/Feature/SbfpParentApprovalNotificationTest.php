@@ -42,7 +42,7 @@ class SbfpParentApprovalNotificationTest extends TestCase
         $enrollment = Enrollment::create([
             'student_id' => $student->id,
             'school_year_id' => $schoolYear->id,
-            'grade_level' => 1,
+            'grade_level' => 2,
             'section' => 'A',
             'status' => Enrollment::STATUS_ENROLLED,
         ]);

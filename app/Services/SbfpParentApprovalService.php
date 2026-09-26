@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Mail\SbfpParentApprovalRequest as ApprovalRequestMail;
+use App\Models\Enrollment;
 use App\Models\NutritionMeasurement;
 use App\Models\SbfpParentApprovalRequest;
 use App\Models\SbfpParticipant;
@@ -14,8 +15,33 @@ class SbfpParentApprovalService
 {
     public const LINK_TTL_HOURS = 72;
 
+    public const AUTOMATIC_APPROVAL_GRADES = [0, 1];
+
+    public function isAutomaticallyApprovedGrade(?int $gradeLevel): bool
+    {
+        return in_array($gradeLevel, self::AUTOMATIC_APPROVAL_GRADES, true);
+    }
+
+    public function isAutomaticallyApprovedEnrollment(?Enrollment $enrollment): bool
+    {
+        return $enrollment !== null && $this->isAutomaticallyApprovedGrade((int) $enrollment->grade_level);
+    }
+
     public function syncBaseline(SbfpParticipant $participant, NutritionMeasurement $measurement): ?SbfpParentApprovalRequest
     {
+        $participant->loadMissing('enrollment');
+        if ($this->isAutomaticallyApprovedEnrollment($participant->enrollment)) {
+            if ($participant->parent_consent !== 'approved' || $participant->disapproval_reason !== null) {
+                $participant->update([
+                    'parent_consent' => 'approved',
+                    'disapproval_reason' => null,
+                ]);
+            }
+
+            $this->closePending($participant, 'automatic_grade_eligibility');
+            return null;
+        }
+
         if (!$this->isEligible($measurement)) {
             if ($participant->parent_consent === null) {
                 $this->closePending($participant, 'no_longer_eligible');

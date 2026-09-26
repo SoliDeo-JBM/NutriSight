@@ -185,19 +185,29 @@ class StudentController extends Controller
                     if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                         $q->whereRaw('1 = 0');
                     } else {
-                        $q->where('grade_level', $user->advisory_grade_level)
-                            ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                        $q->where(function ($scope) use ($user) {
+                            $scope->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                                ->orWhere(function ($advisory) use ($user) {
+                                    $advisory->where('grade_level', $user->advisory_grade_level)
+                                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                                });
+                                });
                     }
                 }
             })
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId)->active();
                 if ($user && $user->isEncoder()) {
-                    $q->where('grade_level', $user->advisory_grade_level)
-                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+                    $q->where(function ($scope) use ($user) {
+                        $scope->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                            ->orWhere(function ($advisory) use ($user) {
+                                $advisory->where('grade_level', $user->advisory_grade_level)
+                                    ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+                            });
+                    });
                 }
                 $q->where(function ($eligibilityQuery) {
-                    $eligibilityQuery->where('grade_level', 0)
+                    $eligibilityQuery->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
                         ->orWhereHas('sbfpParticipant', function ($participantQuery) {
                             $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
                                 $measurementQuery->where('measurement_period', 'baseline')
@@ -387,7 +397,9 @@ class StudentController extends Controller
 
         $participant = SbfpParticipant::create([
             'enrollment_id' => $enrollment->id,
-            'parent_consent' => null,
+            'parent_consent' => $this->parentApprovalService->isAutomaticallyApprovedGrade((int) $enrollment->grade_level)
+                ? 'approved'
+                : null,
         ]);
 
         $measurement = NutritionMeasurement::create([
@@ -776,6 +788,14 @@ class StudentController extends Controller
         $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->active()->first();
 
         if ($enrollment && $enrollment->sbfpParticipant) {
+            if ($this->parentApprovalService->isAutomaticallyApprovedEnrollment($enrollment)) {
+                $enrollment->sbfpParticipant->update([
+                    'parent_consent' => 'approved',
+                    'disapproval_reason' => null,
+                ]);
+                return back()->with('success', 'Kinder and Grade 1 participants are automatically approved.');
+            }
+
             $this->parentApprovalService->closePending($enrollment->sbfpParticipant, 'manual_staff_decision', Auth::id());
             $enrollment->sbfpParticipant->update([
                 'parent_consent' => $validated['parent_consent'] === 'pending' ? null : ($validated['parent_consent'] ?? null),
@@ -813,11 +833,17 @@ class StudentController extends Controller
                     ->with('sbfpParticipant')
                     ->first();
 
-                if (!$enrollment || !$enrollment->sbfpParticipant || ($user->isEncoder() && (
-                    (string) $enrollment->grade_level !== (string) $user->advisory_grade_level ||
-                    strtolower(trim($enrollment->section)) !== strtolower(trim((string) $user->advisory_section))
-                ))) {
+                if (!$enrollment || !$enrollment->sbfpParticipant || ($user->isEncoder() && !$this->encoderOwnsEnrollment($user, $enrollment))) {
                     throw ValidationException::withMessages(['approvals' => 'One or more students are outside your advisory list.']);
+                }
+
+                if ($this->parentApprovalService->isAutomaticallyApprovedEnrollment($enrollment)) {
+                    $this->parentApprovalService->closePending($enrollment->sbfpParticipant, 'automatic_grade_eligibility', $user->id);
+                    $enrollment->sbfpParticipant->update([
+                        'parent_consent' => 'approved',
+                        'disapproval_reason' => null,
+                    ]);
+                    continue;
                 }
 
                 $status = $entry['parent_consent'] ?? null;
@@ -900,6 +926,10 @@ class StudentController extends Controller
 
     private function encoderOwnsEnrollment(\App\Models\User $user, Enrollment $enrollment): bool
     {
+        if ($this->parentApprovalService->isAutomaticallyApprovedEnrollment($enrollment)) {
+            return true;
+        }
+
         return $enrollment->grade_level == $user->advisory_grade_level
             && strtolower(trim($enrollment->section)) === strtolower(trim((string) $user->advisory_section));
     }
@@ -929,8 +959,13 @@ class StudentController extends Controller
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId)->active();
                 if ($user && $user->isEncoder()) {
-                    $q->where('grade_level', $user->advisory_grade_level)
-                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+                    $q->where(function ($scope) use ($user) {
+                        $scope->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                            ->orWhere(function ($advisory) use ($user) {
+                                $advisory->where('grade_level', $user->advisory_grade_level)
+                                    ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+                            });
+                    });
                 }
             });
 
