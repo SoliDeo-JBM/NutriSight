@@ -92,7 +92,7 @@
                         <th class="px-4 py-3 border">Age</th>
                         <th class="px-4 py-3 border">Sex</th>
                         <th class="px-4 py-3 border text-center" colspan="3">Period Progress</th>
-                        <th class="px-4 py-3 border">Parent's Approval</th>
+                        <th class="px-4 py-3 border">Approval</th>
                         <th class="px-4 py-3 border text-center">Learner QR Code</th>
                     </tr>
                     <tr>
