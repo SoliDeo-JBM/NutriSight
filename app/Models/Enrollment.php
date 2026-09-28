@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Services\SbfpParentApprovalService;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -24,6 +25,24 @@ class Enrollment extends Model
     public function scopeActive($query)
     {
         return $query->where('status', self::STATUS_ENROLLED);
+    }
+
+    public function scopeEligibleForSbfp($query)
+    {
+        return $query->where(function ($eligibilityQuery) {
+            $eligibilityQuery->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                ->orWhereHas('sbfpParticipant.nutritionMeasurements', function ($measurementQuery) {
+                    $measurementQuery->where('measurement_period', 'baseline')
+                        ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                });
+        });
+    }
+
+    public function scopeActiveApprovedSbfp($query)
+    {
+        return $query->active()
+            ->eligibleForSbfp()
+            ->whereHas('sbfpParticipant', fn($participantQuery) => $participantQuery->where('parent_consent', 'approved'));
     }
 
     public function student()

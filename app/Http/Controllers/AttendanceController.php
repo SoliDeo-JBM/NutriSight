@@ -55,44 +55,24 @@ class AttendanceController extends Controller
 
         $studentQuery = Student::with([
             'enrollments' => function ($q) use ($activeSyId) {
-                $q->where('school_year_id', $activeSyId)
+                $q->where('school_year_id', $activeSyId)->activeApprovedSbfp()
                     ->with('sbfpParticipant.nutritionMeasurements');
             },
         ])
-            ->whereHas('enrollments', function ($q) use ($activeSyId, $user, $encoderScope) {
-                $q->where('school_year_id', $activeSyId);
-                if ($encoderScope && $user && $user->isEncoder() && $user->advisory_grade_level && $user->advisory_section) {
-                    $q->where('grade_level', $user->advisory_grade_level)
+            ->whereHas('enrollments', function ($q) use ($activeSyId, $user, $encoderScope, $request) {
+                $q->where('school_year_id', $activeSyId)->activeApprovedSbfp();
+                if ($encoderScope && $user && $user->isEncoder()) {
+                    if ($user->advisory_grade_level === null || blank($user->advisory_section)) {
+                        $q->whereRaw('1 = 0');
+                    } else {
+                        $q->where('grade_level', $user->advisory_grade_level)
                         ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                    }
+                } elseif (!$encoderScope) {
+                    $q->when($request->filled('grade_level'), fn($query) => $query->where('grade_level', $request->input('grade_level')))
+                        ->when($request->filled('section'), fn($query) => $query->where('section', $request->input('section')));
                 }
             });
-
-        if (!$encoderScope) {
-            $studentQuery->whereHas('enrollments', function ($query) use ($activeSyId, $request) {
-                $query->where('school_year_id', $activeSyId)
-                    ->when($request->filled('grade_level'), fn($q) => $q->where('grade_level', $request->input('grade_level')))
-                    ->when($request->filled('section'), fn($q) => $q->where('section', $request->input('section')));
-            });
-        }
-
-        $studentQuery->whereHas('enrollments', function ($enrollmentQuery) use ($activeSyId, $date, $encoderScope) {
-            $enrollmentQuery->where('school_year_id', $activeSyId)
-                ->whereHas('sbfpParticipant', function ($participantQuery) use ($date, $encoderScope) {
-                    if (!$encoderScope) {
-                        $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                            $measurementQuery->where('measurement_period', 'baseline')
-                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                        });
-                    }
-
-                    $participantQuery->where(function ($consentQuery) use ($date) {
-                        $consentQuery->where('parent_consent', 'approved')
-                            ->orWhereHas('attendanceRecords', function ($attendanceQuery) use ($date) {
-                                $attendanceQuery->whereDate('attendance_date', $date);
-                            });
-                    });
-                });
-        });
 
         $sbfpStudents = $studentQuery
             ->orderBy('last_name')

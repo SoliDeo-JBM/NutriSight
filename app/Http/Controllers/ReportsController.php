@@ -166,18 +166,9 @@ class ReportsController extends Controller
 
     public function showAttendanceSummary(SchoolYear $schoolYear)
     {
-        $approvedBeneficiary = function ($query) use ($schoolYear) {
-            $query->where('school_year_id', $schoolYear->id)
-                ->whereHas('sbfpParticipant', function ($participantQuery) {
-                    $participantQuery->where('parent_consent', 'approved')
-                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                            $measurementQuery->where('measurement_period', 'baseline')
-                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                        });
-                });
-        };
-        $students = Student::with(['enrollments' => fn($query) => $query->where('school_year_id', $schoolYear->id)->with('sbfpParticipant.attendanceRecords')])
-            ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
+        $students = Student::with(['enrollments' => fn($query) => $query->where('school_year_id', $schoolYear->id)->activeApprovedSbfp()->with('sbfpParticipant.attendanceRecords')])
+            ->whereHas('enrollments', fn($query) => $query->where('school_year_id', $schoolYear->id)->activeApprovedSbfp())
+            ->orderBy('last_name')->orderBy('first_name')->get()
             ->map(function (Student $student) use ($schoolYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $dailyRecords = $records->groupBy(fn($record) => $record->attendance_date?->toDateString());
@@ -194,20 +185,14 @@ class ReportsController extends Controller
         $section ??= $scopeUser?->advisory_section;
         $approvedBeneficiary = function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
             $query->where('school_year_id', $schoolYear->id)
+                ->activeApprovedSbfp()
                 ->when($grade !== null, fn($q) => $q->where('grade_level', $grade))
-                ->when($section !== null, fn($q) => $q->where('section', $section))
-                ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))
-                ->whereHas('sbfpParticipant', function ($participantQuery) {
-                    $participantQuery->where('parent_consent', 'approved')
-                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                            $measurementQuery->where('measurement_period', 'baseline')
-                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                        });
-                });
+                ->when($section !== null, fn($q) => $q->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($section))]))
+                ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'));
         };
         return Student::with([
             'enrollments' => function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
-                $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section))->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))->with('sbfpParticipant.attendanceRecords');
+                $query->where('school_year_id', $schoolYear->id)->activeApprovedSbfp()->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($section))]))->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))->with('sbfpParticipant.attendanceRecords');
             }
         ])
             ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
@@ -437,11 +422,11 @@ class ReportsController extends Controller
         $rows = collect($this->blankRows())->keyBy(fn($row) => $row['grade_level'] . '-' . $row['sex']);
         $students = Student::with([
             'enrollments' => function ($query) use ($period) {
-                $query->where('school_year_id', $period->school_year_id)
+                $query->where('school_year_id', $period->school_year_id)->active()
                     ->with('sbfpParticipant.nutritionMeasurements');
             }
         ])->whereHas('enrollments', function ($query) use ($period) {
-            $query->where('school_year_id', $period->school_year_id)
+            $query->where('school_year_id', $period->school_year_id)->active()
                 ->whereHas('sbfpParticipant', function ($participantQuery) {
                     $participantQuery->where('parent_consent', 'approved')
                         ->whereHas('nutritionMeasurements', function ($measurementQuery) {
@@ -890,6 +875,7 @@ class ReportsController extends Controller
         $students = Student::with([
             'enrollments' => function ($query) use ($schoolYear, $enrollmentScope) {
                 $query->where('school_year_id', $schoolYear?->id)
+                    ->activeApprovedSbfp()
                     ->when($enrollmentScope !== null, function ($query) use ($enrollmentScope) {
                         if (($enrollmentScope['unassigned'] ?? false) === true) {
                             $query->whereRaw('1 = 0');
@@ -902,6 +888,7 @@ class ReportsController extends Controller
             },
         ])->whereHas('enrollments', function ($query) use ($schoolYear, $enrollmentScope) {
             $query->where('school_year_id', $schoolYear?->id)
+                ->activeApprovedSbfp()
                 ->when($enrollmentScope !== null, function ($query) use ($enrollmentScope) {
                     if (($enrollmentScope['unassigned'] ?? false) === true) {
                         $query->whereRaw('1 = 0');
@@ -909,8 +896,7 @@ class ReportsController extends Controller
                         $query->where('grade_level', $enrollmentScope['grade_level'])
                             ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($enrollmentScope['section']))]);
                     }
-                })
-                ->whereHas('sbfpParticipant', fn($participant) => $participant->where('parent_consent', 'approved'));
+                });
         })->get();
 
         $attendanceStudents = 0;

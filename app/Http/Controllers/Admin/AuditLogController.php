@@ -44,7 +44,7 @@ class AuditLogController extends Controller
 
         // Filter by action
         if ($request->filled('action')) {
-            $query->where('action', $request->input('action'));
+            $query->whereRaw('LOWER(action) = ?', [strtolower($request->input('action'))]);
         }
 
         $auditLogs = $query->paginate(20)->withQueryString();
@@ -57,7 +57,11 @@ class AuditLogController extends Controller
         }
 
         $modules = (clone $baseLogQuery)->distinct()->pluck('module');
-        $actions = (clone $baseLogQuery)->distinct()->pluck('action');
+        $actions = (clone $baseLogQuery)->distinct()->pluck('action')
+            ->map(fn($action) => ucfirst(strtolower($action)))
+            ->unique()
+            ->sort()
+            ->values();
 
         $rolePrefix = auth()->user()->isSuperAdmin() ? 'super-admin' : 'admin';
 

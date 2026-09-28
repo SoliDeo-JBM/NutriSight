@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Enrollment;
+use App\Models\AuditLog;
 use App\Models\SchoolYear;
 use App\Models\Student;
 use App\Models\User;
@@ -33,6 +34,11 @@ class StudentWithdrawalTest extends TestCase
         $response = $this->actingAs($encoder)->delete(route('encoder.students.destroy', $student));
 
         $response->assertRedirect();
+        $this->assertDatabaseHas('audit_logs', [
+            'user_id' => $encoder->id,
+            'action' => 'Removed',
+            'module' => 'Students',
+        ]);
         $this->assertDatabaseHas('students', ['id' => $student->id]);
         $this->assertDatabaseHas('enrollments', [
             'id' => $enrollment->id,
@@ -71,6 +77,38 @@ class StudentWithdrawalTest extends TestCase
             'id' => $enrollment->id,
             'status' => Enrollment::STATUS_ENROLLED,
         ]);
+    }
+
+    public function test_removed_action_is_available_in_the_audit_log_filter(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $this->actingAs($admin)
+            ->get(route('admin.audit-logs.index'))
+            ->assertOk()
+            ->assertSee('<option value="Removed"', false);
+    }
+
+    public function test_case_variants_share_one_updated_action_filter(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        foreach (['Updated', 'updated'] as $action) {
+            AuditLog::create([
+                'user_id' => $admin->id,
+                'action' => $action,
+                'module' => 'Students',
+                'description' => $action . ' action fixture',
+            ]);
+        }
+
+        $this->actingAs($admin)->get(route('admin.audit-logs.index'))
+            ->assertOk()
+            ->assertSee('<option value="Updated"', false)
+            ->assertDontSee('<option value="updated"', false);
+
+        $this->actingAs($admin)->get(route('admin.audit-logs.index', ['action' => 'Updated']))
+            ->assertOk()
+            ->assertViewHas('auditLogs', fn($logs) => $logs->total() === 2);
     }
 
     private function createActiveSchoolYear(): SchoolYear

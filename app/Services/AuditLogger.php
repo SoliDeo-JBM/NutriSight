@@ -7,6 +7,8 @@ use Illuminate\Support\Facades\Request;
 
 class AuditLogger
 {
+    public const ACTION_REMOVED = 'Removed';
+
     public static function log(string $action, string $module, string $description): void
     {
         try {

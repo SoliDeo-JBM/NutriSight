@@ -176,11 +176,11 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $query = Student::with(['enrollments' => function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)->active()
+            $q->where('school_year_id', $activeSyId)->active()->eligibleForSbfp()
                 ->with('sbfpParticipant.nutritionMeasurements');
         }])
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-                $q->where('school_year_id', $activeSyId)->active();
+                $q->where('school_year_id', $activeSyId)->active()->eligibleForSbfp();
                 if ($user && $user->isEncoder()) {
                     if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                         $q->whereRaw('1 = 0');
@@ -189,29 +189,6 @@ class StudentController extends Controller
                             ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                     }
                 }
-            })
-            ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-                $q->where('school_year_id', $activeSyId)->active();
-                if ($user && $user->isEncoder()) {
-                    if ($user->advisory_grade_level === null || $user->advisory_section === null) {
-                        $q->whereRaw('1 = 0');
-                    } else {
-                        $q->where('grade_level', $user->advisory_grade_level)
-                            ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
-                    }
-                }
-                $q->where(function ($eligibilityQuery) {
-                    $eligibilityQuery->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
-                        ->orWhere(function ($belowNormal) {
-                            $belowNormal->whereNotIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
-                                ->whereHas('sbfpParticipant', function ($participantQuery) {
-                                    $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                                        $measurementQuery->where('measurement_period', 'baseline')
-                                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                                    });
-                                });
-                        });
-                });
             });
 
         // Search by name or LRN
@@ -899,7 +876,7 @@ class StudentController extends Controller
         }
 
         $enrollment->update(['status' => Enrollment::STATUS_WITHDRAWN]);
-        AuditLogger::log('Updated', 'Students', 'Marked student as withdrawn: ' . $student->first_name . ' ' . $student->last_name);
+        AuditLogger::log(AuditLogger::ACTION_REMOVED, 'Students', 'Removed student from the active SBFP enrollment: ' . $student->first_name . ' ' . $student->last_name);
 
         return back()->with('success', 'Student marked as withdrawn. Existing records were preserved.');
     }

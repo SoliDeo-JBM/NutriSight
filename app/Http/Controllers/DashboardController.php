@@ -4,8 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Models\Student;
 use App\Models\StudentAttendanceRecord;
+use App\Models\Enrollment;
 use App\Models\User;
 use App\Services\SchoolYearManager;
+use App\Services\SbfpParentApprovalService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -38,17 +40,11 @@ class DashboardController extends Controller
 
         // Get all SBFP participants for active school year
         $students = Student::with(['enrollments' => function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements' => function ($sub) {
+            $q->where('school_year_id', $activeSyId)->activeApprovedSbfp()->with(['sbfpParticipant.nutritionMeasurements' => function ($sub) {
                 $sub->orderBy('created_at', 'desc');
             }]);
         }])->whereHas('enrollments', function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)->whereHas('sbfpParticipant', function ($sub) {
-                $sub->where('parent_consent', 'approved')
-                    ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                        $measurementQuery->where('measurement_period', 'baseline')
-                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                    });
-            });
+            $q->where('school_year_id', $activeSyId)->activeApprovedSbfp();
         })->get();
 
         $sbfpStudents = $students->map(function ($student) use ($activeSyId) {
@@ -118,7 +114,19 @@ class DashboardController extends Controller
             ->join('sbfp_participants as participants', 'participants.id', '=', 'records.sbfp_participant_id')
             ->join('enrollments', 'enrollments.id', '=', 'participants.enrollment_id')
             ->where('enrollments.school_year_id', $activeSyId)
+            ->where('enrollments.status', Enrollment::STATUS_ENROLLED)
+            ->where('participants.parent_consent', 'approved')
             ->whereIn('enrollments.grade_level', $gradeLevels)
+            ->where(function ($query) {
+                $query->whereIn('enrollments.grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                    ->orWhereExists(function ($measurementQuery) {
+                        $measurementQuery->selectRaw('1')
+                            ->from('nutrition_measurements')
+                            ->whereColumn('nutrition_measurements.sbfp_participant_id', 'participants.id')
+                            ->where('nutrition_measurements.measurement_period', 'baseline')
+                            ->whereIn('nutrition_measurements.bmi_category', ['Wasted', 'Severely Wasted']);
+                    });
+            })
             ->groupBy('enrollments.grade_level')
             ->select([
                 'enrollments.grade_level',
@@ -151,7 +159,7 @@ class DashboardController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
 
         $studentQuery = Student::whereHas('enrollments', function ($q) use ($activeSyId, $user) {
-            $q->where('school_year_id', $activeSyId);
+            $q->where('school_year_id', $activeSyId)->active();
             if ($user && $user->isEncoder()) {
                 if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                     $q->whereRaw('1 = 0');
@@ -163,15 +171,16 @@ class DashboardController extends Controller
         });
 
         $totalStudents = (clone $studentQuery)->count();
-        $totalSbfp = (clone $studentQuery)->whereHas('enrollments', function ($q) use ($activeSyId) {
-            $q->where('school_year_id', $activeSyId)
-                ->whereHas('sbfpParticipant', function ($participantQuery) {
-                    $participantQuery->where('parent_consent', 'approved')
-                        ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                            $measurementQuery->where('measurement_period', 'baseline')
-                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                        });
-                });
+        $totalSbfp = (clone $studentQuery)->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
+            $q->where('school_year_id', $activeSyId)->activeApprovedSbfp();
+            if ($user && $user->isEncoder()) {
+                if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                    $q->whereRaw('1 = 0');
+                } else {
+                    $q->where('grade_level', $user->advisory_grade_level)
+                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                }
+            }
         })->count();
 
         $attendanceDates = [];
@@ -180,22 +189,26 @@ class DashboardController extends Controller
         }
 
         $attendanceCountsByDate = StudentAttendanceRecord::query()
-            ->join('sbfp_participants', 'sbfp_participants.id', '=', 'student_attendance_records.sbfp_participant_id')
-            ->join('enrollments', 'enrollments.id', '=', 'sbfp_participants.enrollment_id')
-            ->where('enrollments.school_year_id', $activeSyId)
-            ->whereIn('student_attendance_records.attendance_date', $attendanceDates)
+            ->whereDate('student_attendance_records.attendance_date', '>=', $attendanceDates[0])
+            ->whereDate('student_attendance_records.attendance_date', '<=', $attendanceDates[6])
             ->where('student_attendance_records.status', 'present')
-            ->when($user && $user->isEncoder(), function ($query) use ($user) {
-                if ($user->advisory_grade_level === null || $user->advisory_section === null) {
-                    $query->whereRaw('1 = 0');
-                } else {
-                    $query->where('enrollments.grade_level', $user->advisory_grade_level)
-                        ->whereRaw('LOWER(TRIM(enrollments.section)) = ?', [strtolower(trim($user->advisory_section))]);
-                }
+            ->whereHas('sbfpParticipant', function ($participantQuery) use ($activeSyId, $user) {
+                $participantQuery->where('parent_consent', 'approved')
+                    ->whereHas('enrollment', function ($enrollmentQuery) use ($activeSyId, $user) {
+                        $enrollmentQuery->where('school_year_id', $activeSyId)->active()->eligibleForSbfp();
+                        if ($user && $user->isEncoder()) {
+                            if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                                $enrollmentQuery->whereRaw('1 = 0');
+                            } else {
+                                $enrollmentQuery->where('grade_level', $user->advisory_grade_level)
+                                    ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
+                            }
+                        }
+                    });
             })
-            ->groupBy('student_attendance_records.attendance_date')
-            ->selectRaw('student_attendance_records.attendance_date, COUNT(*) as total_count')
-            ->pluck('total_count', 'student_attendance_records.attendance_date');
+            ->get()
+            ->groupBy(fn($record) => Carbon::parse($record->attendance_date)->toDateString())
+            ->map->count();
 
         $attendanceCounts = collect($attendanceDates)
             ->map(fn($date) => (int) ($attendanceCountsByDate[$date] ?? 0))
@@ -233,17 +246,11 @@ class DashboardController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $periods = ['Baseline', 'Midline', 'Endline'];
         $students = Student::with(['enrollments' => function ($query) use ($activeSyId) {
-            $query->where('school_year_id', $activeSyId)->with(['sbfpParticipant.nutritionMeasurements' => function ($measurementQuery) {
+            $query->where('school_year_id', $activeSyId)->activeApprovedSbfp()->with(['sbfpParticipant.nutritionMeasurements' => function ($measurementQuery) {
                 $measurementQuery->orderBy('created_at', 'desc');
             }]);
         }])->whereHas('enrollments', function ($query) use ($activeSyId) {
-            $query->where('school_year_id', $activeSyId)->whereHas('sbfpParticipant', function ($participantQuery) {
-                $participantQuery->where('parent_consent', 'approved')
-                    ->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                        $measurementQuery->where('measurement_period', 'baseline')
-                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                    });
-            });
+            $query->where('school_year_id', $activeSyId)->activeApprovedSbfp();
         })->get()->map(function ($student) use ($activeSyId) {
             $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
             $student->dashboardPeriods = $this->groupMeasurementsByPeriod($enrollment?->sbfpParticipant?->nutritionMeasurements ?? collect());
@@ -299,11 +306,10 @@ class DashboardController extends Controller
     {
         $schoolYear = SchoolYearManager::activeSchoolYear();
         $students = Student::with(['enrollments' => function ($query) use ($schoolYear) {
-            $query->where('school_year_id', $schoolYear?->id)
+            $query->where('school_year_id', $schoolYear?->id)->activeApprovedSbfp()
                 ->with(['sbfpParticipant.nutritionMeasurements', 'sbfpParticipant.attendanceRecords']);
         }])->whereHas('enrollments', function ($query) use ($schoolYear) {
-            $query->where('school_year_id', $schoolYear?->id)
-                ->whereHas('sbfpParticipant', fn ($participant) => $participant->where('parent_consent', 'approved'));
+            $query->where('school_year_id', $schoolYear?->id)->activeApprovedSbfp();
         })->get();
 
         $attendanceStudents = 0;

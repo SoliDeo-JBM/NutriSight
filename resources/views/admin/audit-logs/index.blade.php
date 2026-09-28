@@ -37,8 +37,11 @@
                     <label class="block text-sm font-semibold text-gray-700 mb-2">Action Type</label>
                     <select name="action" @change="$el.form.requestSubmit()" class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                         <option value="">All Actions</option>
+                        @if(!$actions->contains('Removed'))
+                        <option value="Removed" {{ request('action') === 'Removed' ? 'selected' : '' }}>Removed</option>
+                        @endif
                         @foreach($actions as $act)
-                        <option value="{{ $act }}" {{ request('action') == $act ? 'selected' : '' }}>{{ $act }}</option>
+                        <option value="{{ $act }}" {{ strtolower((string) request('action')) === strtolower($act) ? 'selected' : '' }}>{{ $act }}</option>
                         @endforeach
                     </select>
                 </div>
@@ -80,7 +83,7 @@
                         <td class="px-4 py-3 border whitespace-nowrap">
                             <span class="px-2 py-0.5 rounded text-xs font-bold 
                                     @if(in_array($log->action, ['Created', 'Approved'])) bg-green-100 text-green-800
-                                    @elseif(in_array($log->action, ['Deleted', 'Archived', 'Disapproved'])) bg-red-100 text-red-800
+                                    @elseif(in_array($log->action, ['Deleted', 'Archived', 'Disapproved', 'Removed'])) bg-red-100 text-red-800
                                     @else bg-amber-100 text-amber-800 @endif">
                                 {{ $log->action }}
                             </span>
