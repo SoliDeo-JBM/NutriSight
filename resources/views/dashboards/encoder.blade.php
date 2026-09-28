@@ -39,17 +39,24 @@
         </div>
     </div>
 
-    <a href="{{ route('encoder.reports.sbfp.assessment') }}" class="block bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition mb-8">
-        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-8">
+        <a href="{{ route('encoder.reports.sbfp.attendance') }}" class="group bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col justify-between hover:border-blue-500 hover:shadow-md transition-all duration-200">
             <div>
-                <h2 class="text-lg font-semibold text-emerald-600">SBFP Assessment Report</h2>
-                <p class="text-gray-600">Review attendance and nutrition progress for your assigned grade and section.</p>
+                <div class="flex items-center justify-between mb-4"><div class="w-12 h-12 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center group-hover:bg-blue-600 group-hover:text-white transition-colors"><i class="fas fa-calendar-days text-xl"></i></div><span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-50 text-blue-700">Feeding Cycle</span></div>
+                <h2 class="text-lg font-bold text-gray-900 group-hover:text-blue-600 transition-colors">1. Attendance Report</h2>
+                <p class="text-sm text-gray-500 mt-2 leading-relaxed">Review daily feeding attendance for your assigned advisory class.</p>
             </div>
-            <span class="inline-flex items-center gap-2 text-sm font-semibold text-emerald-700">
-                Open Report <i class="fas fa-arrow-right"></i>
-            </span>
-        </div>
-    </a>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex items-center justify-between text-sm font-semibold text-blue-600 group-hover:text-blue-700"><span>View Attendance</span><i class="fas fa-arrow-right"></i></div>
+        </a>
+        <a href="{{ route('encoder.reports.sbfp.assessment') }}" class="group bg-white rounded-lg shadow-sm border border-gray-200 p-6 flex flex-col justify-between hover:border-violet-500 hover:shadow-md transition-all duration-200">
+            <div>
+                <div class="flex items-center justify-between mb-4"><div class="w-12 h-12 rounded-lg bg-violet-50 text-violet-600 flex items-center justify-center group-hover:bg-violet-600 group-hover:text-white transition-colors"><i class="fas fa-chart-column text-xl"></i></div><span class="text-xs font-semibold px-2.5 py-1 rounded-full bg-violet-50 text-violet-700">Program Impact</span></div>
+                <h2 class="text-lg font-bold text-gray-900 group-hover:text-violet-600 transition-colors">2. SBFP Assessment</h2>
+                <p class="text-sm text-gray-500 mt-2 leading-relaxed">Review attendance and nutrition progress for your assigned advisory class.</p>
+            </div>
+            <div class="pt-6 mt-6 border-t border-gray-100 flex items-center justify-between text-sm font-semibold text-violet-600 group-hover:text-violet-700"><span>View Assessment</span><i class="fas fa-arrow-right"></i></div>
+        </a>
+    </div>
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
         <a href="{{ route('encoder.students.index') }}" class="bg-white p-6 rounded-lg shadow-sm border border-gray-200 hover:shadow-md transition">

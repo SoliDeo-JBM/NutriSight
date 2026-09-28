@@ -119,12 +119,13 @@
 
 <div class="flex flex-col gap-5">
     <div class="no-print flex items-center justify-between gap-3">
-        <div><a href="{{ route('admin.reports.sbfp.attendance') }}" class="inline-flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"><i class="fas fa-arrow-left"></i> Back</a>
+        <div><a href="{{ route($attendanceRoutePrefix . '.attendance') }}" class="inline-flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700"><i class="fas fa-arrow-left"></i> Back</a>
             <h1 class="mt-3 text-xl font-bold text-slate-900">{{ date('F', mktime(0, 0, 0, $month, 1)) }} Attendance · SY {{ $schoolYear->year }}</h1>
         </div>
-        <div class="flex flex-wrap gap-2"><a href="{{ request()->fullUrl() }}" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-600 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"><i class="fas fa-arrows-rotate"></i> Refresh</a><a href="{{ route('admin.reports.sbfp.attendance.month.excel', $reportMonth) }}" data-loading-link data-loading-message="Preparing Excel report..." class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><i class="fas fa-file-excel"></i> Excel</a><a href="{{ route('admin.reports.sbfp.attendance.month.docx', $reportMonth) }}" data-loading-link data-loading-message="Preparing Word report..." class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"><i class="fas fa-file-word"></i> Word</a><a href="{{ route('admin.reports.sbfp.attendance.month.pdf', $reportMonth) }}" data-loading-link data-loading-message="Preparing PDF report..." class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"><i class="fas fa-file-pdf"></i> PDF</a></div>
+        <div class="flex flex-wrap gap-2"><a href="{{ request()->fullUrl() }}" class="inline-flex items-center gap-1.5 rounded-lg bg-slate-600 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-700"><i class="fas fa-arrows-rotate"></i> Refresh</a><a href="{{ route($attendanceRoutePrefix . '.attendance.month.excel', $reportMonth) }}" data-loading-link data-loading-message="Preparing Excel report..." class="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-700"><i class="fas fa-file-excel"></i> Excel</a><a href="{{ route($attendanceRoutePrefix . '.attendance.month.docx', $reportMonth) }}" data-loading-link data-loading-message="Preparing Word report..." class="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white hover:bg-blue-700"><i class="fas fa-file-word"></i> Word</a><a href="{{ route($attendanceRoutePrefix . '.attendance.month.pdf', $reportMonth) }}" data-loading-link data-loading-message="Preparing PDF report..." class="inline-flex items-center gap-1.5 rounded-lg bg-red-600 px-3 py-2 text-xs font-semibold text-white hover:bg-red-700"><i class="fas fa-file-pdf"></i> PDF</a></div>
     </div>
 
+    @if(!$isEncoder)
     <form method="GET" class="no-print flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div><label class="mb-1 block text-xs font-semibold text-slate-700">Grade Level</label><select name="grade" onchange="this.form.submit()" class="rounded-lg border border-slate-200 px-3 py-2 text-sm">
                 <option value="">All grades</option>@foreach($grades as $grade)<option value="{{ $grade }}" {{ (int) $selectedGrade === (int) $grade ? 'selected' : '' }}>{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>@endforeach
@@ -138,6 +139,7 @@
                 <option value="section">Section</option>
             </select></div>
     </form>
+    @endif
 
     <section class="attendance-sheet overflow-x-auto rounded-xl border border-slate-300 bg-white p-3 shadow-sm">
         <table id="attendanceTable" class="attendance-grid w-full">

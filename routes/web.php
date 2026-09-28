@@ -170,6 +170,13 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::get('/assessment/docx', [App\Http\Controllers\ReportsController::class, 'exportAssessmentDocx'])->name('assessment.docx');
             Route::get('/assessment/pdf', [App\Http\Controllers\ReportsController::class, 'exportAssessmentPdf'])->name('assessment.pdf');
         });
+        Route::prefix('reports/sbfp')->name('reports.sbfp.')->group(function () {
+            Route::get('/attendance', [App\Http\Controllers\ReportsController::class, 'encoderSbfpAttendance'])->name('attendance');
+            Route::get('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'showAttendanceMonth'])->name('attendance.month');
+            Route::get('/attendance/month/{month}/excel', [App\Http\Controllers\ReportsController::class, 'exportAttendanceExcel'])->name('attendance.month.excel');
+            Route::get('/attendance/month/{month}/docx', [App\Http\Controllers\ReportsController::class, 'exportAttendanceDocx'])->name('attendance.month.docx');
+            Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
+        });
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
         Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->name('students.change-section');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');

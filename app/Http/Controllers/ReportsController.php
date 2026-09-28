@@ -78,6 +78,14 @@ class ReportsController extends Controller
         return view('admin.reports.attendance.index', compact('schoolYears'));
     }
 
+    public function encoderSbfpAttendance()
+    {
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+        $schoolYear?->load(['attendanceReportMonths' => fn($query) => $query->orderBy('month')]);
+
+        return view('encoder.reports.attendance.index', compact('schoolYear'));
+    }
+
     public function storeAttendanceMonth(Request $request)
     {
         $validated = $request->validate(['school_year_id' => 'required|exists:school_years,id', 'month' => 'required|integer|between:1,12']);
@@ -111,14 +119,16 @@ class ReportsController extends Controller
 
     public function showAttendanceMonth(Request $request, AttendanceReportMonth $month)
     {
+        $isEncoder = auth()->user()?->isEncoder() ?? false;
+        $this->ensureAttendanceMonthAccess($month, $isEncoder);
         $month->load('schoolYear');
-        $selectedGrade = $request->filled('grade') ? (int) $request->input('grade') : null;
-        $selectedSection = $request->filled('section') ? $request->input('section') : null;
-        $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection);
+        $selectedGrade = $isEncoder ? auth()->user()->advisory_grade_level : ($request->filled('grade') ? (int) $request->input('grade') : null);
+        $selectedSection = $isEncoder ? auth()->user()->advisory_section : ($request->filled('section') ? $request->input('section') : null);
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection, $isEncoder ? auth()->user() : null);
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
         $grades = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('grade_level')->distinct()->orderBy('grade_level')->pluck('grade_level');
         $sections = DB::table('enrollments')->where('school_year_id', $month->school_year_id)->whereNotNull('section')->distinct()->orderBy('section')->pluck('section');
-        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear)), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection]);
+        return view('admin.reports.attendance.month', ['schoolYear' => $month->schoolYear, 'reportMonth' => $month, 'month' => $month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear)), 'students' => $students, 'grades' => $grades, 'sections' => $sections, 'selectedGrade' => $selectedGrade, 'selectedSection' => $selectedSection, 'isEncoder' => $isEncoder, 'attendanceRoutePrefix' => $isEncoder ? 'encoder.reports.sbfp' : 'admin.reports.sbfp']);
     }
 
     public function storeAttendanceSection(Request $request, AttendanceReportMonth $month)
@@ -144,7 +154,7 @@ class ReportsController extends Controller
         $section->load('month.schoolYear');
         $students = $this->attendanceStudents($section->month->schoolYear, $section->month->month, $section->grade_level, $section->section);
         $calendarYear = $this->attendanceCalendarYear($section->month->schoolYear, $section->month->month);
-        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => (int) date('t', mktime(0, 0, 0, $section->month->month, 1, $calendarYear)), 'students' => $students]);
+        return view('admin.reports.attendance.month', ['schoolYear' => $section->month->schoolYear, 'reportMonth' => $section->month, 'section' => $section, 'month' => $section->month->month, 'calendarYear' => $calendarYear, 'daysInMonth' => (int) date('t', mktime(0, 0, 0, $section->month->month, 1, $calendarYear)), 'students' => $students, 'grades' => collect(), 'sections' => collect(), 'selectedGrade' => $section->grade_level, 'selectedSection' => $section->section, 'isEncoder' => false, 'attendanceRoutePrefix' => 'admin.reports.sbfp']);
     }
 
     public function showAttendanceGradeSummary(AttendanceReportMonth $month, int $grade)
@@ -177,13 +187,16 @@ class ReportsController extends Controller
         return view('admin.reports.attendance.summary', compact('schoolYear', 'students'));
     }
 
-    private function attendanceStudents(SchoolYear $schoolYear, int $month, ?int $grade = null, ?string $section = null)
+    private function attendanceStudents(SchoolYear $schoolYear, int $month, ?int $grade = null, ?string $section = null, ?User $scopeUser = null)
     {
         $calendarYear = $this->attendanceCalendarYear($schoolYear, $month);
-        $approvedBeneficiary = function ($query) use ($schoolYear, $grade, $section) {
+        $grade ??= $scopeUser?->advisory_grade_level;
+        $section ??= $scopeUser?->advisory_section;
+        $approvedBeneficiary = function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
             $query->where('school_year_id', $schoolYear->id)
                 ->when($grade !== null, fn($q) => $q->where('grade_level', $grade))
                 ->when($section !== null, fn($q) => $q->where('section', $section))
+                ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))
                 ->whereHas('sbfpParticipant', function ($participantQuery) {
                     $participantQuery->where('parent_consent', 'approved')
                         ->whereHas('nutritionMeasurements', function ($measurementQuery) {
@@ -193,8 +206,8 @@ class ReportsController extends Controller
                 });
         };
         return Student::with([
-            'enrollments' => function ($query) use ($schoolYear, $grade, $section) {
-                $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section))->with('sbfpParticipant.attendanceRecords');
+            'enrollments' => function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
+                $query->where('school_year_id', $schoolYear->id)->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->where('section', $section))->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))->with('sbfpParticipant.attendanceRecords');
             }
         ])
             ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
@@ -212,17 +225,27 @@ class ReportsController extends Controller
             });
     }
 
+    private function ensureAttendanceMonthAccess(AttendanceReportMonth $month, bool $isEncoder): void
+    {
+        if ($isEncoder) {
+            abort_unless($month->school_year_id === SchoolYearManager::activeSchoolYearId(), 404);
+        }
+    }
+
     public function exportAttendanceExcel(AttendanceReportMonth $month)
     {
+        $this->ensureAttendanceMonthAccess($month, auth()->user()?->isEncoder() ?? false);
         $month->load('schoolYear');
+        $scopeUser = auth()->user()?->isEncoder() ? auth()->user() : null;
         [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
-        return Excel::download(new AttendanceReportExport($this->attendanceStudents($month->schoolYear, $month->month), $month, $adminName, $superAdminName), 'attendance-' . $month->month . '.xlsx');
+        return Excel::download(new AttendanceReportExport($this->attendanceStudents($month->schoolYear, $month->month, null, null, $scopeUser), $month, $adminName, $superAdminName), 'attendance-' . $month->month . '.xlsx');
     }
 
     public function exportAttendanceDocx(AttendanceReportMonth $month)
     {
+        $this->ensureAttendanceMonthAccess($month, auth()->user()?->isEncoder() ?? false);
         $month->load('schoolYear');
-        $students = $this->attendanceStudents($month->schoolYear, $month->month);
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, null, null, auth()->user()?->isEncoder() ? auth()->user() : null);
         [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
@@ -263,8 +286,9 @@ class ReportsController extends Controller
 
     public function exportAttendancePdf(AttendanceReportMonth $month)
     {
+        $this->ensureAttendanceMonthAccess($month, auth()->user()?->isEncoder() ?? false);
         $month->load('schoolYear');
-        $students = $this->attendanceStudents($month->schoolYear, $month->month);
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, null, null, auth()->user()?->isEncoder() ? auth()->user() : null);
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
         [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
         return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
