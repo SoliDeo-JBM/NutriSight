@@ -185,34 +185,31 @@ class StudentController extends Controller
                     if ($user->advisory_grade_level === null || $user->advisory_section === null) {
                         $q->whereRaw('1 = 0');
                     } else {
-                        $q->where(function ($scope) use ($user) {
-                            $scope->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
-                                ->orWhere(function ($advisory) use ($user) {
-                                    $advisory->where('grade_level', $user->advisory_grade_level)
-                                        ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
-                                });
-                                });
+                        $q->where('grade_level', $user->advisory_grade_level)
+                            ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($user->advisory_section))]);
                     }
                 }
             })
             ->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
                 $q->where('school_year_id', $activeSyId)->active();
                 if ($user && $user->isEncoder()) {
-                    $q->where(function ($scope) use ($user) {
-                        $scope->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
-                            ->orWhere(function ($advisory) use ($user) {
-                                $advisory->where('grade_level', $user->advisory_grade_level)
-                                    ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
-                            });
-                    });
+                    if ($user->advisory_grade_level === null || $user->advisory_section === null) {
+                        $q->whereRaw('1 = 0');
+                    } else {
+                        $q->where('grade_level', $user->advisory_grade_level)
+                            ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+                    }
                 }
                 $q->where(function ($eligibilityQuery) {
                     $eligibilityQuery->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
-                        ->orWhereHas('sbfpParticipant', function ($participantQuery) {
-                            $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                                $measurementQuery->where('measurement_period', 'baseline')
-                                    ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                            });
+                        ->orWhere(function ($belowNormal) {
+                            $belowNormal->whereNotIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                                ->whereHas('sbfpParticipant', function ($participantQuery) {
+                                    $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                                        $measurementQuery->where('measurement_period', 'baseline')
+                                            ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                                    });
+                                });
                         });
                 });
             });
@@ -978,9 +975,12 @@ class StudentController extends Controller
             if ($participant->parent_consent === 'disapproved') {
                 return false;
             }
-            $latestMeasurement = $participant->nutritionMeasurements()->latest()->first();
-            $isWasted = $latestMeasurement && in_array($latestMeasurement->bmi_category, ['Wasted', 'Severely Wasted']);
-            return $participant->parent_consent === 'approved';
+            $baselineMeasurement = $participant->nutritionMeasurements()
+                ->where('measurement_period', 'baseline')
+                ->first();
+            $isWasted = $baselineMeasurement && in_array($baselineMeasurement->bmi_category, ['Wasted', 'Severely Wasted'], true);
+            $isAutomaticallyApproved = in_array($enrollment->grade_level, SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES, true);
+            return ($isAutomaticallyApproved || $isWasted) && $participant->parent_consent === 'approved';
         });
 
         $schoolYear = SchoolYearManager::activeSchoolYear();

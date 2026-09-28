@@ -20,8 +20,8 @@
     }
 }" class="mx-auto flex max-w-4xl flex-col gap-6">
     <div>
-        <h1 class="text-2xl font-bold text-gray-900">Report Logo</h1>
-        <p class="mt-1 text-sm text-gray-500">Manage the school and DepEd logos displayed in downloadable SBFP reports.</p>
+        <h1 class="text-2xl font-bold text-gray-900">Report Settings</h1>
+        <p class="mt-1 text-sm text-gray-500">Manage the report logos and signatory details for the active school year.</p>
     </div>
 
     @if(session('success'))
@@ -33,6 +33,20 @@
         @foreach($errors->all() as $error)<div>{{ $error }}</div>@endforeach
     </div>
     @endif
+
+    <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">
+        <h2 class="text-lg font-bold text-gray-900">Project Development Officer</h2>
+        <p class="mt-1 text-sm text-gray-500">This name appears as the prepared-by signatory on reports for the active school year.</p>
+        <form method="POST" action="{{ route('super-admin.school-logo.project-development-officer.update') }}" class="mt-5 flex flex-col gap-4 sm:flex-row sm:items-end">
+            @csrf @method('PUT')
+            <div class="flex-1">
+                <label for="project_development_officer_name" class="block text-sm font-semibold text-gray-700">Full name</label>
+                <input id="project_development_officer_name" name="project_development_officer_name" type="text" value="{{ old('project_development_officer_name', $projectDevelopmentOfficerName) }}" required maxlength="255" pattern="[A-Za-zÀ-ÿ .'-]+" class="mt-2 block w-full rounded-lg border border-gray-300 p-2.5 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500" placeholder="e.g., Juan Dela Cruz">
+                @error('project_development_officer_name')<p class="mt-1 text-xs text-red-600">{{ $message }}</p>@enderror
+            </div>
+            <button type="submit" class="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-blue-700"><i class="fas fa-save"></i> Save name</button>
+        </form>
+    </section>
 
     <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <section class="rounded-lg border border-gray-200 bg-white p-6 shadow-sm">

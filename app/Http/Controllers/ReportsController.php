@@ -14,6 +14,7 @@ use App\Models\SchoolYear;
 use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
 use App\Models\User;
+use App\Models\SchoolYearReportSetting;
 use App\Services\SchoolYearManager;
 use App\Services\ReportPeriodManager;
 use App\Services\SchoolLogoService;
@@ -214,7 +215,7 @@ class ReportsController extends Controller
     public function exportAttendanceExcel(AttendanceReportMonth $month)
     {
         $month->load('schoolYear');
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
         return Excel::download(new AttendanceReportExport($this->attendanceStudents($month->schoolYear, $month->month), $month, $adminName, $superAdminName), 'attendance-' . $month->month . '.xlsx');
     }
 
@@ -222,7 +223,7 @@ class ReportsController extends Controller
     {
         $month->load('schoolYear');
         $students = $this->attendanceStudents($month->schoolYear, $month->month);
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 400]);
         $header = $section->addHeader();
@@ -232,7 +233,7 @@ class ReportsController extends Controller
         $schoolLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($schoolLogoCell);
         $schoolLogoCell->getStyle()->setVAlign('center');
-        $schoolLogoCell->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $schoolLogoCell->addImage(SchoolLogoService::path($month->school_year_id), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $headerTextCell = $headerTable->addCell(8000);
         $this->configureDocxHeaderCell($headerTextCell);
         $headerText = $headerTextCell->addTextRun(['alignment' => 'center']);
@@ -242,7 +243,7 @@ class ReportsController extends Controller
         $depedLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($depedLogoCell);
         $depedLogoCell->getStyle()->setVAlign('center');
-        $depedLogoCell->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $depedLogoCell->addImage(SchoolLogoService::depedPath($month->school_year_id), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $table = $section->addTable(['borderSize' => 6]);
         $table->addRow();
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
@@ -265,7 +266,7 @@ class ReportsController extends Controller
         $month->load('schoolYear');
         $students = $this->attendanceStudents($month->schoolYear, $month->month);
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
         return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
     }
 
@@ -343,7 +344,7 @@ class ReportsController extends Controller
         }
         $period->load(['schoolYear', 'rows' => fn($query) => $query->orderBy('grade_level')->orderBy('sex')]);
         $rows = $this->formRows($period->rows->isEmpty() ? $this->blankRows() : $period->rows->toArray());
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($period->school_year_id);
 
         return view('admin.reports.consolidated.report', [
             'schoolYear' => $period->schoolYear,
@@ -455,7 +456,7 @@ class ReportsController extends Controller
     {
         $schoolYear = $period->schoolYear;
         $rows = $this->formRows($this->periodRows($period));
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($schoolYear->id);
 
         return Excel::download(new DepEdForm1Export($rows, $schoolYear, $period, $adminName, $superAdminName), 'sbfp-form-1-' . ($period?->name ?? 'summary') . '.xlsx');
     }
@@ -480,7 +481,7 @@ class ReportsController extends Controller
     {
         $schoolYear = $period->schoolYear;
         $rows = $this->formRows($this->periodRows($period));
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($schoolYear->id);
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 250]);
         $header = $section->addHeader();
@@ -491,7 +492,7 @@ class ReportsController extends Controller
         $schoolLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($schoolLogoCell);
         $schoolLogoCell->getStyle()->setVAlign('center');
-        $schoolLogoCell->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $schoolLogoCell->addImage(SchoolLogoService::path($schoolYear->id), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $headerTextCell = $headerTable->addCell(8000);
         $this->configureDocxHeaderCell($headerTextCell);
         $headerText = $headerTextCell->addTextRun(['alignment' => 'center']);
@@ -508,7 +509,7 @@ class ReportsController extends Controller
         $depedLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($depedLogoCell);
         $depedLogoCell->getStyle()->setVAlign('center');
-        $depedLogoCell->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $depedLogoCell->addImage(SchoolLogoService::depedPath($schoolYear->id), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 40]);
         $table->addRow();
         foreach ([['Grade Levels', 1, true], ['Enrollment', 2, true], ['Pupils Weighed', 2, true], ['BODY MASS INDEX (BMI)', 10, false], ['HEIGHT-FOR-AGE (HFA)', 8, false], ['Pupils Taken Height', 2, true]] as [$heading, $span, $vertical]) {
@@ -556,7 +557,7 @@ class ReportsController extends Controller
     {
         $schoolYear = $period->schoolYear;
         $rows = $this->formRows($this->periodRows($period));
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($schoolYear->id);
 
         return Pdf::loadView('admin.reports.consolidated.print', compact('schoolYear', 'period', 'rows', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('sbfp-form-1.pdf');
     }
@@ -576,14 +577,15 @@ class ReportsController extends Controller
         return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="sbfp-form-1.sql"']);
     }
 
-    private function reportSignatories(): array
+    private function reportSignatories(?int $schoolYearId = null): array
     {
-        $admin = User::where('role', User::ROLE_ADMIN)->orderBy('id')->first();
+        $pdoName = $schoolYearId
+            ? SchoolYearReportSetting::where('school_year_id', $schoolYearId)->value('project_development_officer_name')
+            : null;
         $superAdmin = User::where('role', User::ROLE_SUPER_ADMIN)->orderBy('id')->first();
-        $admin ??= auth()->user()?->isAdmin() ? auth()->user() : null;
 
         return [
-            $this->formatSignatoryName($admin, 'Full Name of the Admin'),
+            $pdoName ? strtoupper(trim($pdoName)) : 'FULL NAME OF THE PROJECT DEVELOPMENT OFFICER',
             $this->formatSignatoryName($superAdmin, 'Full Name of the Super Admin'),
         ];
     }
@@ -687,15 +689,17 @@ class ReportsController extends Controller
 
     public function exportAssessmentExcel()
     {
-        [$adminName, $superAdminName] = $this->reportSignatories();
-        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear(), $this->assessmentScopeForCurrentUser());
-        return Excel::download(new AssessmentReportWorkbookExport($assessment, $adminName, $superAdminName, $this->assessmentScopeLabel()), 'sbfp-assessment.xlsx');
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+        $assessment = $this->assessmentData($schoolYear, $this->assessmentScopeForCurrentUser());
+        [$adminName, $superAdminName] = $this->reportSignatories($schoolYear?->id);
+        return Excel::download(new AssessmentReportWorkbookExport($assessment, $adminName, $superAdminName, $this->assessmentScopeLabel(), $schoolYear?->id), 'sbfp-assessment.xlsx');
     }
 
     public function exportAssessmentDocx()
     {
-        $assessment = $this->assessmentData(SchoolYearManager::activeSchoolYear(), $this->assessmentScopeForCurrentUser());
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        $schoolYear = SchoolYearManager::activeSchoolYear();
+        $assessment = $this->assessmentData($schoolYear, $this->assessmentScopeForCurrentUser());
+        [$adminName, $superAdminName] = $this->reportSignatories($schoolYear?->id);
         $scopeLabel = $this->assessmentScopeLabel();
         $word = new PhpWord();
         $section = $word->addSection(['orientation' => 'landscape', 'margin' => 600]);
@@ -706,7 +710,7 @@ class ReportsController extends Controller
         $schoolLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($schoolLogoCell);
         $schoolLogoCell->getStyle()->setVAlign('center');
-        $schoolLogoCell->addImage(SchoolLogoService::path(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $schoolLogoCell->addImage(SchoolLogoService::path($schoolYear?->id), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $headerTextCell = $headerTable->addCell(9000);
         $this->configureDocxHeaderCell($headerTextCell);
         $headerText = $headerTextCell->addTextRun(['alignment' => 'center']);
@@ -720,7 +724,7 @@ class ReportsController extends Controller
         $depedLogoCell = $headerTable->addCell(1000);
         $this->configureDocxHeaderCell($depedLogoCell);
         $depedLogoCell->getStyle()->setVAlign('center');
-        $depedLogoCell->addImage(SchoolLogoService::depedPath(), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
+        $depedLogoCell->addImage(SchoolLogoService::depedPath($schoolYear?->id), ['width' => 42, 'height' => 42, 'alignment' => 'center']);
         $table = $section->addTable(['borderSize' => 6, 'cellMargin' => 80]);
         $table->addRow();
         foreach (AssessmentReportExport::columnHeadings() as $heading) {
@@ -759,7 +763,7 @@ class ReportsController extends Controller
     {
         $schoolYear = SchoolYearManager::activeSchoolYear();
         $assessment = $this->assessmentData($schoolYear, $this->assessmentScopeForCurrentUser());
-        [$adminName, $superAdminName] = $this->reportSignatories();
+        [$adminName, $superAdminName] = $this->reportSignatories($schoolYear?->id);
         $scopeLabel = $this->assessmentScopeLabel();
 
         return Pdf::loadView('admin.reports.assessment.print', compact('schoolYear', 'assessment', 'adminName', 'superAdminName', 'scopeLabel'))->setPaper('a4', 'landscape')->download('sbfp-assessment.pdf');

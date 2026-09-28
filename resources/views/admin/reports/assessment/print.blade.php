@@ -151,8 +151,8 @@
 
 <body>
     <div class="export-header">
-        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path() }}" alt="School logo">
-        <img class="export-logo right" src="{{ \App\Services\SchoolLogoService::depedPath() }}" alt="Department of Education seal">
+        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path($schoolYear?->id) }}" alt="School logo">
+        <img class="export-logo right" src="{{ \App\Services\SchoolLogoService::depedPath($schoolYear?->id) }}" alt="Department of Education seal">
         <h1>SCHOOL-BASED FEEDING PROGRAM - ASSESSMENT REPORT</h1>
         <p class="subtitle">Marisol Bliss Elementary School | SY {{ $assessment['school_year'] }}</p>
         @if($scopeLabel)

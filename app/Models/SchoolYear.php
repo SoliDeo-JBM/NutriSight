@@ -41,4 +41,9 @@ class SchoolYear extends Model
     {
         return $this->hasMany(AttendanceReportMonth::class);
     }
+
+    public function reportSetting()
+    {
+        return $this->hasOne(SchoolYearReportSetting::class);
+    }
 }

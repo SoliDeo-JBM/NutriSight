@@ -92,6 +92,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'edit'])->name('school-logo.edit');
         Route::put('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'update'])->name('school-logo.update');
         Route::put('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'updateDepEd'])->name('school-logo.deped.update');
+        Route::put('/school-logo/project-development-officer', [App\Http\Controllers\SchoolLogoController::class, 'updateProjectDevelopmentOfficer'])->name('school-logo.project-development-officer.update');
         Route::delete('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'reset'])->name('school-logo.reset');
         Route::delete('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'resetDepEd'])->name('school-logo.deped.reset');
 

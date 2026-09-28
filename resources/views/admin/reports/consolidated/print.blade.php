@@ -132,8 +132,8 @@
 
 <body>
     <div class="export-header">
-        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path() }}" alt="School logo">
-        <img class="export-logo right" src="{{ \App\Services\SchoolLogoService::depedPath() }}" alt="Department of Education seal">
+        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path($schoolYear?->id) }}" alt="School logo">
+        <img class="export-logo right" src="{{ \App\Services\SchoolLogoService::depedPath($schoolYear?->id) }}" alt="Department of Education seal">
         <p class="export-heading">Department of Education</p>
         <p class="export-heading">Bureau of Learner Support Services</p>
         <h1>NUTRITIONAL STATUS REPORT OF MARISOL BLISS ELEMENTARY SCHOOL</h1>

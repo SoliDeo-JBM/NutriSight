@@ -21,7 +21,6 @@ class StudentViewController extends Controller
             ->whereHas('enrollments', function ($q) use ($activeSyId) {
                 $q->where('school_year_id', $activeSyId)->active();
             });
-
         if ($request->filled('search')) {
             $search = trim($request->input('search'));
             $searchTerm = mb_strlen($search) === 1 ? strtolower($search) . '%' : '%' . strtolower($search) . '%';
@@ -118,11 +117,14 @@ class StudentViewController extends Controller
                 $q->where('school_year_id', $activeSyId)->active()
                     ->where(function ($eligibilityQuery) {
                         $eligibilityQuery->whereIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
-                            ->orWhereHas('sbfpParticipant', function ($participantQuery) {
-                                $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
-                                    $measurementQuery->where('measurement_period', 'baseline')
-                                        ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
-                                });
+                            ->orWhere(function ($belowNormal) {
+                                $belowNormal->whereNotIn('grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)
+                                    ->whereHas('sbfpParticipant', function ($participantQuery) {
+                                        $participantQuery->whereHas('nutritionMeasurements', function ($measurementQuery) {
+                                            $measurementQuery->where('measurement_period', 'baseline')
+                                                ->whereIn('bmi_category', ['Wasted', 'Severely Wasted']);
+                                        });
+                                    });
                             });
                     });
             });
