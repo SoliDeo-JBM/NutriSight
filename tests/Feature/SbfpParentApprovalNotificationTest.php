@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Mail\SbfpParentApprovalRequest;
+use App\Mail\SbfpAutomaticEnrollmentNotice;
 use App\Mail\FeedingDayNotice;
 use App\Models\Enrollment;
 use App\Models\NutritionMeasurement;
@@ -98,5 +99,76 @@ class SbfpParentApprovalNotificationTest extends TestCase
         $manualBody = (new FeedingDayNotice($student, 'Champorado', '2026-09-25'))->render();
 
         $this->assertStringNotContainsString('Scanned at:', $manualBody);
+    }
+
+    public function test_automatically_approved_grade_receives_an_informational_notice_without_approval_actions(): void
+    {
+        $student = new Student([
+            'first_name' => 'Ana',
+            'last_name' => 'Dela Cruz',
+        ]);
+        $measurement = new NutritionMeasurement([
+            'height' => '105',
+            'weight' => '16.5',
+            'bmi' => 14.97,
+        ]);
+
+        $notice = new SbfpAutomaticEnrollmentNotice($student, $measurement, 0);
+        $body = $notice->render();
+
+        $this->assertStringContainsString('Ana Dela Cruz', $body);
+        $this->assertStringContainsString('Kindergarten learner', $body);
+        $this->assertStringContainsString('No parent approval action is required', $body);
+        $this->assertStringContainsString('16.50 kg', $body);
+        $this->assertStringContainsString('105.00 cm', $body);
+        $this->assertStringContainsString('14.97', $body);
+        $this->assertStringContainsString('Republic Act No. 10173', $body);
+        $this->assertStringNotContainsString('parent.sbfp.approval', $body);
+        $this->assertStringNotContainsString('Review and Respond', $body);
+    }
+
+    public function test_automatically_approved_grade_does_not_create_an_approval_request(): void
+    {
+        $schoolYear = SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+        $student = Student::create([
+            'lrn' => 136542100013,
+            'first_name' => 'Ana',
+            'last_name' => 'Dela Cruz',
+            'sex' => 'Female',
+            'birth_date' => '2019-01-01',
+            'guardian_name' => 'Maria Dela Cruz',
+            'guardian_email' => 'guardian@example.com',
+            'guardian_contact' => '09171234567',
+            'address' => '1 Main Street',
+        ]);
+        $enrollment = Enrollment::create([
+            'student_id' => $student->id,
+            'school_year_id' => $schoolYear->id,
+            'grade_level' => 0,
+            'section' => 'A',
+            'status' => Enrollment::STATUS_ENROLLED,
+        ]);
+        $participant = SbfpParticipant::create([
+            'enrollment_id' => $enrollment->id,
+            'parent_consent' => 'approved',
+        ]);
+        $measurement = NutritionMeasurement::create([
+            'sbfp_participant_id' => $participant->id,
+            'height' => '105',
+            'weight' => '16.5',
+            'bmi' => 14.97,
+            'bmi_category' => 'Normal',
+            'hfa' => 'Normal',
+            'measurement_period' => 'baseline',
+        ]);
+
+        app(SbfpParentApprovalService::class)->syncBaseline($participant, $measurement);
+
+        $this->assertSame(0, $participant->approvalRequests()->count());
     }
 }

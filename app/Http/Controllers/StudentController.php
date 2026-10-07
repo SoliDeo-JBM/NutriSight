@@ -9,6 +9,7 @@ use App\Models\NutritionMeasurement;
 use App\Models\PhilippineBarangay;
 use App\Models\PhilippineMunicipality;
 use App\Models\PhilippineProvince;
+use App\Mail\SbfpAutomaticEnrollmentNotice;
 use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
@@ -17,6 +18,7 @@ use App\Services\SbfpParentApprovalService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
@@ -386,6 +388,14 @@ class StudentController extends Controller
             'measurement_period' => 'baseline',
         ]);
         $this->parentApprovalService->syncBaseline($participant, $measurement);
+        if ($this->parentApprovalService->isAutomaticallyApprovedGrade((int) $enrollment->grade_level)
+            && filled($student->guardian_email)) {
+            Mail::to($student->guardian_email)->queue(new SbfpAutomaticEnrollmentNotice(
+                $student,
+                $measurement,
+                (int) $enrollment->grade_level,
+            ));
+        }
         $this->reportPeriodManager->ensure(SchoolYearManager::activeSchoolYearId(), 'baseline');
 
         AuditLogger::log('Created', 'Students', 'Added student ' . $student->first_name . ' ' . $student->last_name);
