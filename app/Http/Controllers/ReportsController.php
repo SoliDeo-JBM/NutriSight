@@ -761,6 +761,7 @@ class ReportsController extends Controller
         }
         $this->addDocxRows($section, ['Period', 'Nutrition status', 'Count'], $periodRows, 'Baseline vs Midline vs Endline Rehabilitation Transition');
         $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
+        $this->addDocxRows($section, ['Rank', 'Province', 'Municipality', 'Barangay', 'At-risk learners', 'Wasted', 'Severely wasted', 'Normal and above', 'Percentage'], array_map(fn($row) => [$row['rank'], $row['province'], $row['municipality'], $row['barangay'], $row['at_risk'], $row['wasted'], $row['severely_wasted'], $row['normal_and_above'], $row['percentage'] . '%'], $assessment['location_concentration']), 'Top Five Location Concentration of Baseline At-Risk Learners');
         $this->addDocxSignatureTable($section, $adminName, $superAdminName);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
@@ -784,6 +785,22 @@ class ReportsController extends Controller
         $columns = implode(', ', array_map(fn($column) => '`' . $column . '`', AssessmentReportExport::columnKeys()));
         $values = implode(', ', array_map(fn($value) => DB::getPdo()->quote((string) $value), AssessmentReportExport::values($assessment)));
         $sql = "-- NutriSight SBFP Assessment report export\nINSERT INTO `sbfp_assessment_report_exports` ({$columns}) VALUES ({$values});\n";
+        foreach ($assessment['location_concentration'] as $row) {
+            $locationColumns = '`school_year`, `rank`, `province`, `municipality`, `barangay`, `at_risk`, `wasted`, `severely_wasted`, `normal_and_above`, `percentage`';
+            $locationValues = implode(', ', array_map(fn($value) => DB::getPdo()->quote((string) $value), [
+                $assessment['school_year'],
+                $row['rank'],
+                $row['province'],
+                $row['municipality'],
+                $row['barangay'],
+                $row['at_risk'],
+                $row['wasted'],
+                $row['severely_wasted'],
+                $row['normal_and_above'],
+                $row['percentage'],
+            ]));
+            $sql .= "INSERT INTO `sbfp_assessment_location_concentration_exports` ({$locationColumns}) VALUES ({$locationValues});\n";
+        }
 
         return response($sql, 200, ['Content-Type' => 'application/sql', 'Content-Disposition' => 'attachment; filename="sbfp-assessment.sql"']);
     }
@@ -884,7 +901,7 @@ class ReportsController extends Controller
                                 ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($enrollmentScope['section']))]);
                         }
                     })
-                    ->with(['sbfpParticipant.nutritionMeasurements', 'sbfpParticipant.attendanceRecords']);
+                    ->with(['sbfpParticipant.nutritionMeasurements', 'sbfpParticipant.attendanceRecords', 'addressSnapshot.province', 'addressSnapshot.municipality', 'addressSnapshot.barangay']);
             },
         ])->whereHas('enrollments', function ($query) use ($schoolYear, $enrollmentScope) {
             $query->where('school_year_id', $schoolYear?->id)
@@ -907,6 +924,7 @@ class ReportsController extends Controller
         $participantDemographics = [];
         $recoveryDemographics = [];
         $periodDemographics = [];
+        $locationConcentration = [];
         $periodSummary = [
             'baseline' => [],
             'midline' => [],
@@ -954,8 +972,39 @@ class ReportsController extends Controller
                 'endline' => $periodStatuses['endline'],
             ];
 
-            if ($baseline && in_array($this->assessmentStatus($baseline->bmi_category), ['Wasted', 'Severely Wasted'], true)) {
+            $baselineStatus = $this->assessmentStatus($baseline?->bmi_category);
+            $locationKey = '';
+            if ($baseline) {
+                $address = $enrollment?->addressSnapshot;
+                $locationKey = implode('|', [
+                    $address?->province_code ?? '',
+                    $address?->municipality_code ?? '',
+                    $address?->barangay_code ?? '',
+                ]);
+                if (!isset($locationConcentration[$locationKey])) {
+                    $locationConcentration[$locationKey] = [
+                        'province' => $address?->province?->name ?? 'Unknown',
+                        'municipality' => $address?->municipality?->name ?? 'Unknown',
+                        'barangay' => $address?->barangay?->name ?? 'Unknown',
+                        'at_risk' => 0,
+                        'wasted' => 0,
+                        'severely_wasted' => 0,
+                        'normal_and_above' => 0,
+                    ];
+                }
+                if (in_array($baselineStatus, ['Normal', 'Overweight', 'Obese'], true)) {
+                    $locationConcentration[$locationKey]['normal_and_above']++;
+                }
+            }
+
+            if ($baseline && in_array($baselineStatus, ['Wasted', 'Severely Wasted'], true)) {
                 $malnourished++;
+                $locationConcentration[$locationKey]['at_risk']++;
+                if ($baselineStatus === 'Severely Wasted') {
+                    $locationConcentration[$locationKey]['severely_wasted']++;
+                } else {
+                    $locationConcentration[$locationKey]['wasted']++;
+                }
                 $endline = $this->measurementForPeriod($measurements, 'endline');
                 $this->incrementDemographic($recoveryDemographics, $demographicKey, $sex, $age);
                 if ($endline?->bmi_category === 'Normal') {
@@ -970,6 +1019,19 @@ class ReportsController extends Controller
         $withAbsences = $attendanceStudents - $completeAttendance;
         $stillNeedingSupport = $malnourished - $recovered;
         $attendanceDemographics = $this->addAttendanceRates($attendanceDemographics);
+        $locationConcentration = collect($locationConcentration)
+            ->filter(fn(array $row): bool => $row['at_risk'] > 0)
+            ->sortByDesc('at_risk')
+            ->take(5)
+            ->values()
+            ->map(function (array $row, int $index) use ($malnourished): array {
+                return [
+                    'rank' => $index + 1,
+                    ...$row,
+                    'percentage' => $malnourished ? round($row['at_risk'] / $malnourished * 100, 1) : 0,
+                ];
+            })
+            ->all();
 
         return [
             'school_year' => $schoolYear?->year ?? 'No active school year',
@@ -987,6 +1049,7 @@ class ReportsController extends Controller
             'attendance_summary' => $this->attendanceSummary($attendanceDemographics),
             'participant_demographics' => $this->sortDemographics($participantDemographics),
             'recovery_demographics' => $this->sortDemographics($recoveryDemographics),
+            'location_concentration' => $locationConcentration,
             'period_summary' => $periodSummary,
             'period_demographics' => $periodDemographics,
         ];

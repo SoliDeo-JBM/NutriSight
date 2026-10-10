@@ -89,7 +89,7 @@
             <tbody>
                 @foreach($sbfpStudents as $index => $student)
                 <tr class="border-b hover:bg-gray-50">
-                    <td class="px-6 py-4 text-sm text-gray-900">{{ $index + 1 }}</td>
+                    <td class="px-6 py-4 text-sm text-gray-900">{{ $sbfpStudents->firstItem() + $index }}</td>
                     <td class="px-6 py-4 text-sm text-gray-900">{{ $student->student_number }}</td>
                     <td class="px-6 py-4 text-sm text-gray-900">{{ $student->first_name }} {{ $student->last_name }}</td>
 
@@ -120,6 +120,11 @@
             </tbody>
         </table>
     </div>
+    @if($sbfpStudents->hasPages())
+    <div class="bg-gray-50 px-6 py-4 border-t border-gray-200">
+        <x-pagination :paginator="$sbfpStudents" />
+    </div>
+    @endif
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>

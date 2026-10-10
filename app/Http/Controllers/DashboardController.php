@@ -12,6 +12,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Pagination\LengthAwarePaginator;
 
 class DashboardController extends Controller
 {
@@ -47,7 +48,7 @@ class DashboardController extends Controller
             $q->where('school_year_id', $activeSyId)->activeApprovedSbfp();
         })->get();
 
-        $sbfpStudents = $students->map(function ($student) use ($activeSyId) {
+        $allSbfpStudents = $students->map(function ($student) use ($activeSyId) {
             $enrollment = $student->enrollments->where('school_year_id', $activeSyId)->first();
             $participant = $enrollment?->sbfpParticipant;
             $measurements = $participant ? $participant->nutritionMeasurements : collect();
@@ -66,7 +67,7 @@ class DashboardController extends Controller
             'Obese' => 0,
         ];
 
-        foreach ($sbfpStudents as $student) {
+        foreach ($allSbfpStudents as $student) {
             $measurement = $this->measurementForPeriod($student->dashboardPeriods, $selectedPeriod);
             if ($measurement && isset($bmiDistribution[$measurement->bmi_category])) {
                 $bmiDistribution[$measurement->bmi_category]++;
@@ -76,7 +77,7 @@ class DashboardController extends Controller
         $periodAverages = array_fill_keys($periods, 0);
         $periodCounts = array_fill_keys($periods, 0);
 
-        foreach ($sbfpStudents as $student) {
+        foreach ($allSbfpStudents as $student) {
             foreach ($periods as $period) {
                 $measurement = $this->measurementForPeriod($student->dashboardPeriods, $period);
                 if ($measurement) {
@@ -96,15 +97,27 @@ class DashboardController extends Controller
 
         $recoveredCount = 0;
 
-        foreach ($sbfpStudents as $student) {
+        foreach ($allSbfpStudents as $student) {
             $measurement = $this->measurementForPeriod($student->dashboardPeriods, $selectedPeriod);
             if ($measurement?->bmi_category === 'Normal') {
                 $recoveredCount++;
             }
         }
 
-        $totalSbfpStudents = $sbfpStudents->count();
+        $totalSbfpStudents = $allSbfpStudents->count();
         $recoveryRate = $totalSbfpStudents > 0 ? round(($recoveredCount / $totalSbfpStudents) * 100, 1) : 0;
+        $perPage = 15;
+        $currentPage = LengthAwarePaginator::resolveCurrentPage('page');
+        $sbfpStudents = new LengthAwarePaginator(
+            $allSbfpStudents->forPage($currentPage, $perPage)->values(),
+            $allSbfpStudents->count(),
+            $perPage,
+            $currentPage,
+            [
+                'path' => request()->url(),
+                'query' => request()->query(),
+            ],
+        );
 
         // Aggregate attendance in one query instead of loading every log per grade.
         $gradeLevels = [0, 1, 2, 3, 4, 5, 6, 7];

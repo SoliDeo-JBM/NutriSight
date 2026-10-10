@@ -5,6 +5,9 @@ namespace Tests\Feature;
 use App\Mail\SbfpAutomaticEnrollmentNotice;
 use App\Models\SchoolYear;
 use App\Models\User;
+use App\Models\PhilippineBarangay;
+use App\Models\PhilippineMunicipality;
+use App\Models\PhilippineProvince;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
@@ -122,5 +125,44 @@ class StudentValidationTest extends TestCase
             return $mail->student->first_name === 'Juan'
                 && $mail->gradeLevel === 1;
         });
+    }
+
+    public function test_student_creation_creates_an_enrollment_address_snapshot(): void
+    {
+        SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+        PhilippineProvince::create(['code' => '01', 'name' => 'Province']);
+        PhilippineMunicipality::create(['code' => '0101', 'name' => 'Municipality', 'province_code' => '01']);
+        PhilippineBarangay::create(['code' => '010101', 'name' => 'Barangay', 'municipality_code' => '0101', 'province_code' => '01']);
+        $encoder = User::factory()->create([
+            'role' => User::ROLE_ENCODER,
+            'advisory_grade_level' => 1,
+            'advisory_section' => 'Mabini',
+        ]);
+
+        $response = $this->actingAs($encoder)->post(
+            route('encoder.students.store'),
+            array_merge($this->validStudentPayload(), [
+                'house_number' => '12',
+                'street' => 'Rizal Street',
+                'purok' => 'Purok 1',
+                'province_code' => '01',
+                'municipality_code' => '0101',
+                'barangay_code' => '010101',
+            ])
+        );
+
+        $response->assertRedirect(route('encoder.students.index'));
+        $this->assertDatabaseHas('enrollment_addresses', [
+            'house_number' => '12',
+            'street' => 'Rizal Street',
+            'province_code' => '01',
+            'municipality_code' => '0101',
+            'barangay_code' => '010101',
+        ]);
     }
 }

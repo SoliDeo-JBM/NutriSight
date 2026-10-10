@@ -27,7 +27,23 @@ class AssessmentReportWorkbookExport implements Export, WithMultipleSheets
             new AssessmentReportSheet('Endline Recovery', ['Sex', 'Age', 'Recovered to Normal', 'Recovered %', 'Still Needing Support', 'Support %'], $this->recoveryRows($assessment['recovery_demographics'])),
             new AssessmentReportSheet('Period Summary', ['Period', 'Nutrition Status', 'Count'], $this->periodSummaryRows($assessment['period_summary'])),
             new AssessmentReportSheet('Period Demographics', ['Sex', 'Age', 'Baseline', 'Midline', 'Endline', 'Percentage'], $this->periodRows($assessment['period_demographics'])),
+            new AssessmentReportSheet('Location Concentration', ['Rank', 'Province', 'Municipality', 'Barangay', 'At-Risk Learners', 'Wasted', 'Severely Wasted', 'Normal and Above', 'Percentage'], $this->locationRows($assessment['location_concentration'])),
         ];
+    }
+
+    private function locationRows(array $rows): array
+    {
+        return array_map(fn($row) => [
+            $row['rank'],
+            $row['province'],
+            $row['municipality'],
+            $row['barangay'],
+            $row['at_risk'],
+            $row['wasted'],
+            $row['severely_wasted'],
+            $row['normal_and_above'],
+            $row['percentage'] . '%',
+        ], $rows);
     }
 
     private function attendanceRows(array $rows): array

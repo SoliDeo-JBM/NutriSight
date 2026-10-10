@@ -161,6 +161,20 @@
             </tbody>
         </table>
     </section>
+    <section class="mt-5 overflow-x-auto rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+        <h2 class="text-lg font-bold text-slate-900">Top Five Location Concentration</h2>
+        <p class="mt-1 text-xs text-slate-500">Baseline Wasted and Severely Wasted learners grouped by school-year address.</p>
+        <table class="mt-4 min-w-full border-collapse text-sm">
+            <thead class="bg-slate-800 text-white"><tr><th class="border border-slate-600 px-3 py-2 text-left">Rank</th><th class="border border-slate-600 px-3 py-2 text-left">Province</th><th class="border border-slate-600 px-3 py-2 text-left">Municipality</th><th class="border border-slate-600 px-3 py-2 text-left">Barangay</th><th class="border border-slate-600 px-3 py-2 text-right">At-Risk</th><th class="border border-slate-600 px-3 py-2 text-right">Wasted</th><th class="border border-slate-600 px-3 py-2 text-right">Severely Wasted</th><th class="border border-slate-600 px-3 py-2 text-right">Normal and Above</th><th class="border border-slate-600 px-3 py-2 text-right">Percentage</th></tr></thead>
+            <tbody>
+                @forelse($assessment['location_concentration'] as $row)
+                <tr><td class="border border-slate-200 px-3 py-2">{{ $row['rank'] }}</td><td class="border border-slate-200 px-3 py-2">{{ $row['province'] }}</td><td class="border border-slate-200 px-3 py-2">{{ $row['municipality'] }}</td><td class="border border-slate-200 px-3 py-2">{{ $row['barangay'] }}</td><td class="border border-slate-200 px-3 py-2 text-right">{{ $row['at_risk'] }}</td><td class="border border-slate-200 px-3 py-2 text-right">{{ $row['wasted'] }}</td><td class="border border-slate-200 px-3 py-2 text-right">{{ $row['severely_wasted'] }}</td><td class="border border-slate-200 px-3 py-2 text-right">{{ $row['normal_and_above'] }}</td><td class="border border-slate-200 px-3 py-2 text-right">{{ $row['percentage'] }}%</td></tr>
+                @empty
+                <tr><td colspan="9" class="border border-slate-200 px-3 py-4 text-center text-slate-500">No baseline at-risk location data.</td></tr>
+                @endforelse
+            </tbody>
+        </table>
+    </section>
     @php
     $renderDemographicRows = function (array $rows, string $type) {
     $total = array_sum(array_column($rows, 'count'));

@@ -371,6 +371,15 @@ class StudentController extends Controller
             'status' => Enrollment::STATUS_ENROLLED,
         ]);
 
+        $enrollment->addressSnapshot()->create([
+            'house_number' => $validated['house_number'] ?? null,
+            'street' => $validated['street'] ?? null,
+            'purok' => $validated['purok'] ?? null,
+            'province_code' => $validated['province_code'] ?? null,
+            'municipality_code' => $validated['municipality_code'] ?? null,
+            'barangay_code' => $validated['barangay_code'] ?? null,
+        ]);
+
         $participant = SbfpParticipant::create([
             'enrollment_id' => $enrollment->id,
             'parent_consent' => $this->parentApprovalService->isAutomaticallyApprovedGrade((int) $enrollment->grade_level)
@@ -483,6 +492,18 @@ class StudentController extends Controller
                 'grade_level' => (int) $validated['grade_level'],
                 'section' => ucfirst(strtolower($validated['section'])),
             ]);
+
+            $enrollment->addressSnapshot()->updateOrCreate(
+                ['enrollment_id' => $enrollment->id],
+                [
+                    'house_number' => $validated['house_number'] ?? null,
+                    'street' => $validated['street'] ?? null,
+                    'purok' => $validated['purok'] ?? null,
+                    'province_code' => $validated['province_code'] ?? null,
+                    'municipality_code' => $validated['municipality_code'] ?? null,
+                    'barangay_code' => $validated['barangay_code'] ?? null,
+                ],
+            );
 
             $measurement = $enrollment->sbfpParticipant?->nutritionMeasurements()
                 ->where('measurement_period', 'baseline')

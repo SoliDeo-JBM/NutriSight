@@ -15,4 +15,14 @@ class PhilippineBarangay extends Model
     protected $keyType = 'string';
 
     protected $fillable = ['code', 'name', 'municipality_code', 'province_code'];
+
+    public function municipality()
+    {
+        return $this->belongsTo(PhilippineMunicipality::class, 'municipality_code', 'code');
+    }
+
+    public function province()
+    {
+        return $this->belongsTo(PhilippineProvince::class, 'province_code', 'code');
+    }
 }

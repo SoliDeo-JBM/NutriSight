@@ -59,4 +59,9 @@ class Enrollment extends Model
     {
         return $this->hasOne(SbfpParticipant::class);
     }
+
+    public function addressSnapshot()
+    {
+        return $this->hasOne(EnrollmentAddress::class);
+    }
 }

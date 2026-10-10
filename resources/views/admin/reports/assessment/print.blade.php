@@ -218,6 +218,19 @@
         </tbody>
     </table>
 
+    <h2>Top Five Location Concentration</h2>
+    <p class="note">Baseline Wasted and Severely Wasted learners grouped by school-year address.</p>
+    <table>
+        <thead><tr><th>Rank</th><th>Province</th><th>Municipality</th><th>Barangay</th><th>At-Risk</th><th>Wasted</th><th>Severely Wasted</th><th>Normal and Above</th><th>Percentage</th></tr></thead>
+        <tbody>
+            @forelse($assessment['location_concentration'] as $row)
+            <tr><td>{{ $row['rank'] }}</td><td>{{ $row['province'] }}</td><td>{{ $row['municipality'] }}</td><td>{{ $row['barangay'] }}</td><td class="number">{{ $row['at_risk'] }}</td><td class="number">{{ $row['wasted'] }}</td><td class="number">{{ $row['severely_wasted'] }}</td><td class="number">{{ $row['normal_and_above'] }}</td><td class="number">{{ $row['percentage'] }}%</td></tr>
+            @empty
+            <tr><td colspan="9">No baseline at-risk location data.</td></tr>
+            @endforelse
+        </tbody>
+    </table>
+
     @php
     $attendanceBySex = collect($assessment['attendance_demographics'])->groupBy('sex');
     $attendanceSummary = $assessment['attendance_summary'];
