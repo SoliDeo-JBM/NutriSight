@@ -18,6 +18,7 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
             'active' => \App\Http\Middleware\EnsureUserIsActive::class,
+            'active-school-year' => \App\Http\Middleware\EnsureSelectedSchoolYearIsActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

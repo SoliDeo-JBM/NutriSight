@@ -169,6 +169,17 @@
         </header>
 
         <div class="content-body">
+            @php($selectedSchoolYear = \App\Services\SchoolYearManager::activeSchoolYear())
+            @if($selectedSchoolYear && !$selectedSchoolYear->is_active)
+            <div class="mb-6 flex items-start gap-3 border border-amber-300 bg-amber-50 px-4 py-3 text-amber-900 shadow-sm" role="alert">
+                <i class="fas fa-lock mt-0.5 text-amber-600" aria-hidden="true"></i>
+                <div class="text-sm">
+                    <p class="font-bold">Read-only school year: {{ $selectedSchoolYear->year }}</p>
+                    <p class="mt-1">This inactive school year is read-only. Edits and other changes are invalid and forbidden.</p>
+                </div>
+            </div>
+            @endif
+
             @if(session('success'))
             <div id="success-alert" class="success-alert">
                 <i class="fas fa-check-circle"></i>

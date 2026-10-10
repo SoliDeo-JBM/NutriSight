@@ -75,7 +75,7 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::middleware('role:super_admin')->prefix('super-admin')->name('super-admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'superAdmin'])->name('dashboard');
         Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'adminIndex'])->name('attendance.index');
-        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->middleware('active-school-year')->name('attendance.update');
         Route::get('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'index'])->name('accounts.index');
         Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
@@ -90,11 +90,11 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/school-years/{schoolYear}/activate', [App\Http\Controllers\Admin\SchoolYearController::class, 'activate'])->name('school-years.activate');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
         Route::get('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'edit'])->name('school-logo.edit');
-        Route::put('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'update'])->name('school-logo.update');
-        Route::put('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'updateDepEd'])->name('school-logo.deped.update');
-        Route::put('/school-logo/project-development-officer', [App\Http\Controllers\SchoolLogoController::class, 'updateProjectDevelopmentOfficer'])->name('school-logo.project-development-officer.update');
-        Route::delete('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'reset'])->name('school-logo.reset');
-        Route::delete('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'resetDepEd'])->name('school-logo.deped.reset');
+        Route::put('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'update'])->middleware('active-school-year')->name('school-logo.update');
+        Route::put('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'updateDepEd'])->middleware('active-school-year')->name('school-logo.deped.update');
+        Route::put('/school-logo/project-development-officer', [App\Http\Controllers\SchoolLogoController::class, 'updateProjectDevelopmentOfficer'])->middleware('active-school-year')->name('school-logo.project-development-officer.update');
+        Route::delete('/school-logo', [App\Http\Controllers\SchoolLogoController::class, 'reset'])->middleware('active-school-year')->name('school-logo.reset');
+        Route::delete('/school-logo/deped', [App\Http\Controllers\SchoolLogoController::class, 'resetDepEd'])->middleware('active-school-year')->name('school-logo.deped.reset');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
@@ -104,11 +104,11 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::middleware('role:admin')->prefix('admin')->name('admin.')->group(function () {
         Route::get('/dashboard', [DashboardController::class, 'admin'])->name('dashboard');
         Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'adminIndex'])->name('attendance.index');
-        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->middleware('active-school-year')->name('attendance.update');
         Route::get('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'index'])->name('meal-plans.index');
-        Route::post('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'store'])->name('meal-plans.store');
-        Route::put('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'update'])->name('meal-plans.update');
-        Route::delete('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'destroy'])->name('meal-plans.destroy');
+        Route::post('/meal-plans', [App\Http\Controllers\Admin\MealPlanController::class, 'store'])->middleware('active-school-year')->name('meal-plans.store');
+        Route::put('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'update'])->middleware('active-school-year')->name('meal-plans.update');
+        Route::delete('/meal-plans/{mealPlan}', [App\Http\Controllers\Admin\MealPlanController::class, 'destroy'])->middleware('active-school-year')->name('meal-plans.destroy');
         Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
         Route::post('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'store'])->name('school-years.store');
         Route::patch('/school-years/{schoolYear}', [App\Http\Controllers\Admin\SchoolYearController::class, 'update'])->name('school-years.update');
@@ -118,21 +118,21 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::prefix('reports/sbfp')->name('reports.sbfp.')->group(function () {
             Route::get('/', [App\Http\Controllers\ReportsController::class, 'sbfpIndex'])->name('index');
             Route::get('/attendance', [App\Http\Controllers\ReportsController::class, 'sbfpAttendance'])->name('attendance');
-            Route::post('/attendance/months', [App\Http\Controllers\ReportsController::class, 'storeAttendanceMonth'])->name('attendance.months.store');
+            Route::post('/attendance/months', [App\Http\Controllers\ReportsController::class, 'storeAttendanceMonth'])->middleware('active-school-year')->name('attendance.months.store');
             Route::get('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'showAttendanceMonth'])->name('attendance.month');
             Route::get('/attendance/month/{month}/excel', [App\Http\Controllers\ReportsController::class, 'exportAttendanceExcel'])->name('attendance.month.excel');
             Route::get('/attendance/month/{month}/docx', [App\Http\Controllers\ReportsController::class, 'exportAttendanceDocx'])->name('attendance.month.docx');
             Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
             Route::get('/attendance/month/{month}/sql', [App\Http\Controllers\ReportsController::class, 'exportAttendanceSql'])->name('attendance.month.sql');
-            Route::patch('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'updateAttendanceMonth'])->name('attendance.month.update');
-            Route::delete('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'destroyAttendanceMonth'])->name('attendance.month.destroy');
+            Route::patch('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'updateAttendanceMonth'])->middleware('active-school-year')->name('attendance.month.update');
+            Route::delete('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'destroyAttendanceMonth'])->middleware('active-school-year')->name('attendance.month.destroy');
             Route::get('/attendance/summary/{schoolYear}', [App\Http\Controllers\ReportsController::class, 'showAttendanceSummary'])->name('attendance.summary');
             Route::get('/annual-consolidated', [App\Http\Controllers\ReportsController::class, 'sbfpYearly'])->name('annual');
-            Route::post('/annual-consolidated/periods', [App\Http\Controllers\ReportsController::class, 'storeReportPeriod'])->name('annual.periods.store');
+            Route::post('/annual-consolidated/periods', [App\Http\Controllers\ReportsController::class, 'storeReportPeriod'])->middleware('active-school-year')->name('annual.periods.store');
             Route::get('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'showReportPeriod'])->name('annual.period');
-            Route::patch('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'updateReportPeriod'])->name('annual.period.update');
-            Route::delete('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'destroyReportPeriod'])->name('annual.period.destroy');
-            Route::post('/annual-consolidated/period/{period}/generate', [App\Http\Controllers\ReportsController::class, 'generateReportPeriod'])->name('annual.period.generate');
+            Route::patch('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'updateReportPeriod'])->middleware('active-school-year')->name('annual.period.update');
+            Route::delete('/annual-consolidated/period/{period}', [App\Http\Controllers\ReportsController::class, 'destroyReportPeriod'])->middleware('active-school-year')->name('annual.period.destroy');
+            Route::post('/annual-consolidated/period/{period}/generate', [App\Http\Controllers\ReportsController::class, 'generateReportPeriod'])->middleware('active-school-year')->name('annual.period.generate');
             Route::get('/annual-consolidated/period/{period}/excel', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodExcel'])->name('annual.period.excel');
             Route::get('/annual-consolidated/period/{period}/docx', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodDocx'])->name('annual.period.docx');
             Route::get('/annual-consolidated/period/{period}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAnnualPeriodPdf'])->name('annual.period.pdf');
@@ -178,24 +178,24 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
         });
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
-        Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->name('students.change-section');
+        Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->middleware('active-school-year')->name('students.change-section');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/{student}/edit', [App\Http\Controllers\StudentController::class, 'edit'])->name('students.edit');
         Route::get('/students/sbfp', [App\Http\Controllers\StudentController::class, 'sbfpIndex'])->name('students.sbfp');
-        Route::post('/students/sbfp/profile-images', [App\Http\Controllers\StudentController::class, 'uploadProfileImages'])->name('students.sbfp.profile-images');
-        Route::post('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'storeBulkAssessments'])->name('students.assessment.bulk');
-        Route::patch('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkAssessments'])->name('students.assessment.bulk.update');
-        Route::patch('/students/{student}/assessment/period', [App\Http\Controllers\StudentController::class, 'updatePeriod'])->name('students.assessment.period.update');
-        Route::patch('/students/{student}/approval', [App\Http\Controllers\StudentController::class, 'updateApproval'])->name('students.approval');
-        Route::patch('/students/approval/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkApproval'])->name('students.approval.bulk');
-        Route::post('/students', [App\Http\Controllers\StudentController::class, 'store'])->name('students.store');
-        Route::put('/students/{student}', [App\Http\Controllers\StudentController::class, 'update'])->name('students.update');
-        Route::delete('/students/{student}', [App\Http\Controllers\StudentController::class, 'destroy'])->name('students.destroy');
-        Route::post('/students/{student}/restore', [App\Http\Controllers\StudentController::class, 'restore'])->name('students.restore');
+        Route::post('/students/sbfp/profile-images', [App\Http\Controllers\StudentController::class, 'uploadProfileImages'])->middleware('active-school-year')->name('students.sbfp.profile-images');
+        Route::post('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'storeBulkAssessments'])->middleware('active-school-year')->name('students.assessment.bulk');
+        Route::patch('/students/assessment/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkAssessments'])->middleware('active-school-year')->name('students.assessment.bulk.update');
+        Route::patch('/students/{student}/assessment/period', [App\Http\Controllers\StudentController::class, 'updatePeriod'])->middleware('active-school-year')->name('students.assessment.period.update');
+        Route::patch('/students/{student}/approval', [App\Http\Controllers\StudentController::class, 'updateApproval'])->middleware('active-school-year')->name('students.approval');
+        Route::patch('/students/approval/bulk', [App\Http\Controllers\StudentController::class, 'updateBulkApproval'])->middleware('active-school-year')->name('students.approval.bulk');
+        Route::post('/students', [App\Http\Controllers\StudentController::class, 'store'])->middleware('active-school-year')->name('students.store');
+        Route::put('/students/{student}', [App\Http\Controllers\StudentController::class, 'update'])->middleware('active-school-year')->name('students.update');
+        Route::delete('/students/{student}', [App\Http\Controllers\StudentController::class, 'destroy'])->middleware('active-school-year')->name('students.destroy');
+        Route::post('/students/{student}/restore', [App\Http\Controllers\StudentController::class, 'restore'])->middleware('active-school-year')->name('students.restore');
         Route::get('/students/{student}/id-card', [App\Http\Controllers\StudentController::class, 'generateIdCard'])->name('students.id-card');
         Route::get('/students/print/batch', [App\Http\Controllers\StudentController::class, 'printBatch'])->name('students.print-batch');
-        Route::post('/students/{student}/assessment', [App\Http\Controllers\StudentController::class, 'storeAssessment'])->name('students.assessment');
-        Route::post('/students/{student}/email-feeding', [App\Http\Controllers\StudentController::class, 'emailFeedingNotice'])->name('students.email-feeding');
+        Route::post('/students/{student}/assessment', [App\Http\Controllers\StudentController::class, 'storeAssessment'])->middleware('active-school-year')->name('students.assessment');
+        Route::post('/students/{student}/email-feeding', [App\Http\Controllers\StudentController::class, 'emailFeedingNotice'])->middleware('active-school-year')->name('students.email-feeding');
 
         Route::get('/settings', [App\Http\Controllers\AccountSettingsController::class, 'edit'])->name('settings');
         Route::patch('/settings', [App\Http\Controllers\AccountSettingsController::class, 'update'])->name('settings.update');
@@ -206,8 +206,8 @@ Route::middleware(['auth', 'active'])->group(function () {
     Route::middleware('role:encoder|admin|super_admin')->name('encoder.')->group(function () {
         Route::get('/profile-images/{participant}', [App\Http\Controllers\StudentController::class, 'showProfileImage'])->name('profile-images.show');
         Route::get('/attendance', [App\Http\Controllers\AttendanceController::class, 'index'])->name('attendance.index');
-        Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->name('attendance.scan');
-        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->name('attendance.update');
+        Route::post('/attendance/scan', [App\Http\Controllers\AttendanceController::class, 'scan'])->middleware('active-school-year')->name('attendance.scan');
+        Route::post('/attendance/update', [App\Http\Controllers\AttendanceController::class, 'updateStatus'])->middleware('active-school-year')->name('attendance.update');
     });
 
     // Account & Profile
