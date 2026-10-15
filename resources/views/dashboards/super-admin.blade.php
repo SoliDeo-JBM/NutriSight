@@ -71,6 +71,7 @@
     <p class="text-gray-600 mb-4">Manage user roles, permissions, system settings, and monitor overarching nutritional progress across all schools and sections.</p>
     <div class="flex flex-wrap gap-4">
         <a href="{{ route('super-admin.accounts.index') }}" class="px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-semibold hover:bg-blue-700 transition">Manage Admin Accounts</a>
+        <a href="{{ route('super-admin.accounts.index', ['role' => 'encoder']) }}" class="px-4 py-2 bg-green-700 text-white rounded-md text-sm font-semibold hover:bg-green-800 transition">Manage Encoder Accounts</a>
         <a href="{{ route('admin.dashboard') }}" class="px-4 py-2 bg-indigo-600 text-white rounded-md text-sm font-semibold hover:bg-indigo-700 transition">View Admin Period Progress Report</a>
                 <a href="{{ route('super-admin.students.index') }}" class="px-4 py-2 bg-gray-800 text-white rounded-md text-sm font-semibold hover:bg-gray-700 transition">Manage Learners</a>
     </div>

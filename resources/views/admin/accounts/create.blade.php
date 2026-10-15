@@ -1,12 +1,13 @@
 @extends('layouts.dashboard')
 
 @section('content')
+@php($isEncoderTarget = $targetRole === \App\Models\User::ROLE_ENCODER)
 <div class="max-w-3xl mx-auto">
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
         <!-- Header -->
         <div class="mb-8">
-            <h1 class="text-2xl font-bold text-gray-900">{{ $isSuperAdmin ? 'Add New Admin Account' : 'Add New Adviser Account' }}</h1>
-            <p class="text-sm text-gray-500 mt-2">{{ $isSuperAdmin ? 'Create a new administrator account.' : 'Create a new teacher/adviser account with advisory assignment.' }}</p>
+            <h1 class="text-2xl font-bold text-gray-900">Add New {{ $isEncoderTarget ? 'Encoder' : 'Admin' }} Account</h1>
+            <p class="text-sm text-gray-500 mt-2">{{ $isEncoderTarget ? 'Create an encoder account with an advisory assignment.' : 'Create a new administrator account.' }}</p>
         </div>
 
         <!-- Error Messages -->
@@ -26,6 +27,7 @@
         <!-- Form -->
         <form action="{{ route($isSuperAdmin ? 'super-admin.accounts.store' : 'admin.accounts.store') }}" method="POST" class="space-y-6">
             @csrf
+            <input type="hidden" name="target_role" value="{{ old('target_role', $targetRole) }}">
 
             <!-- DepEd Employee ID -->
             <div>
@@ -247,7 +249,7 @@
                 @enderror
             </div>
 
-            @if(!$isSuperAdmin)
+            @if($isEncoderTarget)
             <!-- Advisory Grade Level & Section (For Encoders / Advisers only) -->
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -282,11 +284,11 @@
 
             <!-- Form Actions -->
             <div class="flex gap-3 pt-6 border-t border-gray-200">
-                <a href="{{ route($isSuperAdmin ? 'super-admin.accounts.index' : 'admin.accounts.index') }}" class="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
+                <a href="{{ $isSuperAdmin ? route('super-admin.accounts.index', ['role' => $targetRole]) : route('admin.accounts.index') }}" class="px-6 py-2.5 bg-gray-200 text-gray-700 rounded-lg text-sm font-semibold hover:bg-gray-300 transition">
                     Cancel
                 </a>
                 <button type="submit" class="px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-semibold hover:bg-blue-700 transition flex items-center gap-2">
-                    <i class="fas fa-save"></i> {{ $isSuperAdmin ? 'Create Admin Account' : 'Create Adviser Account' }}
+                    <i class="fas fa-save"></i> Create {{ $isEncoderTarget ? 'Encoder' : 'Admin' }} Account
                 </button>
             </div>
         </form>

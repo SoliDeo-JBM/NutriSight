@@ -1,17 +1,25 @@
 @extends('layouts.dashboard')
 
 @section('content')
+@php($isEncoderTarget = $targetRole === \App\Models\User::ROLE_ENCODER)
 <div class="flex flex-col gap-6">
     <!-- Header with Add Button -->
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-            <h1 class="text-2xl font-bold text-gray-900">{{ auth()->user()->isSuperAdmin() ? 'Admin Accounts' : 'Adviser Accounts' }}</h1>
+            <h1 class="text-2xl font-bold text-gray-900">{{ $isEncoderTarget ? 'Encoder Accounts' : 'Admin Accounts' }}</h1>
             <p class="text-sm text-gray-500 mt-1">Manage account profiles and reversible access changes.</p>
         </div>
-        <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.create') : route('admin.accounts.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold inline-flex items-center gap-2 whitespace-nowrap">
-            <i class="fas fa-plus"></i> {{ auth()->user()->isSuperAdmin() ? 'Add New Admin' : 'Add New Adviser' }}
+        <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.create', ['role' => $targetRole]) : route('admin.accounts.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 font-semibold inline-flex items-center gap-2 whitespace-nowrap">
+            <i class="fas fa-plus"></i> Add New {{ $isEncoderTarget ? 'Encoder' : 'Admin' }}
         </a>
     </div>
+
+    @if(auth()->user()->isSuperAdmin())
+    <nav class="flex gap-2 border-b border-gray-200" aria-label="Account role">
+        <a href="{{ route('super-admin.accounts.index', ['role' => 'admin']) }}" @class(['border-b-2 px-4 py-2 text-sm font-semibold', 'border-blue-600 text-blue-700' => !$isEncoderTarget, 'border-transparent text-gray-500 hover:text-gray-800' => $isEncoderTarget])>Admin Accounts</a>
+        <a href="{{ route('super-admin.accounts.index', ['role' => 'encoder']) }}" @class(['border-b-2 px-4 py-2 text-sm font-semibold', 'border-blue-600 text-blue-700' => $isEncoderTarget, 'border-transparent text-gray-500 hover:text-gray-800' => !$isEncoderTarget])>Encoder Accounts</a>
+    </nav>
+    @endif
 
     @if(session('success'))
     <div class="bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg text-sm">
@@ -39,7 +47,7 @@
 
     <!-- Filters & Search Card -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-        <form method="GET" action="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index') : route('admin.accounts.index') }}" class="space-y-4" x-data>
+        <form method="GET" action="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index', ['role' => $targetRole]) : route('admin.accounts.index') }}" class="space-y-4" x-data>
             <!-- Search Bar -->
             <div>
                 <label class="block text-sm font-semibold text-gray-700 mb-2">Search by Name or DepEd ID</label>
@@ -93,7 +101,7 @@
             </div>
 
             <div class="flex justify-end pt-1">
-                <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index') : route('admin.accounts.index') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
+                <a href="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.index', ['role' => $targetRole]) : route('admin.accounts.index') }}" class="text-sm text-gray-600 hover:text-blue-600 inline-flex items-center gap-2">
                     <i class="fas fa-rotate-left"></i> Reset filters
                 </a>
             </div>
@@ -245,7 +253,7 @@
                     <input id="edit_position" type="text" name="position" aria-invalid="{{ $errors->has('position') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('position') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
                     @error('position')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
-                @if(!auth()->user()->isSuperAdmin())
+                @if($isEncoderTarget)
                 <div>
                     <label for="edit_grade_level" class="block text-sm font-semibold text-gray-700 mb-2">Advisory Grade Level</label>
                     <select id="edit_grade_level" name="advisory_grade_level" aria-invalid="{{ $errors->has('advisory_grade_level') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('advisory_grade_level') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm bg-white text-gray-700 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
@@ -294,7 +302,7 @@
                     Cancel
                 </button>
                 <button id="statusSubmitButton" type="submit" class="px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700">
-                    Confirm Removal
+                    Confirm Archive
                 </button>
             </div>
         </form>

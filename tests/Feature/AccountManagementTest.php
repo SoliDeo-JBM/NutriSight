@@ -76,13 +76,168 @@ class AccountManagementTest extends TestCase
             'position' => 'Master Teacher I',
         ]);
 
-        $response->assertRedirect(route('super-admin.accounts.index'));
+        $response->assertRedirect(route('super-admin.accounts.index', ['role' => 'admin']));
         $this->assertDatabaseHas('users', [
             'id' => $admin->id,
             'name' => 'Updated Admin',
             'email' => 'updated.admin@example.com',
             'deped_id' => 'ADM-002',
             'position' => 'Master Teacher I',
+        ]);
+    }
+
+    public function test_super_admin_can_view_encoder_accounts(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $schoolYear = SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN, 'name' => 'Managed Admin']);
+        $encoder = User::factory()->create(['role' => User::ROLE_ENCODER, 'name' => 'Managed Encoder']);
+        $admin->syncSchoolYearUserRecord($schoolYear->id);
+        $encoder->syncSchoolYearUserRecord($schoolYear->id);
+
+        $response = $this->actingAs($superAdmin)->get(route('super-admin.accounts.index', ['role' => 'encoder']));
+
+        $response->assertOk()
+            ->assertSee('Encoder Accounts')
+            ->assertSee('Managed Encoder')
+            ->assertDontSee('Managed Admin')
+            ->assertSee(route('super-admin.accounts.create', ['role' => 'encoder']))
+            ->assertSee('Confirm Archive')
+            ->assertDontSee('Confirm Removal');
+    }
+
+    public function test_super_admin_can_create_encoder_with_advisory_assignment(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $schoolYear = SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+
+        $this->actingAs($superAdmin)->get(route('super-admin.accounts.create', ['role' => 'encoder']))
+            ->assertOk()
+            ->assertSee('Add New Encoder Account')
+            ->assertSee('name="advisory_grade_level"', false)
+            ->assertSee('name="advisory_section"', false);
+
+        $response = $this->actingAs($superAdmin)->post(route('super-admin.accounts.store'), [
+            'target_role' => User::ROLE_ENCODER,
+            'deped_id' => 'ENC-100',
+            'first_name' => 'Encoder',
+            'last_name' => 'Created',
+            'email' => 'created.encoder@example.com',
+            'password' => 'SecurePass1!',
+            'password_confirmation' => 'SecurePass1!',
+            'sex' => 'Female',
+            'birthdate' => '1990-01-01',
+            'position' => 'Teacher I',
+            'advisory_grade_level' => 3,
+            'advisory_section' => 'Mabini',
+        ]);
+
+        $response->assertRedirect(route('super-admin.accounts.index', ['role' => 'encoder']));
+        $encoder = User::where('email', 'created.encoder@example.com')->firstOrFail();
+        $this->assertSame(User::ROLE_ENCODER, $encoder->role);
+        $this->assertDatabaseHas('school_year_user_records', [
+            'school_year_id' => $schoolYear->id,
+            'user_id' => $encoder->id,
+            'role' => User::ROLE_ENCODER,
+            'advisory_grade_level' => '3',
+            'advisory_section' => 'Mabini',
+        ]);
+    }
+
+    public function test_admin_cannot_create_admin_by_tampering_with_target_role(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+
+        $response = $this->actingAs($admin)->post(route('admin.accounts.store'), [
+            'target_role' => User::ROLE_ADMIN,
+            'deped_id' => 'ENC-101',
+            'first_name' => 'Encoder',
+            'last_name' => 'Protected',
+            'email' => 'protected.encoder@example.com',
+            'password' => 'SecurePass1!',
+            'password_confirmation' => 'SecurePass1!',
+            'sex' => 'Female',
+            'birthdate' => '1990-01-01',
+            'position' => 'Teacher I',
+            'advisory_grade_level' => 3,
+            'advisory_section' => 'Mabini',
+        ]);
+
+        $response->assertRedirect(route('admin.accounts.index'));
+        $this->assertDatabaseHas('users', [
+            'email' => 'protected.encoder@example.com',
+            'role' => User::ROLE_ENCODER,
+        ]);
+        $this->assertDatabaseMissing('users', [
+            'email' => 'protected.encoder@example.com',
+            'role' => User::ROLE_ADMIN,
+        ]);
+    }
+
+    public function test_super_admin_cannot_select_unmanaged_roles(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+
+        $this->actingAs($superAdmin)
+            ->get(route('super-admin.accounts.index', ['role' => User::ROLE_SUPER_ADMIN]))
+            ->assertForbidden();
+
+        $this->post(route('super-admin.accounts.store'), [
+            'target_role' => User::ROLE_SUPER_ADMIN,
+        ])->assertForbidden();
+    }
+
+    public function test_super_admin_can_edit_encoder_profile_and_advisory_assignment(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $schoolYear = SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+        $encoder = User::factory()->create([
+            'role' => User::ROLE_ENCODER,
+            'email' => 'encoder@example.com',
+            'advisory_grade_level' => 2,
+            'advisory_section' => 'A',
+        ]);
+        $encoder->syncSchoolYearUserRecord($schoolYear->id);
+
+        $response = $this->actingAs($superAdmin)->patch(route('super-admin.accounts.update', $encoder), [
+            'name' => 'Updated Encoder',
+            'sex' => 'Female',
+            'birthdate' => '1990-01-02',
+            'email' => 'updated.encoder@example.com',
+            'deped_id' => 'ENC-102',
+            'position' => 'Teacher II',
+            'advisory_grade_level' => 4,
+            'advisory_section' => 'Rizal',
+        ]);
+
+        $response->assertRedirect(route('super-admin.accounts.index', ['role' => 'encoder']));
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'role' => User::ROLE_ENCODER,
+            'email' => 'updated.encoder@example.com',
+            'advisory_grade_level' => 4,
+            'advisory_section' => 'Rizal',
+        ]);
+        $this->assertDatabaseHas('school_year_user_records', [
+            'school_year_id' => $schoolYear->id,
+            'user_id' => $encoder->id,
+            'advisory_grade_level' => '4',
+            'advisory_section' => 'Rizal',
         ]);
     }
 
@@ -110,18 +265,25 @@ class AccountManagementTest extends TestCase
         ]);
     }
 
-    public function test_managed_account_update_rejects_wrong_target_role(): void
+    public function test_admin_cannot_update_admin_and_super_admin_cannot_update_super_admin(): void
     {
-        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
-        $encoder = User::factory()->create(['role' => User::ROLE_ENCODER]);
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $otherAdmin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $this->actingAs($admin)->patch(route('admin.accounts.update', $otherAdmin), [
+            'name' => 'Should Not Update',
+            'email' => $otherAdmin->email,
+        ])->assertForbidden();
 
-        $response = $this->actingAs($superAdmin)->patch(route('super-admin.accounts.update', $encoder), [
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $otherSuperAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+
+        $response = $this->actingAs($superAdmin)->patch(route('super-admin.accounts.update', $otherSuperAdmin), [
             'name' => 'Should Not Update',
             'sex' => 'Male',
             'birthdate' => '1990-01-02',
-            'email' => $encoder->email,
-            'deped_id' => $encoder->deped_id,
-            'position' => $encoder->position,
+            'email' => $otherSuperAdmin->email,
+            'deped_id' => $otherSuperAdmin->deped_id,
+            'position' => $otherSuperAdmin->position,
         ]);
 
         $response->assertForbidden();
@@ -160,6 +322,32 @@ class AccountManagementTest extends TestCase
         ]);
 
         $response->assertRedirect(route('admin.accounts.index'));
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'is_active' => true,
+            'deleted_at' => null,
+        ]);
+    }
+
+    public function test_super_admin_can_archive_and_restore_encoder(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $encoder = User::factory()->create(['role' => User::ROLE_ENCODER, 'is_active' => true]);
+
+        $this->actingAs($superAdmin)->delete(route('accounts.destroy', $encoder), [
+            'password' => 'password',
+        ])->assertRedirect(route('super-admin.accounts.index', ['role' => 'encoder']));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'is_active' => false,
+            'deleted_at' => null,
+        ]);
+
+        $this->actingAs($superAdmin)->post(route('accounts.restore', $encoder), [
+            'password' => 'password',
+        ])->assertRedirect(route('super-admin.accounts.index', ['role' => 'encoder']));
+
         $this->assertDatabaseHas('users', [
             'id' => $encoder->id,
             'is_active' => true,

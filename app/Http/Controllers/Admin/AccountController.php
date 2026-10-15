@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\SchoolYearUserRecord;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\Rule;
@@ -18,7 +19,7 @@ class AccountController extends Controller
     {
         /** @var User $currentUser */
         $currentUser = Auth::user();
-        $targetRole = $currentUser->isSuperAdmin() ? 'admin' : 'encoder';
+        $targetRole = $this->resolveTargetRole($request, $currentUser);
 
         $query = User::where('role', $targetRole);
         $activeSchoolYearId = SchoolYearManager::activeSchoolYearId();
@@ -99,14 +100,15 @@ class AccountController extends Controller
 
         $sexes = ['Male', 'Female'];
 
-        return view('admin.accounts.index', compact('advisers', 'gradeLevels', 'positions', 'sexes'));
+        return view('admin.accounts.index', compact('advisers', 'gradeLevels', 'positions', 'sexes', 'targetRole'));
     }
 
-    public function create()
+    public function create(Request $request)
     {
         /** @var User $currentUser */
         $currentUser = Auth::user();
         $isSuperAdmin = $currentUser->isSuperAdmin();
+        $targetRole = $this->resolveTargetRole($request, $currentUser);
         $positions = [
             'Teacher I',
             'Teacher II',
@@ -117,16 +119,15 @@ class AccountController extends Controller
         $gradeLevels = [0, 1, 2, 3, 4, 5, 6, 7];
         $sexes = ['Male', 'Female'];
 
-        return view('admin.accounts.create', compact('positions', 'gradeLevels', 'sexes', 'isSuperAdmin'));
+        return view('admin.accounts.create', compact('positions', 'gradeLevels', 'sexes', 'isSuperAdmin', 'targetRole'));
     }
 
     public function store(Request $request)
     {
         /** @var User $currentUser */
         $currentUser = Auth::user();
-        $isSuperAdmin = $currentUser->isSuperAdmin();
-        $targetRole = $isSuperAdmin ? 'admin' : 'encoder';
-        $redirectRoute = $isSuperAdmin ? 'super-admin.accounts.index' : 'admin.accounts.index';
+        $targetRole = $this->resolveTargetRole($request, $currentUser, true);
+        $isEncoder = $targetRole === User::ROLE_ENCODER;
 
         $validated = $request->validate([
             'deped_id' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', 'unique:users,deped_id'],
@@ -140,8 +141,8 @@ class AccountController extends Controller
             'sex' => 'required|in:Male,Female',
             'birthdate' => 'required|date|before:today',
             'position' => ['required', 'string', 'max:255', 'regex:/^[\pL\pN\s.\'\/-]+$/u'],
-            'advisory_grade_level' => $isSuperAdmin ? 'nullable' : 'required|integer',
-            'advisory_section' => $isSuperAdmin ? ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'] : ['required', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
+            'advisory_grade_level' => $isEncoder ? 'required|integer|between:0,7' : 'nullable|integer|between:0,7',
+            'advisory_section' => $isEncoder ? ['required', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'] : ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
         ]);
 
         $user = User::create([
@@ -156,8 +157,8 @@ class AccountController extends Controller
             'sex' => $validated['sex'],
             'birthdate' => $validated['birthdate'],
             'position' => $validated['position'],
-            'advisory_grade_level' => $isSuperAdmin ? null : (int)$validated['advisory_grade_level'],
-            'advisory_section' => $isSuperAdmin ? null : ucfirst(strtolower($validated['advisory_section'])),
+            'advisory_grade_level' => $isEncoder ? (int) $validated['advisory_grade_level'] : null,
+            'advisory_section' => $isEncoder ? ucfirst(strtolower($validated['advisory_section'])) : null,
             'role' => $targetRole,
             'is_active' => true,
         ]);
@@ -165,16 +166,14 @@ class AccountController extends Controller
 
         \App\Services\AuditLogger::log('Created', 'Accounts', 'Created new ' . $targetRole . ' account for ' . $user->name);
 
-        return redirect()->route($redirectRoute)->with('success', 'Account created successfully.');
+        return $this->redirectToAccountIndex($currentUser, $targetRole)->with('success', 'Account created successfully.');
     }
 
     public function update(Request $request, User $user)
     {
         /** @var User $currentUser */
         $currentUser = Auth::user();
-        $expectedRole = $currentUser->isSuperAdmin() ? User::ROLE_ADMIN : User::ROLE_ENCODER;
-
-        abort_unless($user->role === $expectedRole, 403);
+        abort_unless($this->canManageAccount($currentUser, $user), 403);
 
         if (!$user->is_active) {
             return back()->withErrors(['account' => 'Archived accounts can only be restored.']);
@@ -238,20 +237,14 @@ class AccountController extends Controller
 
         \App\Services\AuditLogger::log('Updated', 'Accounts', 'Updated account profile for ' . $user->name);
 
-        $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
-        return redirect()->route($redirectRoute)->with('success', 'Account updated successfully.');
+        return $this->redirectToAccountIndex($currentUser, $user->role)->with('success', 'Account updated successfully.');
     }
 
     public function destroy(Request $request, User $user)
     {
         /** @var User $currentUser */
         $currentUser = Auth::user();
-        if ($currentUser->isSuperAdmin() && $user->role !== 'admin') {
-            abort(403);
-        }
-        if ($currentUser->isAdmin() && $user->role !== 'encoder') {
-            abort(403);
-        }
+        abort_unless($this->canManageAccount($currentUser, $user), 403);
 
         if ($currentUser->id === $user->id) {
             return back()->withErrors(['delete_error' => 'You cannot delete your own account.']);
@@ -269,20 +262,14 @@ class AccountController extends Controller
 
         \App\Services\AuditLogger::log('Archived', 'Accounts', 'Archived user account ' . $user->name);
 
-        $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
-        return redirect()->route($redirectRoute)->with('success', 'Account archived and access disabled.');
+        return $this->redirectToAccountIndex($currentUser, $user->role)->with('success', 'Account archived and access disabled.');
     }
 
     public function restore(Request $request, User $user)
     {
         /** @var User $currentUser */
         $currentUser = Auth::user();
-        if ($currentUser->isSuperAdmin() && $user->role !== User::ROLE_ADMIN) {
-            abort(403);
-        }
-        if ($currentUser->isAdmin() && $user->role !== User::ROLE_ENCODER) {
-            abort(403);
-        }
+        abort_unless($this->canManageAccount($currentUser, $user), 403);
 
         $request->validate([
             'password' => ['required', function ($attribute, $value, $fail) use ($currentUser) {
@@ -296,7 +283,39 @@ class AccountController extends Controller
 
         \App\Services\AuditLogger::log('Restored', 'Accounts', 'Restored user account ' . $user->name);
 
-        $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
-        return redirect()->route($redirectRoute)->with('success', 'Account restored successfully.');
+        return $this->redirectToAccountIndex($currentUser, $user->role)->with('success', 'Account restored successfully.');
+    }
+
+    private function resolveTargetRole(Request $request, User $currentUser, bool $fromInput = false): string
+    {
+        if ($currentUser->isAdmin()) {
+            return User::ROLE_ENCODER;
+        }
+
+        $role = $fromInput
+            ? $request->input('target_role', User::ROLE_ADMIN)
+            : $request->query('role', User::ROLE_ADMIN);
+
+        abort_unless(in_array($role, [User::ROLE_ADMIN, User::ROLE_ENCODER], true), 403);
+
+        return $role;
+    }
+
+    private function canManageAccount(User $actor, User $target): bool
+    {
+        if ($actor->isSuperAdmin()) {
+            return in_array($target->role, [User::ROLE_ADMIN, User::ROLE_ENCODER], true);
+        }
+
+        return $actor->isAdmin() && $target->role === User::ROLE_ENCODER;
+    }
+
+    private function redirectToAccountIndex(User $actor, string $targetRole): RedirectResponse
+    {
+        if ($actor->isSuperAdmin()) {
+            return redirect()->route('super-admin.accounts.index', ['role' => $targetRole]);
+        }
+
+        return redirect()->route('admin.accounts.index');
     }
 }
