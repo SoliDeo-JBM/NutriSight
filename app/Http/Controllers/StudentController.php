@@ -1020,14 +1020,18 @@ class StudentController extends Controller
 
     public function uploadProfileImages(Request $request)
     {
+        $invalidImageMessage = 'The selected file is not a valid JPEG, PNG, or WEBP image. Renamed or unsupported files are not accepted.';
+
         $request->validate([
             'profiles' => ['required', 'array'],
-            'profiles.*' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'profiles.*' => ['bail', 'nullable', 'file', 'max:5120', function ($attribute, $file, $fail) use ($invalidImageMessage) {
+                if (!$this->isSupportedProfileImage($file)) {
+                    $fail($invalidImageMessage);
+                }
+            }],
         ], [
-            'profiles.*.image' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
-            'profiles.*.mimes' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
-            'profiles.*.max' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
-            'profiles.*.uploaded' => 'Profile image upload failed. Please use a JPG, PNG, or WEBP image up to 5 MB.',
+            'profiles.*.max' => 'Profile images must be 5 MB or smaller.',
+            'profiles.*.uploaded' => 'The profile image could not be uploaded. Please try again.',
         ]);
 
         /** @var \App\Models\User|null $user */
@@ -1097,7 +1101,44 @@ class StudentController extends Controller
         AuditLogger::log('Updated', 'SBFP Participants', 'Uploaded profile images for: ' . implode(', ', $uploadedStudents) . '.');
 
         return back()
-            ->with('success', "Uploaded {$updated} profile image(s).");
+            ->with('profile_upload_success', "Uploaded {$updated} profile image(s).");
+    }
+
+    private function isSupportedProfileImage($file): bool
+    {
+        if (!$file instanceof \Illuminate\Http\UploadedFile || !$file->isValid()) {
+            return false;
+        }
+
+        $contents = @file_get_contents($file->getRealPath());
+        if (!is_string($contents) || $contents === '') {
+            return false;
+        }
+
+        try {
+            $imageInfo = @getimagesizefromstring($contents);
+            $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
+            if (!is_array($imageInfo)
+                || !in_array($imageInfo['mime'] ?? null, $allowedMimes, true)
+                || $detectedMime !== $imageInfo['mime']
+                || ($imageInfo[0] * $imageInfo[1]) > 20000000
+                || !function_exists('imagecreatefromstring')) {
+                return false;
+            }
+
+            $decodedImage = @imagecreatefromstring($contents);
+            if (!$decodedImage instanceof \GdImage) {
+                return false;
+            }
+
+            imagedestroy($decodedImage);
+
+            return true;
+        } catch (\Throwable $exception) {
+            return false;
+        }
     }
 
     public function showProfileImage(SbfpParticipant $participant)
