@@ -301,11 +301,26 @@
         </section>
     </main>
 
-    <footer class="bg-slate-50 px-6 py-10 text-slate-600 sm:px-12 lg:px-8">
-        <div class="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row md:items-center md:justify-between">
+    <footer class="border-t border-slate-800 bg-slate-900 px-6 py-10 text-slate-300 sm:px-12 lg:px-8">
+        <div class="mx-auto grid max-w-7xl gap-8 md:grid-cols-[1fr_auto] md:items-center">
             <div>
-                <p class="text-sm">&copy; 2026 NutriSight School-Based Feeding Program. All rights reserved.</p>
+                <a href="#hero" class="inline-flex items-center gap-3" aria-label="NutriSight home">
+                    <x-application-logo class="h-9 w-9 fill-current text-orange-400" />
+                    <span class="text-lg font-extrabold text-white">NutriSight</span>
+                </a>
+                <p class="mt-3 max-w-md text-sm leading-6 text-slate-400">School-Based Feeding Program at Marisol Bliss Elementary School.</p>
             </div>
+
+            <nav class="flex flex-wrap gap-x-6 gap-y-3" aria-label="Footer navigation">
+                <a href="#features" class="text-sm font-semibold transition hover:text-orange-300">Features</a>
+                <a href="#about" class="text-sm font-semibold transition hover:text-orange-300">About</a>
+                <a href="{{ route('login') }}" class="text-sm font-semibold transition hover:text-orange-300">Login</a>
+            </nav>
+        </div>
+
+        <div class="mx-auto mt-8 flex max-w-7xl flex-col gap-3 border-t border-white/10 pt-5 text-xs text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+            <p>&copy; {{ now()->year }} NutriSight School-Based Feeding Program. All rights reserved.</p>
+            <a href="#hero" class="font-semibold transition hover:text-white">Back to top</a>
         </div>
     </footer>
 </body>
