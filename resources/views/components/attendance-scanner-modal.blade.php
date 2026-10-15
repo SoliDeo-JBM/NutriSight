@@ -60,7 +60,17 @@
             });
         }
     }">
-        <h2 class="text-lg font-medium text-gray-900 mb-4"><i class="fas fa-qrcode text-orange-600 mr-2"></i> Scan Learner QR Code</h2>
+        <div class="flex items-center justify-between mb-4">
+            <h2 class="text-lg font-medium text-gray-900"><i class="fas fa-qrcode text-orange-600 mr-2"></i> Scan Learner QR Code</h2>
+            <button type="button"
+                    x-on:click="$dispatch('close-modal', 'attendance-scanner')"
+                    title="Close scan attendance"
+                    aria-label="Close scan attendance"
+                    class="inline-flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-rose-700 transition hover:bg-rose-200 hover:text-rose-800 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2"
+            >
+                <i class="fas fa-times" aria-hidden="true"></i>
+            </button>
+        </div>
 
         <label for="scanner-meal-period" class="block text-sm font-semibold text-gray-700 mb-1">Feeding period</label>
         <select id="scanner-meal-period" x-model="mealPeriod" class="w-full mb-4 border-gray-300 rounded-md shadow-sm focus:border-orange-500 focus:ring-orange-500 p-2.5 text-sm">
