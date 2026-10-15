@@ -25,6 +25,12 @@
     </div>
     @endif
 
+    @if($errors->has('account'))
+    <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm">
+        {{ $errors->first('account') }}
+    </div>
+    @endif
+
     @if($errors->any() && !$errors->has('delete_error'))
     <div class="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm" role="alert">
         Please correct {{ $errors->count() }} highlighted account field{{ $errors->count() === 1 ? '' : 's' }} below and try again.
@@ -113,7 +119,12 @@
                     @forelse($advisers as $index => $adviser)
                     <tr class="hover:bg-gray-50 {{ !$adviser->is_active ? 'bg-gray-100 opacity-75' : '' }}">
                         <td class="px-4 py-4 border text-sm text-gray-900">{{ $advisers->firstItem() + $index }}</td>
-                        <td class="px-4 py-4 border text-sm font-semibold text-gray-900">{{ $adviser->name }}</td>
+                        <td class="px-4 py-4 border text-sm font-semibold text-gray-900">
+                            {{ $adviser->name }}
+                            @if(!$adviser->is_active)
+                            <span class="ml-2 rounded bg-gray-200 px-2 py-0.5 text-xs font-bold text-gray-700">Archived</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->deped_id ?? '-' }}</td>
                         <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->position ?? '-' }}</td>
                         <td class="px-4 py-4 border text-sm text-gray-600">{{ $adviser->advisory_grade_level ?? '-' }} - {{ $adviser->advisory_section ?? '-' }}</td>
@@ -121,6 +132,7 @@
 
                         <!-- Actions Column -->
                         <td class="px-4 py-4 border text-center space-x-2 whitespace-nowrap">
+                            @if($adviser->is_active)
                             <button type="button"
                                 onclick="openEditModal(this)"
                                 data-action="{{ auth()->user()->isSuperAdmin() ? route('super-admin.accounts.update', $adviser) : route('admin.accounts.update', $adviser) }}"
@@ -139,10 +151,11 @@
                                 class="text-xs px-3 py-1.5 bg-blue-100 text-blue-800 hover:bg-blue-200 rounded font-semibold">
                                 Edit
                             </button>
+                            @endif
 
                             <!-- Reversible account status action -->
                             <button type="button" onclick="openStatusModal(this)" data-user-id="{{ $adviser->id }}" data-user-name="{{ $adviser->name }}" data-active="{{ $adviser->is_active ? '1' : '0' }}" class="text-xs px-3 py-1.5 {{ $adviser->is_active ? 'bg-rose-100 text-rose-800 hover:bg-rose-200' : 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200' }} rounded font-semibold">
-                                {{ $adviser->is_active ? 'Remove' : 'Restore' }}
+                                {{ $adviser->is_active ? 'Archive' : 'Restore' }}
                             </button>
                         </td>
                     </tr>
@@ -262,9 +275,9 @@
 <!-- Account Status Confirmation Modal -->
 <div id="deleteModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 hidden">
     <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
-        <h3 id="statusModalTitle" class="text-lg font-bold text-gray-900 mb-2">Confirm Account Removal</h3>
+        <h3 id="statusModalTitle" class="text-lg font-bold text-gray-900 mb-2">Confirm Account Archive</h3>
         <p class="text-sm text-gray-600 mb-4">
-            Are you sure you want to <span id="statusActionText">remove</span> <span id="deleteUserName" class="font-semibold text-gray-900"></span>? Removing an account disables access without deleting its database record.
+            Are you sure you want to <span id="statusActionText">archive</span> <span id="deleteUserName" class="font-semibold text-gray-900"></span>? Archiving disables access without deleting its database record.
         </p>
 
         <form id="deleteForm" method="POST" class="space-y-4">
@@ -308,9 +321,9 @@
 
         form.action = isActive ? `/accounts/${button.dataset.userId}` : `/accounts/${button.dataset.userId}/restore`;
         form.querySelector('input[name="_method"]').value = isActive ? 'DELETE' : 'POST';
-        document.getElementById('statusModalTitle').textContent = isActive ? 'Confirm Account Removal' : 'Confirm Account Restoration';
-        document.getElementById('statusActionText').textContent = isActive ? 'remove' : 'restore';
-        document.getElementById('statusSubmitButton').textContent = isActive ? 'Confirm Removal' : 'Confirm Restoration';
+        document.getElementById('statusModalTitle').textContent = isActive ? 'Confirm Account Archive' : 'Confirm Account Restoration';
+        document.getElementById('statusActionText').textContent = isActive ? 'archive' : 'restore';
+        document.getElementById('statusSubmitButton').textContent = isActive ? 'Confirm Archive' : 'Confirm Restoration';
         document.getElementById('statusSubmitButton').className = isActive ?
             'px-4 py-2 bg-rose-600 text-white rounded-lg text-sm font-semibold hover:bg-rose-700' :
             'px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-semibold hover:bg-emerald-700';

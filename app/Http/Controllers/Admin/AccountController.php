@@ -176,6 +176,10 @@ class AccountController extends Controller
 
         abort_unless($user->role === $expectedRole, 403);
 
+        if (!$user->is_active) {
+            return back()->withErrors(['account' => 'Archived accounts can only be restored.']);
+        }
+
         $validated = $request->validate([
             'first_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
@@ -263,10 +267,10 @@ class AccountController extends Controller
 
         $user->update(['is_active' => false]);
 
-        \App\Services\AuditLogger::log('Removed', 'Accounts', 'Deactivated user account ' . $user->name);
+        \App\Services\AuditLogger::log('Archived', 'Accounts', 'Archived user account ' . $user->name);
 
         $redirectRoute = $currentUser->isSuperAdmin() ? 'super-admin.accounts.index' : 'admin.accounts.index';
-        return redirect()->route($redirectRoute)->with('success', 'Account removed and access disabled.');
+        return redirect()->route($redirectRoute)->with('success', 'Account archived and access disabled.');
     }
 
     public function restore(Request $request, User $user)

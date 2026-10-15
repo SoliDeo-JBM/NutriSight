@@ -144,6 +144,17 @@ class AccountManagementTest extends TestCase
             'deleted_at' => null,
         ]);
 
+        $this->actingAs($admin)->patch(route('admin.accounts.update', $encoder), [
+            'first_name' => 'Should',
+            'last_name' => 'Not Update',
+            'email' => $encoder->email,
+        ])->assertSessionHasErrors('account');
+
+        $this->assertDatabaseHas('users', [
+            'id' => $encoder->id,
+            'is_active' => false,
+        ]);
+
         $response = $this->actingAs($admin)->post(route('accounts.restore', $encoder), [
             'password' => 'password',
         ]);

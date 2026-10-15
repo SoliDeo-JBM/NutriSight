@@ -40,6 +40,9 @@
                         @if(!$actions->contains('Removed'))
                         <option value="Removed" {{ request('action') === 'Removed' ? 'selected' : '' }}>Removed</option>
                         @endif
+                        @if(!$actions->contains('Archived'))
+                        <option value="Archived" {{ request('action') === 'Archived' ? 'selected' : '' }}>Archived</option>
+                        @endif
                         @foreach($actions as $act)
                         <option value="{{ $act }}" {{ strtolower((string) request('action')) === strtolower($act) ? 'selected' : '' }}>{{ $act }}</option>
                         @endforeach

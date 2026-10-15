@@ -98,6 +98,7 @@
                         <th class="px-4 py-3 border">No.</th>
                         <th class="px-4 py-3 border">LRN</th>
                         <th class="px-4 py-3 border">Learner's Name (Last, First, Ext, Middle)</th>
+                        <th class="px-4 py-3 border">Status</th>
                         <th class="px-4 py-3 border">Birthdate</th>
                         <th class="px-4 py-3 border">Age</th>
                         <th class="px-4 py-3 border">Sex</th>
@@ -115,15 +116,23 @@
                     @forelse($students ?? [] as $index => $student)
                     @php
                     $enrollment = $student->enrollments->first();
+                    $isArchived = $enrollment?->status === \App\Models\Enrollment::STATUS_WITHDRAWN;
                     $baselineRecord = $student->nutritionalRecords()
                     ->where('measurement_period', 'baseline')
                     ->latest()
                     ->first();
                     @endphp
-                    <tr class="hover:bg-gray-50">
+                    <tr class="hover:bg-gray-50 {{ $isArchived ? 'bg-gray-100 opacity-75' : '' }}">
                         <td class="px-4 py-3 border">{{ $students->firstItem() + $index }}</td>
                         <td class="px-4 py-3 border font-semibold text-slate-800">{{ $student->student_number }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
+                        <td class="px-4 py-3 border whitespace-nowrap">
+                            @if($isArchived)
+                            <span class="rounded bg-gray-200 px-2 py-0.5 text-xs font-bold text-gray-700">Archived</span>
+                            @else
+                            <span class="rounded bg-emerald-100 px-2 py-0.5 text-xs font-bold text-emerald-700">Active</span>
+                            @endif
+                        </td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
                         <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
                         <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
@@ -146,13 +155,20 @@
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_email ?? '-' }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->guardian_contact ?? '-' }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">
+                            @if($isArchived)
+                            <form method="POST" action="{{ route('encoder.students.restore', $student->id) }}" class="inline">
+                                @csrf
+                                <button type="submit" class="text-emerald-700 hover:underline text-xs font-medium">Restore</button>
+                            </form>
+                            @else
                             <a href="{{ route('encoder.students.edit', $student->id) }}" class="text-blue-600 hover:underline text-xs font-medium">Edit</a>
-                            <button type="button" onclick="openWithdrawModal('{{ route('encoder.students.destroy', $student->id) }}', @js($student->first_name . ' ' . $student->last_name))" class="ml-3 text-rose-600 hover:underline text-xs font-medium">Remove</button>
+                            <button type="button" onclick="openWithdrawModal('{{ route('encoder.students.destroy', $student->id) }}', @js($student->first_name . ' ' . $student->last_name))" class="ml-3 text-rose-600 hover:underline text-xs font-medium">Archive</button>
+                            @endif
                         </td>
                     </tr>
                     @empty
                     <tr>
-                        <td colspan="14" class="px-4 py-8 border text-center text-gray-500">No learners found matching your criteria. Click "Add Advisory Learner" to begin.</td>
+                        <td colspan="15" class="px-4 py-8 border text-center text-gray-500">No learners found matching your criteria. Click "Add Advisory Learner" to begin.</td>
                     </tr>
                     @endforelse
                 </tbody>
@@ -172,8 +188,8 @@
     <div class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="withdraw-student-title" onclick="event.stopPropagation()">
         <div class="mb-4 flex items-start justify-between gap-4">
             <div>
-                <h2 id="withdraw-student-title" class="font-bold text-gray-900">Remove Learner</h2>
-                <p class="mt-1 text-sm text-gray-600">Are you sure you want to mark <span id="withdraw-student-name" class="font-semibold text-gray-900"></span> as withdrawn?</p>
+                <h2 id="withdraw-student-title" class="font-bold text-gray-900">Archive Learner</h2>
+                <p class="mt-1 text-sm text-gray-600">Are you sure you want to archive <span id="withdraw-student-name" class="font-semibold text-gray-900"></span>?</p>
             </div>
             <button type="button" onclick="closeWithdrawModal()" aria-label="Close" class="text-gray-400 hover:text-gray-700"><i class="fas fa-times"></i></button>
         </div>
@@ -182,7 +198,7 @@
             @csrf
             @method('DELETE')
             <button type="button" onclick="closeWithdrawModal()" class="rounded-lg bg-gray-200 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-300">Cancel</button>
-            <button type="submit" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Confirm Remove</button>
+            <button type="submit" class="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700">Confirm Archive</button>
         </form>
     </div>
 </div>

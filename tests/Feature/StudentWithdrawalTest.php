@@ -36,7 +36,7 @@ class StudentWithdrawalTest extends TestCase
         $response->assertRedirect();
         $this->assertDatabaseHas('audit_logs', [
             'user_id' => $encoder->id,
-            'action' => 'Removed',
+            'action' => 'Archived',
             'module' => 'Students',
         ]);
         $this->assertDatabaseHas('students', ['id' => $student->id]);
@@ -46,7 +46,14 @@ class StudentWithdrawalTest extends TestCase
         ]);
         $this->assertDatabaseMissing('enrollments', ['id' => $enrollment->id, 'status' => Enrollment::STATUS_ENROLLED]);
 
-        $this->actingAs($encoder)->get(route('encoder.students.index'))->assertDontSee($student->first_name);
+        $archivedList = $this->actingAs($encoder)->get(route('encoder.students.index'));
+        $archivedList->assertSee($student->first_name);
+        $archivedList->assertSee('Archived');
+        $archivedList->assertSee('Restore');
+
+        $this->actingAs($encoder)->put(route('encoder.students.update', $student), [
+            'lrn' => $student->lrn,
+        ])->assertNotFound();
 
         $this->actingAs($encoder)->post(route('encoder.students.restore', $student))->assertRedirect();
         $this->assertDatabaseHas('enrollments', [
