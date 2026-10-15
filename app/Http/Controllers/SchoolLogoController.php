@@ -41,10 +41,15 @@ class SchoolLogoController extends Controller
     public function update(Request $request)
     {
         $validated = $request->validate([
-            'school_logo' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:2048'],
+            'school_logo' => ['required', 'file', 'max:2048'],
         ]);
 
-        SchoolLogoService::upload($validated['school_logo'], SchoolYearManager::activeSchoolYearId());
+        try {
+            SchoolLogoService::upload($validated['school_logo'], SchoolYearManager::activeSchoolYearId());
+        } catch (\InvalidArgumentException $exception) {
+            return back()->withErrors(['school_logo' => $exception->getMessage()]);
+        }
+
         AuditLogger::log('Updated', 'System Settings', 'Updated the school logo used in downloadable SBFP reports with file ' . $validated['school_logo']->getClientOriginalName());
 
         return back()->with('success', 'School logo updated successfully.');
@@ -53,10 +58,15 @@ class SchoolLogoController extends Controller
     public function updateDepEd(Request $request)
     {
         $validated = $request->validate([
-            'deped_logo' => ['required', 'image', 'mimes:jpeg,jpg,png,webp', 'max:2048'],
+            'deped_logo' => ['required', 'file', 'max:2048'],
         ]);
 
-        SchoolLogoService::uploadDepEd($validated['deped_logo'], SchoolYearManager::activeSchoolYearId());
+        try {
+            SchoolLogoService::uploadDepEd($validated['deped_logo'], SchoolYearManager::activeSchoolYearId());
+        } catch (\InvalidArgumentException $exception) {
+            return back()->withErrors(['deped_logo' => $exception->getMessage()]);
+        }
+
         AuditLogger::log('Updated', 'System Settings', 'Updated the DepEd logo used in downloadable SBFP reports with file ' . $validated['deped_logo']->getClientOriginalName());
 
         return back()->with('success', 'DepEd logo updated successfully.');

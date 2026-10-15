@@ -40,12 +40,14 @@ class SchoolLogoService
 
     public static function upload(UploadedFile $file, ?int $schoolYearId = null): void
     {
-        self::store($file, self::FILE_PREFIX, $schoolYearId);
+        $mime = self::validatedImageMime($file);
+        self::store($file, self::FILE_PREFIX, $schoolYearId, $mime);
     }
 
     public static function uploadDepEd(UploadedFile $file, ?int $schoolYearId = null): void
     {
-        self::store($file, self::DEPED_FILE_PREFIX, $schoolYearId);
+        $mime = self::validatedImageMime($file);
+        self::store($file, self::DEPED_FILE_PREFIX, $schoolYearId, $mime);
     }
 
     public static function reset(?int $schoolYearId = null): void
@@ -58,12 +60,16 @@ class SchoolLogoService
         self::deleteStored(self::DEPED_FILE_PREFIX, null, $schoolYearId);
     }
 
-    private static function store(UploadedFile $file, string $prefix, ?int $schoolYearId = null): void
+    private static function store(UploadedFile $file, string $prefix, ?int $schoolYearId, string $mime): void
     {
         $disk = Storage::disk('public');
         $disk->makeDirectory(self::DIRECTORY);
 
-        $extension = strtolower($file->getClientOriginalExtension());
+        $extension = match ($mime) {
+            'image/jpeg' => 'jpg',
+            'image/png' => 'png',
+            'image/webp' => 'webp',
+        };
         $yearId = $schoolYearId ?? SchoolYearManager::activeSchoolYearId();
         $scopedPrefix = self::scopedPrefix($prefix, $yearId);
         $filename = $scopedPrefix . bin2hex(random_bytes(8)) . '.' . $extension;
@@ -74,6 +80,47 @@ class SchoolLogoService
         }
 
         self::deleteStored($prefix, $storedPath, $yearId);
+    }
+
+    private static function validatedImageMime(UploadedFile $file): string
+    {
+        $invalidImageMessage = 'The selected file is not a valid JPEG, PNG, or WEBP image. Renamed or unsupported files are not accepted.';
+
+        if (!$file->isValid()) {
+            throw new \InvalidArgumentException($invalidImageMessage);
+        }
+
+        $contents = @file_get_contents($file->getRealPath());
+        if (!is_string($contents) || $contents === '') {
+            throw new \InvalidArgumentException($invalidImageMessage);
+        }
+
+        try {
+            $imageInfo = @getimagesizefromstring($contents);
+            $detectedMime = (new \finfo(FILEINFO_MIME_TYPE))->buffer($contents);
+            $allowedMimes = ['image/jpeg', 'image/png', 'image/webp'];
+
+            if (!is_array($imageInfo)
+                || !in_array($imageInfo['mime'] ?? null, $allowedMimes, true)
+                || $detectedMime !== $imageInfo['mime']
+                || ($imageInfo[0] * $imageInfo[1]) > 20000000
+                || !function_exists('imagecreatefromstring')) {
+                throw new \InvalidArgumentException($invalidImageMessage);
+            }
+
+            $decodedImage = @imagecreatefromstring($contents);
+            if (!$decodedImage instanceof \GdImage) {
+                throw new \InvalidArgumentException($invalidImageMessage);
+            }
+
+            imagedestroy($decodedImage);
+
+            return $detectedMime;
+        } catch (\InvalidArgumentException $exception) {
+            throw $exception;
+        } catch (\Throwable $exception) {
+            throw new \InvalidArgumentException($invalidImageMessage, previous: $exception);
+        }
     }
 
     private static function deleteStored(string $prefix, ?string $except = null, ?int $schoolYearId = null): void
