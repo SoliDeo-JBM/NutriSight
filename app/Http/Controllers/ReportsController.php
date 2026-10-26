@@ -287,7 +287,10 @@ class ReportsController extends Controller
         $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection, $isEncoder ? auth()->user() : null);
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
         [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
-        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
+        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))
+            ->setOption(['isHtml5ParserEnabled' => false, 'dpi' => 72])
+            ->setPaper('a4', 'landscape')
+            ->download('attendance-report.pdf');
     }
 
     public function exportAttendanceSql(AttendanceReportMonth $month): Response

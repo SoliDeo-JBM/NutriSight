@@ -128,7 +128,7 @@
     @if(!$isEncoder)
     <form method="GET" class="no-print flex flex-wrap items-end gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div><label class="mb-1 block text-xs font-semibold text-slate-700">Grade Level</label><select name="grade" onchange="this.form.submit()" class="rounded-lg border border-slate-200 px-3 py-2 text-sm">
-                <option value="">All grades</option>@foreach($grades as $grade)<option value="{{ $grade }}" {{ (int) $selectedGrade === (int) $grade ? 'selected' : '' }}>{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>@endforeach
+                <option value="">All grades</option>@foreach($grades as $grade)<option value="{{ $grade }}" {{ $selectedGrade !== null && (int) $selectedGrade === (int) $grade ? 'selected' : '' }}>{{ $grade === 0 ? 'Kinder' : ($grade === 7 ? 'SPED' : 'Grade ' . $grade) }}</option>@endforeach
             </select></div>
         <div><label class="mb-1 block text-xs font-semibold text-slate-700">Section</label><select name="section" onchange="this.form.submit()" class="rounded-lg border border-slate-200 px-3 py-2 text-sm">
                 <option value="">All sections</option>@foreach($sections as $sectionOption)<option value="{{ $sectionOption }}" {{ $selectedSection === $sectionOption ? 'selected' : '' }}>{{ $sectionOption }}</option>@endforeach
