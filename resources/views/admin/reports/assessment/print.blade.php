@@ -146,6 +146,7 @@
         .signature-line { border-bottom: 1px solid #333; width: 190px; }
         .signature-name { text-align: center; font-weight: bold; margin-top: 4px; }
         .signature-role { text-align: center; margin-top: 2px; }
+        .generated-at { position: fixed; bottom: 0; right: 0; font-size: 8px; color: #555; }
     </style>
 </head>
 
@@ -342,6 +343,7 @@
     <div class="legend">@foreach($transitionCategories as $category => $color)<span class="legend-item"><span class="legend-color" style="background:{{ $color }};"></span>{{ $category }}</span>@endforeach</div>
     <p class="note"><strong>Transition interpretation:</strong> The cohort's Normal status changed from {{ $baselineNormal }} at Baseline to {{ $midlineNormal }} at Midline and {{ $endlineNormal }} at Endline. By Endline, {{ $endlineNormal }} of {{ $transitionTotal }} participants were Normal, while {{ $endlineSupport }} remained Wasted or Severely Wasted and may need continued support.</p>
     <table class="signatures"><tr><td><div class="signature-stack">Prepared by:<div class="signature-gap"></div><div class="signature-line"></div><div class="signature-name">{{ $adminName }}</div><div class="signature-role">Project Development Officer</div></div></td><td><div class="signature-stack">Noted by:<div class="signature-gap"></div><div class="signature-line"></div><div class="signature-name">{{ $superAdminName }}</div><div class="signature-role">School Head</div></div></td></tr></table>
+    <div class="generated-at">Generated: {{ now()->format('M d, Y h:i A') }}</div>
 </body>
 
 </html>

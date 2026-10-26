@@ -15,8 +15,22 @@
             <a href="{{ route('encoder.students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
                 <i class="fas fa-plus"></i> Add Advisory Learner
             </a>
+            <form method="POST" action="{{ route('encoder.students.import.preview') }}" enctype="multipart/form-data">
+                @csrf
+                <label class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer">
+                    <i class="fas fa-file-import"></i> Import from Excel
+                    <input type="file" name="spreadsheet" accept=".xlsx,.xls" class="hidden" onchange="this.form.submit()" required>
+                </label>
+            </form>
         </div>
     </div>
+
+    @if(session('import_errors'))
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <p class="font-semibold">Some rows could not be imported:</p>
+        <ul class="mt-1 list-disc pl-5">@foreach(session('import_errors') as $error)<li>{{ $error }}</li>@endforeach</ul>
+    </div>
+    @endif
 
     <div id="change-section-modal" class="fixed inset-0 z-50 hidden items-center justify-center bg-slate-950/40 p-4" onclick="if(event.target===this)this.classList.add('hidden')">
         <form method="POST" action="{{ route('encoder.students.change-section') }}" class="w-full max-w-md rounded-xl bg-white p-6 shadow-2xl" onclick="event.stopPropagation()">

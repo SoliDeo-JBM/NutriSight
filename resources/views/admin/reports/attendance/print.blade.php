@@ -17,9 +17,10 @@
         th, td { border: 1px solid #333; padding: 3px 2px; text-align: center; vertical-align: middle; }
         th { background: #d9e2f3; }
         .number-column { width: 28px; }
-        .name-column { width: 125px; text-align: left; }
-        .grade-column { width: 48px; }
-        .section-column { width: 42px; }
+        .name-column { width: 170px; text-align: left; overflow-wrap: anywhere; word-wrap: break-word; }
+        .grade-column { width: 45px; }
+        .section-column { width: 65px; overflow-wrap: anywhere; word-wrap: break-word; }
+        .day-column { width: 15px; padding-left: 0; padding-right: 0; }
         .present { color: #15803d; font-weight: bold; }
         .absent { color: #dc2626; font-weight: bold; }
         .total-row td { background: #dbeafe; font-weight: bold; }
@@ -31,6 +32,7 @@
         .signature-line { height: 1px; border-bottom: 1px solid #333; }
         .signature-name { margin-top: 4px; font-weight: bold; text-align: center; }
         .signature-role { margin-top: 2px; text-align: center; }
+        .generated-at { position: fixed; bottom: 0; right: 0; font-size: 7px; color: #555; }
     </style>
 </head>
 
@@ -55,7 +57,7 @@
                 <th colspan="{{ $daysInMonth }}">ACTUAL FEEDING</th>
             </tr>
             <tr>
-                @foreach(range(1, $daysInMonth) as $day)<th>{{ $day }}</th>@endforeach
+                @foreach(range(1, $daysInMonth) as $day)<th class="day-column">{{ $day }}</th>@endforeach
             </tr>
         </thead>
         <tbody>
@@ -67,7 +69,7 @@
                 <td>{{ $student['section'] }}</td>
                 @foreach($student['days'] as $status)
                     @php($status = strtolower((string) $status))
-                    <td class="{{ in_array($status, ['present', 'p', 'served']) ? 'present' : (in_array($status, ['absent', 'a']) ? 'absent' : '') }}">{{ in_array($status, ['present', 'p', 'served']) ? '✓' : (in_array($status, ['absent', 'a']) ? 'A' : '') }}</td>
+                    <td class="day-column {{ in_array($status, ['present', 'p', 'served']) ? 'present' : (in_array($status, ['absent', 'a']) ? 'absent' : '') }}">{{ in_array($status, ['present', 'p', 'served']) ? '✓' : (in_array($status, ['absent', 'a']) ? 'A' : '') }}</td>
                 @endforeach
             </tr>
             @empty
@@ -76,7 +78,7 @@
             <tr class="total-row">
                 <td colspan="4" class="name-column">TOTAL:</td>
                 @foreach(range(1, $daysInMonth) as $day)
-                    <td>{{ $students->filter(fn ($student) => in_array(strtolower((string) ($student['days'][$day] ?? '')), ['present', 'p', 'served']))->count() ?: '' }}</td>
+                    <td class="day-column">{{ $students->filter(fn ($student) => in_array(strtolower((string) ($student['days'][$day] ?? '')), ['present', 'p', 'served']))->count() ?: '' }}</td>
                 @endforeach
             </tr>
         </tbody>
@@ -104,6 +106,7 @@
             </td>
         </tr>
     </table>
+    <div class="generated-at">Generated: {{ now()->format('M d, Y h:i A') }}</div>
 </body>
 
 </html>

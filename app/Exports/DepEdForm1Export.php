@@ -142,6 +142,7 @@ class DepEdForm1Export implements FromArray, ShouldAutoSize, WithEvents, WithHea
         $sheet->setCellValue("M" . ($signatureRow + 2), $this->superAdminName);
         $sheet->setCellValue("A" . ($signatureRow + 3), 'Project Development Officer');
         $sheet->setCellValue("M" . ($signatureRow + 3), 'School Head');
+        $sheet->setCellValue("Y" . ($signatureRow + 5), 'Generated: ' . now()->format('M d, Y h:i A'));
         $sheet->getStyle("A{$signatureRow}:Y" . ($signatureRow + 3))->getAlignment()->setHorizontal('center')->setVertical('center');
         $sheet->getStyle("A{$signatureRow}:Y{$signatureRow}")->getFont()->setBold(true);
         $sheet->getStyle("A" . ($signatureRow + 2) . ":Y" . ($signatureRow + 2))->getFont()->setBold(true);

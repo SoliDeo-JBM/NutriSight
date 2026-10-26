@@ -7,9 +7,59 @@ use App\Models\Student;
 use App\Models\Enrollment;
 use App\Services\SchoolYearManager;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
+use App\Services\StudentSpreadsheetImportService;
 
 class StudentViewController extends Controller
 {
+    public function previewSpreadsheet(Request $request, StudentSpreadsheetImportService $importService)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $file = $request->validate([
+            'spreadsheet' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
+        ])['spreadsheet'];
+
+        $preview = $importService->preview($file, $user);
+        $token = Str::random(40);
+        $path = $file->storeAs('student-imports', $token . '.' . $file->getClientOriginalExtension());
+        session(['student_import_path' => $path]);
+
+        return view('students.import-preview', [
+            'rows' => $preview['rows'],
+            'confirmRoute' => $user->isSuperAdmin() ? 'super-admin.students.import.confirm' : 'admin.students.import.confirm',
+            'backRoute' => $user->isSuperAdmin() ? 'super-admin.students.index' : 'admin.students.index',
+            'isEncoder' => false,
+        ]);
+    }
+
+    public function confirmSpreadsheet(Request $request, StudentSpreadsheetImportService $importService)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $path = session('student_import_path');
+        $routePrefix = $user->isSuperAdmin() ? 'super-admin' : 'admin';
+        if (!$path || !Storage::disk('local')->exists($path)) {
+            return redirect()->route($routePrefix . '.students.index')->withErrors(['spreadsheet' => 'The preview expired. Please select the Excel file again.']);
+        }
+
+        try {
+            $result = $importService->importStoredFile(Storage::disk('local')->path($path), $user);
+        } finally {
+            Storage::disk('local')->delete($path);
+            session()->forget('student_import_path');
+        }
+
+        $message = "{$result['imported']} learner(s) added and {$result['accounts_created']} encoder account(s) created.";
+        if ($result['skipped']) {
+            $message .= " {$result['skipped']} row(s) were skipped because they were already imported or invalid.";
+        }
+
+        return redirect()->route($routePrefix . '.students.index')->with('success', $message)->with('import_errors', $result['errors']);
+    }
+
     public function index(Request $request)
     {
         $activeSyId = SchoolYearManager::activeSchoolYearId();

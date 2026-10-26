@@ -264,6 +264,7 @@ class ReportsController extends Controller
                 $table->addCell(700)->addText((string) $value, ['size' => 7]);
         }
         $this->addDocxSignatureTable($section, $adminName, $superAdminName);
+        $this->addDocxGeneratedAt($section);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-attendance-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
         return response()->download($path, 'attendance-report.docx')->deleteFileAfterSend(true);
@@ -271,6 +272,7 @@ class ReportsController extends Controller
 
     public function exportAttendancePdf(AttendanceReportMonth $month)
     {
+        ini_set('memory_limit', '512M');
         $this->ensureAttendanceMonthAccess($month, auth()->user()?->isEncoder() ?? false);
         $month->load('schoolYear');
         $students = $this->attendanceStudents($month->schoolYear, $month->month, null, null, auth()->user()?->isEncoder() ? auth()->user() : null);
@@ -556,6 +558,7 @@ class ReportsController extends Controller
             }
         }
         $this->addDocxSignatureTable($section, $adminName, $superAdminName);
+        $this->addDocxGeneratedAt($section);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-form1-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -763,6 +766,7 @@ class ReportsController extends Controller
         $this->addDocxRows($section, ['Sex', 'Age', 'Baseline', 'Midline', 'Endline'], array_map(fn($row) => [$row['sex'], $row['age'], $row['baseline'], $row['midline'], $row['endline']], $assessment['period_demographics']), 'Rehabilitation Transition by Demographic');
         $this->addDocxRows($section, ['Rank', 'Province', 'Municipality', 'Barangay', 'At-risk learners', 'Wasted', 'Severely wasted', 'Normal and above', 'Percentage'], array_map(fn($row) => [$row['rank'], $row['province'], $row['municipality'], $row['barangay'], $row['at_risk'], $row['wasted'], $row['severely_wasted'], $row['normal_and_above'], $row['percentage'] . '%'], $assessment['location_concentration']), 'Top Five Location Concentration of Baseline At-Risk Learners');
         $this->addDocxSignatureTable($section, $adminName, $superAdminName);
+        $this->addDocxGeneratedAt($section);
         $path = tempnam(sys_get_temp_dir(), 'nutrisight-assessment-') . '.docx';
         IOFactory::createWriter($word, 'Word2007')->save($path);
 
@@ -837,6 +841,12 @@ class ReportsController extends Controller
             $signatureTable->addCell(5000)->addText($prepared, $style + ['alignment' => 'center']);
             $signatureTable->addCell(5000)->addText($noted, $style + ['alignment' => 'center']);
         }
+
+    }
+
+    private function addDocxGeneratedAt($section): void
+    {
+        $section->addFooter()->addText('Generated: ' . now()->format('M d, Y h:i A'), ['size' => 8], ['alignment' => 'right']);
     }
 
     private function configureDocxHeaderTable($table): void

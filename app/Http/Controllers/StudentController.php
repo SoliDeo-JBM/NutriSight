@@ -15,11 +15,13 @@ use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
 use App\Services\ReportPeriodManager;
 use App\Services\SbfpParentApprovalService;
+use App\Services\StudentSpreadsheetImportService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
@@ -29,12 +31,14 @@ class StudentController extends Controller
     protected NutriCalculationService $nutriService;
     protected ReportPeriodManager $reportPeriodManager;
     protected SbfpParentApprovalService $parentApprovalService;
+    protected StudentSpreadsheetImportService $spreadsheetImportService;
 
-    public function __construct(NutriCalculationService $nutriService, ReportPeriodManager $reportPeriodManager, SbfpParentApprovalService $parentApprovalService)
+    public function __construct(NutriCalculationService $nutriService, ReportPeriodManager $reportPeriodManager, SbfpParentApprovalService $parentApprovalService, StudentSpreadsheetImportService $spreadsheetImportService)
     {
         $this->nutriService = $nutriService;
         $this->reportPeriodManager = $reportPeriodManager;
         $this->parentApprovalService = $parentApprovalService;
+        $this->spreadsheetImportService = $spreadsheetImportService;
     }
 
     public function index(Request $request)
@@ -125,6 +129,59 @@ class StudentController extends Controller
         ];
 
         return view('students.index', compact('students', 'sexes', 'bmiCategories', 'sortOptions', 'user'));
+    }
+
+    public function previewSpreadsheet(Request $request, StudentSpreadsheetImportService $importService)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $file = $request->validate([
+            'spreadsheet' => ['required', 'file', 'mimes:xlsx,xls', 'max:10240'],
+        ])['spreadsheet'];
+
+        $preview = $importService->preview($file, $user);
+        if ($preview['not_found']) {
+            return back()->withErrors(['spreadsheet' => 'Students not found for your assigned grade and section.']);
+        }
+
+        $token = Str::random(40);
+        $path = $file->storeAs('student-imports', $token . '.' . $file->getClientOriginalExtension());
+        session(['student_import_path' => $path]);
+
+        return view('students.import-preview', [
+            'rows' => $preview['rows'],
+            'confirmRoute' => 'encoder.students.import.confirm',
+            'backRoute' => 'encoder.students.index',
+            'isEncoder' => true,
+        ]);
+    }
+
+    public function confirmSpreadsheet(Request $request)
+    {
+        /** @var \App\Models\User $user */
+        $user = Auth::user();
+        $path = session('student_import_path');
+        if (!$path || !Storage::disk('local')->exists($path)) {
+            return redirect()->route('encoder.students.index')->withErrors(['spreadsheet' => 'The preview expired. Please select the Excel file again.']);
+        }
+
+        try {
+            $result = $this->spreadsheetImportService->importStoredFile(Storage::disk('local')->path($path), $user);
+        } finally {
+            Storage::disk('local')->delete($path);
+            session()->forget('student_import_path');
+        }
+
+        if ($result['not_found']) {
+            return redirect()->route('encoder.students.index')->withErrors(['spreadsheet' => 'Students not found for your assigned grade and section.']);
+        }
+
+        $message = "{$result['imported']} learner(s) added.";
+        if ($result['skipped']) {
+            $message .= " {$result['skipped']} row(s) were skipped because they were already imported or invalid.";
+        }
+
+        return redirect()->route('encoder.students.index')->with('success', $message)->with('import_errors', $result['errors']);
     }
 
     public function changeSectionName(Request $request)

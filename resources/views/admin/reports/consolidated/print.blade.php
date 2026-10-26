@@ -127,6 +127,13 @@
             margin-top: 2px;
             text-align: center;
         }
+        .generated-at {
+            position: fixed;
+            bottom: 0;
+            right: 0;
+            font-size: 7px;
+            color: #555;
+        }
     </style>
 </head>
 
@@ -201,6 +208,7 @@
             </td>
         </tr>
     </table>
+    <div class="generated-at">Generated: {{ now()->format('M d, Y h:i A') }}</div>
 </body>
 
 </html>

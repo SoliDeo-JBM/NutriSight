@@ -8,7 +8,21 @@
             <h1 class="text-2xl font-bold text-gray-900">Complete Learner List</h1>
             <p class="text-sm text-gray-500 mt-1">Master list of all learners with WHO nutritional metrics across school sections.</p>
         </div>
+        <form method="POST" action="{{ route($routePrefix . '.students.import.preview') }}" enctype="multipart/form-data">
+            @csrf
+            <label class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer">
+                <i class="fas fa-file-import"></i> Import from Excel
+                <input type="file" name="spreadsheet" accept=".xlsx,.xls" class="hidden" onchange="this.form.submit()" required>
+            </label>
+        </form>
     </div>
+
+    @if(session('import_errors'))
+    <div class="rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+        <p class="font-semibold">Some rows could not be imported:</p>
+        <ul class="mt-1 list-disc pl-5">@foreach(session('import_errors') as $error)<li>{{ $error }}</li>@endforeach</ul>
+    </div>
+    @endif
 
     <!-- Filters & Search Card -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
@@ -122,7 +136,7 @@
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $student->last_name }}, {{ $student->first_name }} {{ $student->name_extension }} {{ $student->middle_name }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->grade_level == 0 ? 'Kinder' : ($enrollment?->grade_level == 7 ? 'SPED' : 'Grade ' . ($enrollment?->grade_level ?? '-')) }}</td>
                         <td class="px-4 py-3 border whitespace-nowrap">{{ $enrollment?->section ?? '-' }}</td>
-                        <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date }}</td>
+                        <td class="px-4 py-3 border whitespace-nowrap">{{ $student->birth_date?->format('Y-m-d') ?? '-' }}</td>
                         <td class="px-4 py-3 border">{{ $student->birth_date?->age ?? '-' }}</td>
                         <td class="px-4 py-3 border">{{ $student->sex ?? '-' }}</td>
                         <td class="px-4 py-3 border">{{ $baselineRecord->weight ?? '-' }}</td>

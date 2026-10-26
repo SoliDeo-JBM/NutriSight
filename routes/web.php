@@ -81,6 +81,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
 
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::post('/students/import/preview', [App\Http\Controllers\Admin\StudentViewController::class, 'previewSpreadsheet'])->name('students.import.preview');
+        Route::post('/students/import/confirm', [App\Http\Controllers\Admin\StudentViewController::class, 'confirmSpreadsheet'])->middleware('active-school-year')->name('students.import.confirm');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
         Route::patch('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'update'])->name('accounts.update');
         Route::get('/school-years', [App\Http\Controllers\Admin\SchoolYearController::class, 'index'])->name('school-years.index');
@@ -148,6 +150,8 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::post('/students/import/preview', [App\Http\Controllers\Admin\StudentViewController::class, 'previewSpreadsheet'])->name('students.import.preview');
+        Route::post('/students/import/confirm', [App\Http\Controllers\Admin\StudentViewController::class, 'confirmSpreadsheet'])->middleware('active-school-year')->name('students.import.confirm');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
         Route::patch('/accounts/{user}', [App\Http\Controllers\Admin\AccountController::class, 'update'])->name('accounts.update');
         Route::get('/audit-logs', [App\Http\Controllers\Admin\AuditLogController::class, 'index'])->name('audit-logs.index');
@@ -178,6 +182,8 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
         });
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
+        Route::post('/students/import/preview', [App\Http\Controllers\StudentController::class, 'previewSpreadsheet'])->name('students.import.preview');
+        Route::post('/students/import/confirm', [App\Http\Controllers\StudentController::class, 'confirmSpreadsheet'])->middleware('active-school-year')->name('students.import.confirm');
         Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->middleware('active-school-year')->name('students.change-section');
         Route::get('/students/create', [App\Http\Controllers\StudentController::class, 'create'])->name('students.create');
         Route::get('/students/{student}/edit', [App\Http\Controllers\StudentController::class, 'edit'])->name('students.edit');
