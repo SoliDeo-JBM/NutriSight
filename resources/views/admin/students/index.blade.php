@@ -8,13 +8,18 @@
             <h1 class="text-2xl font-bold text-gray-900">Complete Learner List</h1>
             <p class="text-sm text-gray-500 mt-1">Master list of all learners with WHO nutritional metrics across school sections.</p>
         </div>
-        <form method="POST" action="{{ route($routePrefix . '.students.import.preview') }}" enctype="multipart/form-data">
-            @csrf
-            <label class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer">
-                <i class="fas fa-file-import"></i> Import from Excel
-                <input type="file" name="spreadsheet" accept=".xlsx,.xls" class="hidden" onchange="this.form.submit()" required>
-            </label>
-        </form>
+        <div class="flex flex-wrap gap-2">
+            <a href="{{ route($routePrefix . '.students.export-excel') }}" data-loading-link data-loading-message="Preparing learner Excel export..." class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
+                <i class="fas fa-file-export"></i> Export to Excel
+            </a>
+            <form method="POST" action="{{ route($routePrefix . '.students.import.preview') }}" enctype="multipart/form-data">
+                @csrf
+                <label class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer">
+                    <i class="fas fa-file-import"></i> Import from Excel
+                    <input type="file" name="spreadsheet" accept=".xlsx,.xls" class="hidden" onchange="this.form.submit()" required>
+                </label>
+            </form>
+        </div>
     </div>
 
     @if(session('import_errors'))

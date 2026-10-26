@@ -81,6 +81,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
 
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::get('/students/export-excel', [App\Http\Controllers\Admin\StudentViewController::class, 'exportExcel'])->name('students.export-excel');
         Route::post('/students/import/preview', [App\Http\Controllers\Admin\StudentViewController::class, 'previewSpreadsheet'])->name('students.import.preview');
         Route::post('/students/import/confirm', [App\Http\Controllers\Admin\StudentViewController::class, 'confirmSpreadsheet'])->middleware('active-school-year')->name('students.import.confirm');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
@@ -150,6 +151,7 @@ Route::middleware(['auth', 'active'])->group(function () {
         Route::get('/accounts/create', [App\Http\Controllers\Admin\AccountController::class, 'create'])->name('accounts.create');
         Route::post('/accounts', [App\Http\Controllers\Admin\AccountController::class, 'store'])->name('accounts.store');
         Route::get('/students', [App\Http\Controllers\Admin\StudentViewController::class, 'index'])->name('students.index');
+        Route::get('/students/export-excel', [App\Http\Controllers\Admin\StudentViewController::class, 'exportExcel'])->name('students.export-excel');
         Route::post('/students/import/preview', [App\Http\Controllers\Admin\StudentViewController::class, 'previewSpreadsheet'])->name('students.import.preview');
         Route::post('/students/import/confirm', [App\Http\Controllers\Admin\StudentViewController::class, 'confirmSpreadsheet'])->middleware('active-school-year')->name('students.import.confirm');
         Route::get('/students/sbfp', [App\Http\Controllers\Admin\StudentViewController::class, 'sbfpIndex'])->name('students.sbfp');
@@ -182,6 +184,7 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
         });
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
+        Route::get('/students/export-excel', [App\Http\Controllers\StudentController::class, 'exportExcel'])->name('students.export-excel');
         Route::post('/students/import/preview', [App\Http\Controllers\StudentController::class, 'previewSpreadsheet'])->name('students.import.preview');
         Route::post('/students/import/confirm', [App\Http\Controllers\StudentController::class, 'confirmSpreadsheet'])->middleware('active-school-year')->name('students.import.confirm');
         Route::patch('/students/change-section', [App\Http\Controllers\StudentController::class, 'changeSectionName'])->middleware('active-school-year')->name('students.change-section');

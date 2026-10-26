@@ -16,6 +16,7 @@ use App\Services\AuditLogger;
 use App\Services\ReportPeriodManager;
 use App\Services\SbfpParentApprovalService;
 use App\Services\StudentSpreadsheetImportService;
+use App\Exports\StudentListExport;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -25,6 +26,7 @@ use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
 use Carbon\Carbon;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StudentController extends Controller
 {
@@ -129,6 +131,23 @@ class StudentController extends Controller
         ];
 
         return view('students.index', compact('students', 'sexes', 'bmiCategories', 'sortOptions', 'user'));
+    }
+
+    public function exportExcel()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $user = Auth::user();
+        $students = Student::with([
+            'enrollments' => function ($q) use ($activeSyId) {
+                $q->where('school_year_id', $activeSyId)->with('sbfpParticipant.nutritionMeasurements');
+            },
+        ])->whereHas('enrollments', function ($q) use ($activeSyId, $user) {
+            $q->where('school_year_id', $activeSyId)
+                ->where('grade_level', $user->advisory_grade_level)
+                ->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim((string) $user->advisory_section))]);
+        })->orderBy('last_name')->orderBy('first_name')->get();
+
+        return Excel::download(new StudentListExport($students), 'advisory-learners.xlsx');
     }
 
     public function previewSpreadsheet(Request $request, StudentSpreadsheetImportService $importService)

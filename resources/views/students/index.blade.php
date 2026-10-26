@@ -15,6 +15,9 @@
             <a href="{{ route('encoder.students.create') }}" class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
                 <i class="fas fa-plus"></i> Add Advisory Learner
             </a>
+            <a href="{{ route('encoder.students.export-excel') }}" data-loading-link data-loading-message="Preparing learner Excel export..." class="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 inline-flex items-center gap-2 whitespace-nowrap">
+                <i class="fas fa-file-export"></i> Export to Excel
+            </a>
             <form method="POST" action="{{ route('encoder.students.import.preview') }}" enctype="multipart/form-data">
                 @csrf
                 <label class="bg-emerald-600 text-white px-4 py-2 rounded text-sm hover:bg-emerald-700 inline-flex items-center gap-2 whitespace-nowrap cursor-pointer">

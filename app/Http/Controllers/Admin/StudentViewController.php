@@ -11,6 +11,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use App\Services\StudentSpreadsheetImportService;
+use App\Exports\StudentListExport;
+use Maatwebsite\Excel\Facades\Excel;
 
 class StudentViewController extends Controller
 {
@@ -150,6 +152,21 @@ class StudentViewController extends Controller
         $routePrefix = auth()->user()->role === 'super_admin' ? 'super-admin' : 'admin';
 
         return view('admin.students.index', compact('students', 'gradeLevels', 'sections', 'sexes', 'bmiCategories', 'sortOptions', 'routePrefix'));
+    }
+
+    public function exportExcel()
+    {
+        $activeSyId = SchoolYearManager::activeSchoolYearId();
+        $students = Student::with([
+            'enrollments' => function ($q) use ($activeSyId) {
+                $q->where('school_year_id', $activeSyId)->active()
+                    ->with('sbfpParticipant.nutritionMeasurements');
+            },
+        ])->whereHas('enrollments', function ($q) use ($activeSyId) {
+            $q->where('school_year_id', $activeSyId)->active();
+        })->orderBy('last_name')->orderBy('first_name')->get();
+
+        return Excel::download(new StudentListExport($students), 'learners.xlsx');
     }
 
     public function sbfpIndex(Request $request)
