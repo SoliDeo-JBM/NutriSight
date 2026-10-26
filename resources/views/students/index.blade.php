@@ -3,12 +3,12 @@
 @section('content')
 <div class="flex flex-col gap-6">
     <!-- Header -->
-    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+    <div class="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div>
             <h1 class="text-2xl font-bold text-gray-900">Advisory Learner List</h1>
             <p class="text-sm text-gray-500 mt-1">Master list of advisory learners with WHO nutritional metrics.</p>
         </div>
-        <div class="flex flex-wrap gap-2">
+        <div class="flex flex-wrap justify-start gap-2 xl:justify-end">
             <button type="button" onclick="document.getElementById('change-section-modal').classList.remove('hidden')" class="bg-amber-500 text-white px-4 py-2 rounded text-sm hover:bg-amber-600 inline-flex items-center gap-2 whitespace-nowrap">
                 <i class="fas fa-pen"></i> Change Section Name
             </button>

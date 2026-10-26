@@ -181,6 +181,8 @@ class ReportsController extends Controller
     private function attendanceStudents(SchoolYear $schoolYear, int $month, ?int $grade = null, ?string $section = null, ?User $scopeUser = null)
     {
         $calendarYear = $this->attendanceCalendarYear($schoolYear, $month);
+        $monthStart = sprintf('%04d-%02d-01', $calendarYear, $month);
+        $monthEnd = date('Y-m-t', strtotime($monthStart));
         $grade ??= $scopeUser?->advisory_grade_level;
         $section ??= $scopeUser?->advisory_section;
         $approvedBeneficiary = function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
@@ -191,15 +193,19 @@ class ReportsController extends Controller
                 ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'));
         };
         return Student::with([
-            'enrollments' => function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
-                $query->where('school_year_id', $schoolYear->id)->activeApprovedSbfp()->when($grade !== null, fn($q) => $q->where('grade_level', $grade))->when($section !== null, fn($q) => $q->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($section))]))->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))->with('sbfpParticipant.attendanceRecords');
+            'enrollments' => function ($query) use ($schoolYear, $grade, $section, $scopeUser, $monthStart, $monthEnd) {
+                $query->where('school_year_id', $schoolYear->id)
+                    ->activeApprovedSbfp()
+                    ->when($grade !== null, fn($q) => $q->where('grade_level', $grade))
+                    ->when($section !== null, fn($q) => $q->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($section))]))
+                    ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))
+                    ->with(['sbfpParticipant.attendanceRecords' => fn($attendanceQuery) => $attendanceQuery->whereBetween('attendance_date', [$monthStart, $monthEnd])]);
             }
         ])
             ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
             ->map(function (Student $student, int $index) use ($month, $calendarYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
                 $recordsByDay = $records
-                    ->filter(fn ($record) => $record->attendance_date?->year === $calendarYear && $record->attendance_date?->month === $month)
                     ->groupBy(fn ($record) => $record->attendance_date?->day);
                 $days = [];
                 $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $calendarYear));
@@ -286,8 +292,17 @@ class ReportsController extends Controller
         $selectedSection = $isEncoder ? null : ($request->filled('section') ? $request->input('section') : null);
         $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection, $isEncoder ? auth()->user() : null);
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
+        $daysInMonth = (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear));
+        $dailyTotals = array_fill(1, $daysInMonth, 0);
+        foreach ($students as $student) {
+            foreach ($student['days'] as $day => $status) {
+                if ($status === 'present') {
+                    $dailyTotals[$day]++;
+                }
+            }
+        }
         [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
-        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))
+        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'dailyTotals', 'adminName', 'superAdminName'))
             ->setOption(['isHtml5ParserEnabled' => false, 'dpi' => 72])
             ->setPaper('a4', 'landscape')
             ->download('attendance-report.pdf');

@@ -2,7 +2,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict 2RPqvSIGj6DCgSkgnureYhSodfaz7JeEQS437rkn8QKSofZjt1DcEldiErcR6L6
+\restrict DWSTds1bPreqRD7xAnazavgv8FLQCqkELArcCIlkyVJmk5cOAwJwNoLFeChlgML
 
 -- Dumped from database version 17.6
 -- Dumped by pg_dump version 17.11 (Ubuntu 17.11-1.pgdg24.04+2)
@@ -1198,6 +1198,8 @@ CREATE FUNCTION realtime.authorize(role_name text, topic_name text, claims text,
     AS $$
 declare
   probe_ids uuid[];
+  probe_inserted_at timestamp := now() at time zone 'utc';
+  visible_ids uuid[];
   ext text;
   allowed boolean;
 begin
@@ -1211,7 +1213,7 @@ begin
     probe_ids := array(select gen_random_uuid() from unnest(read_extensions));
 
     insert into realtime.messages (id, topic, extension, inserted_at, updated_at)
-    select p.id, topic_name, p.extension, now() at time zone 'utc', now() at time zone 'utc'
+    select p.id, topic_name, p.extension, probe_inserted_at, probe_inserted_at
     from unnest(probe_ids, read_extensions) as p(id, extension);
 
     perform set_config('role', role_name, true),
@@ -1221,8 +1223,15 @@ begin
             set_config('request.jwt.claim.role', role_name, true),
             set_config('request.headers', headers, true);
 
+    -- One lookup for every probe, by the full primary key.
+    visible_ids := array(
+      select m.id
+      from realtime.messages m
+      where m.inserted_at = probe_inserted_at
+        and m.id = any(probe_ids));
+
     read_allowed := array(
-      select exists(select 1 from realtime.messages m where m.id = p.id)
+      select p.id = any(visible_ids)
       from unnest(probe_ids) with ordinality as p(id, n)
       order by p.n);
 
@@ -5598,8 +5607,8 @@ CREATE TABLE realtime.messages (
     payload jsonb,
     event text,
     private boolean DEFAULT false,
-    updated_at timestamp without time zone DEFAULT now() NOT NULL,
-    inserted_at timestamp without time zone DEFAULT now() NOT NULL,
+    updated_at timestamp without time zone DEFAULT timezone('utc'::text, clock_timestamp()) NOT NULL,
+    inserted_at timestamp without time zone DEFAULT timezone('utc'::text, clock_timestamp()) NOT NULL,
     id uuid DEFAULT gen_random_uuid() NOT NULL,
     binary_payload bytea,
     skip_broadcast boolean DEFAULT false NOT NULL
@@ -6835,6 +6844,52 @@ COPY public.audit_logs (id, user_id, action, module, description, ip_address, cr
 762	26	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-10-10 13:14:13	2026-10-10 13:14:13
 763	28	updated	School Years	Activated academic school year 2026-2027	127.0.0.1	2026-10-10 13:15:11	2026-10-10 13:15:11
 764	26	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-10-10 13:22:50	2026-10-10 13:22:50
+765	33	updated	School Years	Switched viewing context to school year 2028-2029	127.0.0.1	2026-10-12 20:51:15	2026-10-12 20:51:15
+766	33	updated	School Years	Switched viewing context to school year 2027-2028	127.0.0.1	2026-10-12 20:51:22	2026-10-12 20:51:22
+767	33	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-10-12 20:51:27	2026-10-12 20:51:27
+768	27	Created	Meal Plan	Added meal for 2026-10-13: Chicken Tinola	127.0.0.1	2026-10-12 22:01:52	2026-10-12 22:01:52
+769	27	Created	Meal Plan	Added meal for 2026-10-13: Tuna Spread Sandwich	127.0.0.1	2026-10-12 22:03:01	2026-10-12 22:03:01
+770	27	Updated	Meal Plan	Updated meal for 2026-10-13 to: Chicken Tinola	127.0.0.1	2026-10-12 22:03:11	2026-10-12 22:03:11
+771	27	Updated	Meal Plan	Updated meal for 2026-10-13 to: Chicken Tinola	127.0.0.1	2026-10-12 22:03:19	2026-10-12 22:03:19
+772	27	Updated	Accounts	Updated account profile for Encoder User One	127.0.0.1	2026-10-12 22:05:41	2026-10-12 22:05:41
+773	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-10-12 22:05:59	2026-10-12 22:05:59
+774	27	Updated	Accounts	Updated account profile for Encoder U. User	127.0.0.1	2026-10-12 22:06:08	2026-10-12 22:06:08
+775	27	Updated	Accounts	Updated account profile for Encoder U. User	127.0.0.1	2026-10-12 22:06:29	2026-10-12 22:06:29
+776	27	Updated	Accounts	Updated account profile for Encoder U. User Three	127.0.0.1	2026-10-12 22:07:41	2026-10-12 22:07:41
+777	27	Updated	Accounts	Updated account profile for Encoder User Three	127.0.0.1	2026-10-12 22:07:50	2026-10-12 22:07:50
+778	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-10-12 22:07:57	2026-10-12 22:07:57
+779	27	Updated	Accounts	Updated account profile for Encoder User Two	127.0.0.1	2026-10-12 22:08:15	2026-10-12 22:08:15
+780	27	Updated	Accounts	Updated account profile for Encoder User One	127.0.0.1	2026-10-12 22:09:18	2026-10-12 22:09:18
+781	27	Removed	Accounts	Deactivated user account Encoder User Two	127.0.0.1	2026-10-12 22:19:45	2026-10-12 22:19:45
+782	27	Restored	Accounts	Restored user account Encoder User Two	127.0.0.1	2026-10-12 22:23:37	2026-10-12 22:23:37
+783	26	updated	School Years	Switched viewing context to school year 2028-2029	127.0.0.1	2026-10-13 10:45:12	2026-10-13 10:45:12
+784	26	updated	School Years	Switched viewing context to school year 2026-2027	127.0.0.1	2026-10-13 10:45:23	2026-10-13 10:45:23
+785	26	Removed	Students	Removed student from the active SBFP enrollment: Tony Stark	127.0.0.1	2026-10-13 10:46:09	2026-10-13 10:46:09
+786	27	Created	Attendance	Scanned QR attendance for student Lea Bautista	127.0.0.1	2026-10-13 11:06:08	2026-10-13 11:06:08
+787	27	Created	Attendance	Scanned QR attendance for student Paul Torres	127.0.0.1	2026-10-13 11:08:18	2026-10-13 11:08:18
+788	27	Created	Attendance	Scanned QR attendance for student Kim Villanueva	127.0.0.1	2026-10-13 11:08:39	2026-10-13 11:08:39
+789	28	Removed	Accounts	Deactivated user account Maam Rose	127.0.0.1	2026-10-13 11:25:50	2026-10-13 11:25:50
+790	28	Created	Accounts	Created new admin account for John Magtoto	127.0.0.1	2026-10-13 11:28:16	2026-10-13 11:28:16
+791	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports with file dog.jpg	127.0.0.1	2026-10-13 11:42:16	2026-10-13 11:42:16
+792	28	Updated	System Settings	Updated the Project Development Officer name for the active school year	127.0.0.1	2026-10-13 11:42:30	2026-10-13 11:42:30
+793	26	Updated	Students	Restored student enrollment: Juan Tamad	127.0.0.1	2026-10-15 10:38:07	2026-10-15 10:38:07
+794	26	Updated	SBFP Participants	Uploaded profile images for: Loki Odinson.	127.0.0.1	2026-10-15 10:52:11	2026-10-15 10:52:11
+795	26	Updated	SBFP Participants	Uploaded profile images for: Thor Odinson.	127.0.0.1	2026-10-15 11:24:13	2026-10-15 11:24:13
+796	28	Archived	Accounts	Archived user account John Magtoto	127.0.0.1	2026-10-15 19:22:32	2026-10-15 19:22:32
+797	28	Restored	Accounts	Restored user account Maam Rose	127.0.0.1	2026-10-15 19:22:42	2026-10-15 19:22:42
+798	28	Updated	System Settings	Reset the school report logo to the default	127.0.0.1	2026-10-15 20:06:23	2026-10-15 20:06:23
+799	28	Updated	System Settings	Updated the school logo used in downloadable SBFP reports with file dog.jpg	127.0.0.1	2026-10-15 20:06:42	2026-10-15 20:06:42
+800	28	Updated	System Settings	Reset the school report logo to the default	127.0.0.1	2026-10-15 20:08:54	2026-10-15 20:08:54
+801	26	Archived	Students	Archived student from the active SBFP enrollment: Juan Tamad	127.0.0.1	2026-10-15 20:36:13	2026-10-15 20:36:13
+802	26	Updated	Students	Renamed advisory section from A to Earth for 22 student enrollment(s).	127.0.0.1	2026-10-26 16:34:50	2026-10-26 16:34:50
+803	27	Updated	Accounts	Updated account profile for Encoder User	127.0.0.1	2026-10-26 16:36:00	2026-10-26 16:36:00
+804	26	Archived	Students	Archived student from the active SBFP enrollment: Aya Laguidao,	127.0.0.1	2026-10-26 16:47:26	2026-10-26 16:47:26
+805	26	Archived	Students	Archived student from the active SBFP enrollment: Chey David,	127.0.0.1	2026-10-26 16:47:33	2026-10-26 16:47:33
+806	26	Archived	Students	Archived student from the active SBFP enrollment: Jheselle Acosta,	127.0.0.1	2026-10-26 16:47:40	2026-10-26 16:47:40
+807	26	Updated	SBFP Approval	Bulk parent consent changes: Aya Laguidao: pending to approved; Jheselle Acosta: pending to approved	127.0.0.1	2026-10-26 17:10:57	2026-10-26 17:10:57
+808	27	Archived	Accounts	Archived user account Encoder User One	127.0.0.1	2026-10-26 17:33:22	2026-10-26 17:33:22
+809	27	Archived	Accounts	Archived user account Encoder User Three	127.0.0.1	2026-10-26 17:34:46	2026-10-26 17:34:46
+810	27	Archived	Accounts	Archived user account Encoder User Two	127.0.0.1	2026-10-26 17:35:15	2026-10-26 17:35:15
 \.
 
 
@@ -6843,6 +6898,8 @@ COPY public.audit_logs (id, user_id, action, module, description, ip_address, cr
 --
 
 COPY public.cache (key, value, expiration) FROM stdin;
+nutrisight-cache-grade1red@nutrisight.test|127.0.0.1:timer	i:1793006861;	1793006861
+nutrisight-cache-grade1red@nutrisight.test|127.0.0.1	i:1;	1793006861
 \.
 
 
@@ -6964,43 +7021,43 @@ COPY public.enrollments (id, student_id, school_year_id, grade_level, section, s
 94	94	6	4	B	enrolled	2026-09-14 00:09:04	2026-09-22 19:04:15
 95	95	6	4	B	enrolled	2026-09-14 00:10:36	2026-09-22 19:04:15
 96	96	6	4	B	enrolled	2026-09-14 00:11:55	2026-09-22 19:04:15
-66	66	6	1	A	enrolled	2026-09-13 23:11:28	2026-09-16 11:01:28
-57	57	6	1	A	enrolled	2026-09-13 22:45:51	2026-09-16 11:02:35
-58	58	6	1	A	enrolled	2026-09-13 22:50:53	2026-09-16 11:02:35
-59	59	6	1	A	enrolled	2026-09-13 22:53:00	2026-09-16 11:02:35
-60	60	6	1	A	enrolled	2026-09-13 22:58:32	2026-09-16 11:02:35
-61	61	6	1	A	enrolled	2026-09-13 23:00:12	2026-09-16 11:02:35
-62	62	6	1	A	enrolled	2026-09-13 23:01:31	2026-09-16 11:02:35
-63	63	6	1	A	enrolled	2026-09-13 23:07:19	2026-09-16 11:02:35
-64	64	6	1	A	enrolled	2026-09-13 23:08:52	2026-09-16 11:02:35
-65	65	6	1	A	enrolled	2026-09-13 23:10:09	2026-09-16 11:02:35
-97	97	6	1	A	enrolled	2026-09-16 11:16:03	2026-09-16 11:16:03
-98	98	6	1	A	enrolled	2026-09-16 13:29:36	2026-09-16 13:29:36
-99	99	6	1	A	enrolled	2026-09-18 10:46:29	2026-09-18 10:46:29
-100	100	6	1	A	enrolled	2026-09-18 13:44:08	2026-09-18 13:44:08
-101	101	6	1	A	enrolled	2026-09-18 15:59:54	2026-09-18 15:59:54
-112	112	6	1	A	enrolled	2026-09-20 17:35:41	2026-09-20 17:35:41
-115	115	6	1	A	enrolled	2026-09-20 20:17:10	2026-09-20 20:17:10
-113	113	6	1	A	withdrawn	2026-09-20 19:55:43	2026-09-20 22:47:00
+57	57	6	1	Earth	enrolled	2026-09-13 22:45:51	2026-10-26 16:34:50
+58	58	6	1	Earth	enrolled	2026-09-13 22:50:53	2026-10-26 16:34:50
+59	59	6	1	Earth	enrolled	2026-09-13 22:53:00	2026-10-26 16:34:50
+60	60	6	1	Earth	enrolled	2026-09-13 22:58:32	2026-10-26 16:34:50
+61	61	6	1	Earth	enrolled	2026-09-13 23:00:12	2026-10-26 16:34:50
+62	62	6	1	Earth	enrolled	2026-09-13 23:01:31	2026-10-26 16:34:50
+63	63	6	1	Earth	enrolled	2026-09-13 23:07:19	2026-10-26 16:34:50
+64	64	6	1	Earth	enrolled	2026-09-13 23:08:52	2026-10-26 16:34:50
+65	65	6	1	Earth	enrolled	2026-09-13 23:10:09	2026-10-26 16:34:50
+66	66	6	1	Earth	enrolled	2026-09-13 23:11:28	2026-10-26 16:34:50
+97	97	6	1	Earth	enrolled	2026-09-16 11:16:03	2026-10-26 16:34:50
+98	98	6	1	Earth	enrolled	2026-09-16 13:29:36	2026-10-26 16:34:50
+99	99	6	1	Earth	enrolled	2026-09-18 10:46:29	2026-10-26 16:34:50
+100	100	6	1	Earth	enrolled	2026-09-18 13:44:08	2026-10-26 16:34:50
+101	101	6	1	Earth	enrolled	2026-09-18 15:59:54	2026-10-26 16:34:50
+112	112	6	1	Earth	enrolled	2026-09-20 17:35:41	2026-10-26 16:34:50
+113	113	6	1	Earth	withdrawn	2026-09-20 19:55:43	2026-10-26 16:34:50
+115	115	6	1	Earth	enrolled	2026-09-20 20:17:10	2026-10-26 16:34:50
 102	102	6	4	B	enrolled	2026-09-20 16:34:06	2026-09-22 19:04:15
 103	103	6	4	B	enrolled	2026-09-20 16:36:18	2026-09-22 19:04:15
 104	104	6	4	B	enrolled	2026-09-20 16:38:34	2026-09-22 19:04:15
 105	105	6	4	B	enrolled	2026-09-20 16:39:52	2026-09-22 19:04:15
 106	106	6	4	B	enrolled	2026-09-20 16:40:58	2026-09-22 19:04:15
 107	107	6	4	B	enrolled	2026-09-20 16:42:03	2026-09-22 19:04:15
+119	119	6	1	Earth	enrolled	2026-09-25 09:39:17	2026-10-26 16:34:50
 108	108	6	4	B	enrolled	2026-09-20 16:43:18	2026-09-22 19:04:15
 109	109	6	4	B	enrolled	2026-09-20 16:44:20	2026-09-22 19:04:15
 110	110	6	4	B	enrolled	2026-09-20 16:45:37	2026-09-22 19:04:15
 111	111	6	4	B	enrolled	2026-09-20 16:47:32	2026-09-22 19:04:15
+120	120	6	1	Earth	enrolled	2026-09-25 22:36:27	2026-10-26 16:34:50
 116	116	6	4	B	withdrawn	2026-09-20 20:27:24	2026-09-22 19:04:15
 114	114	6	4	B	withdrawn	2026-09-20 20:05:16	2026-09-23 13:48:59
 117	117	6	4	B	withdrawn	2026-09-22 19:39:53	2026-09-23 13:49:10
 118	118	6	4	B	enrolled	2026-09-23 13:52:09	2026-09-23 13:52:09
-119	119	6	1	A	enrolled	2026-09-25 09:39:17	2026-09-25 09:39:17
-120	120	6	1	A	enrolled	2026-09-25 22:36:27	2026-09-25 22:36:27
 121	121	6	4	B	enrolled	2026-10-07 08:35:22	2026-10-07 08:35:22
-122	122	6	1	A	enrolled	2026-10-07 17:19:41	2026-10-07 17:19:41
-123	123	6	1	A	enrolled	2026-10-07 18:12:06	2026-10-07 18:12:06
+122	122	6	1	Earth	enrolled	2026-10-07 17:19:41	2026-10-26 16:34:50
+123	123	6	1	Earth	withdrawn	2026-10-07 18:12:06	2026-10-26 16:34:50
 \.
 
 
@@ -7053,6 +7110,8 @@ COPY public.meal_plans (id, meal_date, meal_name, recorded_by_user_id, created_a
 27	2026-09-28	menudo	27	2026-09-28 15:40:50	2026-09-28 15:40:50	afternoon
 28	2026-09-29	Chicken Sinigang	27	2026-09-29 10:48:44	2026-09-29 10:48:44	morning
 29	2026-10-07	adobs	27	2026-10-07 14:18:02	2026-10-07 14:18:02	morning
+31	2026-10-13	Tuna Spread Sandwich	27	2026-10-12 22:03:01	2026-10-12 22:03:01	afternoon
+30	2026-10-13	Chicken Tinola	27	2026-10-12 22:01:51	2026-10-12 22:03:19	morning
 \.
 
 
@@ -51021,22 +51080,22 @@ COPY public.ph_provinces (code, name, region_code, created_at, updated_at) FROM 
 --
 
 COPY public.report_period_rows (id, report_period_id, grade_level, sex, enrollment, pupils_weighed, bmi_severely_wasted, bmi_wasted, bmi_normal, bmi_overweight, bmi_obese, hfa_severely_stunted, hfa_stunted, hfa_normal, hfa_tall, created_at, updated_at, pupils_height_taken) FROM stdin;
-2369	4	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:30	2026-10-07 17:07:30	0
-2370	4	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:30	2026-10-07 17:07:30	0
-2371	4	1	M	11	11	8	3	0	0	0	0	0	11	0	2026-10-07 17:07:30	2026-10-07 17:07:30	11
-2372	4	1	F	4	4	2	2	0	0	0	0	0	4	0	2026-10-07 17:07:30	2026-10-07 17:07:30	4
-2373	4	2	M	3	3	2	1	0	0	0	0	0	3	0	2026-10-07 17:07:30	2026-10-07 17:07:30	3
-2374	4	2	F	1	1	1	0	0	0	0	0	0	1	0	2026-10-07 17:07:30	2026-10-07 17:07:30	1
-2375	4	3	M	1	1	1	0	0	0	0	0	0	1	0	2026-10-07 17:07:30	2026-10-07 17:07:30	1
-2376	4	3	F	1	1	1	0	0	0	0	0	0	1	0	2026-10-07 17:07:30	2026-10-07 17:07:30	1
-2377	4	4	M	8	8	4	4	0	0	0	0	0	8	0	2026-10-07 17:07:30	2026-10-07 17:07:30	8
-2378	4	4	F	4	4	2	2	0	0	0	0	0	4	0	2026-10-07 17:07:30	2026-10-07 17:07:30	4
-2379	4	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:30	2026-10-07 17:07:30	0
-2380	4	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:30	2026-10-07 17:07:30	0
-2381	4	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:30	2026-10-07 17:07:30	0
-2382	4	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:30	2026-10-07 17:07:30	0
-2383	4	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:31	2026-10-07 17:07:31	0
-2384	4	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-07 17:07:31	2026-10-07 17:07:31	0
+2433	6	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2434	6	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2435	6	1	M	11	3	1	0	2	0	0	0	0	3	0	2026-10-13 11:37:38	2026-10-13 11:37:38	3
+2436	6	1	F	4	2	0	0	2	0	0	0	0	2	0	2026-10-13 11:37:38	2026-10-13 11:37:38	2
+2437	6	2	M	3	3	0	0	2	1	0	0	0	3	0	2026-10-13 11:37:38	2026-10-13 11:37:38	3
+2438	6	2	F	1	1	0	0	1	0	0	0	0	1	0	2026-10-13 11:37:38	2026-10-13 11:37:38	1
+2439	6	3	M	1	1	0	0	1	0	0	0	0	1	0	2026-10-13 11:37:38	2026-10-13 11:37:38	1
+2440	6	3	F	1	1	0	0	1	0	0	0	0	1	0	2026-10-13 11:37:38	2026-10-13 11:37:38	1
+2441	6	4	M	8	3	0	0	2	1	0	0	0	3	0	2026-10-13 11:37:38	2026-10-13 11:37:38	3
+2442	6	4	F	4	2	0	0	1	1	0	0	0	2	0	2026-10-13 11:37:38	2026-10-13 11:37:38	2
+2443	6	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2444	6	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2445	6	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2446	6	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2447	6	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
+2448	6	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-13 11:37:38	2026-10-13 11:37:38	0
 2385	5	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-09 22:31:11	2026-10-09 22:31:11	0
 2386	5	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-09 22:31:11	2026-10-09 22:31:11	0
 2387	5	1	M	11	8	0	8	0	0	0	0	0	8	0	2026-10-09 22:31:11	2026-10-09 22:31:11	8
@@ -51053,22 +51112,22 @@ COPY public.report_period_rows (id, report_period_id, grade_level, sex, enrollme
 2398	5	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-09 22:31:11	2026-10-09 22:31:11	0
 2399	5	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-09 22:31:11	2026-10-09 22:31:11	0
 2400	5	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-09 22:31:11	2026-10-09 22:31:11	0
-2081	6	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2082	6	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2083	6	1	M	7	2	1	0	1	0	0	0	0	2	0	2026-09-18 16:08:12	2026-09-18 16:08:12	2
-2084	6	1	F	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
-2085	6	2	M	3	3	0	0	2	1	0	0	0	3	0	2026-09-18 16:08:12	2026-09-18 16:08:12	3
-2086	6	2	F	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
-2087	6	3	M	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
-2088	6	3	F	1	1	0	0	1	0	0	0	0	1	0	2026-09-18 16:08:12	2026-09-18 16:08:12	1
-2089	6	4	M	3	3	0	0	2	1	0	0	0	3	0	2026-09-18 16:08:12	2026-09-18 16:08:12	3
-2090	6	4	F	2	2	0	0	1	1	0	0	0	2	0	2026-09-18 16:08:12	2026-09-18 16:08:12	2
-2091	6	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2092	6	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2093	6	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2094	6	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2095	6	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
-2096	6	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-09-18 16:08:12	2026-09-18 16:08:12	0
+2497	4	0	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:24	2026-10-15 20:07:24	0
+2498	4	0	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:24	2026-10-15 20:07:24	0
+2499	4	1	M	12	12	8	4	0	0	0	0	0	12	0	2026-10-15 20:07:24	2026-10-15 20:07:24	12
+2500	4	1	F	4	4	2	2	0	0	0	0	0	4	0	2026-10-15 20:07:24	2026-10-15 20:07:24	4
+2501	4	2	M	3	3	2	1	0	0	0	0	0	3	0	2026-10-15 20:07:25	2026-10-15 20:07:25	3
+2502	4	2	F	1	1	1	0	0	0	0	0	0	1	0	2026-10-15 20:07:25	2026-10-15 20:07:25	1
+2503	4	3	M	1	1	1	0	0	0	0	0	0	1	0	2026-10-15 20:07:25	2026-10-15 20:07:25	1
+2504	4	3	F	1	1	1	0	0	0	0	0	0	1	0	2026-10-15 20:07:25	2026-10-15 20:07:25	1
+2505	4	4	M	8	8	4	4	0	0	0	0	0	8	0	2026-10-15 20:07:25	2026-10-15 20:07:25	8
+2506	4	4	F	4	4	2	2	0	0	0	0	0	4	0	2026-10-15 20:07:25	2026-10-15 20:07:25	4
+2507	4	5	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:25	2026-10-15 20:07:25	0
+2508	4	5	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:25	2026-10-15 20:07:25	0
+2509	4	6	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:26	2026-10-15 20:07:26	0
+2510	4	6	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:26	2026-10-15 20:07:26	0
+2511	4	7	M	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:26	2026-10-15 20:07:26	0
+2512	4	7	F	0	0	0	0	0	0	0	0	0	0	0	2026-10-15 20:07:26	2026-10-15 20:07:26	0
 \.
 
 
@@ -51174,9 +51233,9 @@ COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_re
 65	65	approved	\N	2026-09-13 23:10:09	2026-09-26 09:14:56	\N
 66	66	approved	\N	2026-09-13 23:11:28	2026-09-26 09:14:56	\N
 119	119	approved	\N	2026-09-25 09:39:17	2026-09-26 09:14:57	\N
-120	120	approved	\N	2026-09-25 22:36:27	2026-09-26 09:14:57	\N
-122	122	approved	\N	2026-10-07 17:19:41	2026-10-07 17:19:41	\N
 123	123	approved	\N	2026-10-07 18:12:06	2026-10-07 18:12:06	\N
+122	122	approved	\N	2026-10-07 17:19:41	2026-10-15 10:52:11	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/XfCF6X62WkU04U3afq8PIJzhhOrwiKyIDpAMljAL.webp
+120	120	approved	\N	2026-09-25 22:36:27	2026-10-15 11:24:13	https://pub-c7d0618ef09947b6a5311ff2f73ab695.r2.dev/sbfp-profiles/X0NCE6TfcZt6r3ffaOnlOmL8wnRUqEbkv6Wk40nK.webp
 \.
 
 
@@ -51185,9 +51244,9 @@ COPY public.sbfp_participants (id, enrollment_id, parent_consent, disapproval_re
 --
 
 COPY public.school_year_report_settings (id, school_year_id, project_development_officer_name, created_at, updated_at) FROM stdin;
-1	6	Richard San Jose	2026-09-28 17:41:35	2026-09-28 17:41:35
 2	8	Jhong Hilarious	2026-09-28 17:41:50	2026-09-28 17:41:50
 3	7	Rene Delas Alas	2026-09-28 17:42:05	2026-09-28 17:42:05
+1	6	Ser Kayl	2026-09-28 17:41:35	2026-10-13 11:42:30
 \.
 
 
@@ -51196,15 +51255,24 @@ COPY public.school_year_report_settings (id, school_year_id, project_development
 --
 
 COPY public.school_year_user_records (id, school_year_id, user_id, role, deped_id, "position", advisory_grade_level, advisory_section, created_at, updated_at, staff_role) FROM stdin;
+96	6	105	encoder	937366573	Teacher I	0	Red	2026-10-26 17:16:54	2026-10-26 17:16:54	\N
+97	6	106	encoder	921222769	Teacher I	0	Blue	2026-10-26 17:16:55	2026-10-26 17:16:55	\N
+98	6	107	encoder	930160289	Teacher I	0	Orange	2026-10-26 17:16:55	2026-10-26 17:16:55	\N
+99	6	108	encoder	911078309	Teacher I	0	Violet	2026-10-26 17:16:56	2026-10-26 17:16:56	\N
+100	6	109	encoder	966903955	Teacher I	0	Yellow	2026-10-26 17:16:57	2026-10-26 17:16:57	\N
+101	6	110	encoder	999581881	Teacher I	0	Green	2026-10-26 17:16:58	2026-10-26 17:16:58	\N
 9	6	28	super_admin	100003	Master Teacher II			2026-09-13 22:00:10	2026-09-13 22:00:10	\N
 11	6	32	encoder	100005	Teacher II	3	A	2026-09-13 22:00:10	2026-09-13 22:00:10	\N
 14	7	27	admin	100002	Master Teacher I			2026-09-13 22:01:54	2026-09-13 22:01:54	\N
 15	7	28	super_admin	100003	Master Teacher II			2026-09-13 22:01:55	2026-09-13 22:01:55	\N
+102	6	111	encoder	905598981	Teacher I	0	Brown	2026-10-26 17:16:58	2026-10-26 17:16:58	\N
+103	6	112	encoder	926980128	Teacher I	0	Pink	2026-10-26 17:16:59	2026-10-26 17:16:59	\N
 18	7	33	encoder	100006	Teacher III	1	A	2026-09-13 22:01:55	2026-09-14 01:01:31	\N
 13	7	26	encoder	100001	Teacher I	4	B	2026-09-13 22:01:54	2026-09-14 01:03:10	\N
 17	7	32	encoder	100005	Teacher II	2	B	2026-09-13 22:01:55	2026-09-14 01:03:25	\N
 16	7	31	encoder	100004	Teacher I	3	A	2026-09-13 22:01:55	2026-09-14 01:03:48	\N
-7	6	26	encoder	100001	Teacher I	1	A	2026-09-13 22:00:09	2026-09-16 11:02:35	\N
+104	6	113	encoder	967454179	Teacher I	1	Malingap	2026-10-26 17:17:00	2026-10-26 17:17:00	\N
+105	6	114	encoder	990298082	Teacher I	1	Magilas	2026-10-26 17:17:00	2026-10-26 17:17:00	\N
 19	8	26	encoder	100001	Teacher I	4	B	2026-09-18 11:02:11	2026-09-18 11:02:11	\N
 20	8	27	admin	100002	Master Teacher I			2026-09-18 11:02:11	2026-09-18 11:02:11	\N
 21	8	28	super_admin	100003	Master Teacher II			2026-09-18 11:02:11	2026-09-18 11:02:11	\N
@@ -51212,9 +51280,35 @@ COPY public.school_year_user_records (id, school_year_id, user_id, role, deped_i
 23	8	32	encoder	100005	Teacher II	2	B	2026-09-18 11:02:11	2026-09-18 11:02:11	\N
 24	8	33	encoder	100006	Teacher III	1	A	2026-09-18 11:02:11	2026-09-18 11:02:11	\N
 10	6	31	encoder	100010	Teacher I	2	B	2026-09-13 22:00:10	2026-09-20 19:39:40	\N
+106	6	115	encoder	950106339	Teacher I	1	Masipag	2026-10-26 17:17:01	2026-10-26 17:17:01	\N
+107	6	116	encoder	947819047	Teacher I	1	Maganaka	2026-10-26 17:17:02	2026-10-26 17:17:02	\N
 12	6	33	encoder	100006	Teacher III	4	B	2026-09-13 22:00:10	2026-09-22 19:04:15	\N
+108	6	117	encoder	938780625	Teacher I	1	Masikap	2026-10-26 17:17:03	2026-10-26 17:17:03	\N
+109	6	118	encoder	962151883	Teacher I	2	Santan	2026-10-26 17:17:03	2026-10-26 17:17:03	\N
+110	6	119	encoder	992827685	Teacher I	2	Lotus	2026-10-26 17:17:04	2026-10-26 17:17:04	\N
+111	6	120	encoder	910947887	Teacher I	2	Orchids	2026-10-26 17:17:05	2026-10-26 17:17:05	\N
+112	6	121	encoder	977879906	Teacher I	2	Sampaguita	2026-10-26 17:17:05	2026-10-26 17:17:05	\N
 8	6	27	admin	100002	Master Teacher I	\N	\N	2026-09-13 22:00:09	2026-09-28 16:39:00	Administrative Officer
 25	6	34	admin	12312	Teacher I	\N	\N	2026-09-28 16:31:43	2026-09-28 16:44:40	Project Development Officer
+26	6	35	admin	69	Master Teacher I	\N	\N	2026-10-13 11:28:15	2026-10-13 11:28:15	\N
+113	6	122	encoder	933152056	Teacher I	2	Rose	2026-10-26 17:17:06	2026-10-26 17:17:06	\N
+114	6	123	encoder	936554085	Teacher I	2	Daisy	2026-10-26 17:17:07	2026-10-26 17:17:07	\N
+115	6	124	encoder	930563363	Teacher I	3	Mahogany	2026-10-26 17:17:08	2026-10-26 17:17:08	\N
+116	6	125	encoder	921372922	Teacher I	3	Acacia	2026-10-26 17:17:08	2026-10-26 17:17:08	\N
+117	6	126	encoder	908095202	Teacher I	3	Narra	2026-10-26 17:17:09	2026-10-26 17:17:09	\N
+118	6	127	encoder	994338448	Teacher I	3	Ipil-ipil	2026-10-26 17:17:10	2026-10-26 17:17:10	\N
+119	6	128	encoder	940046516	Teacher I	4	Bonifacio	2026-10-26 17:17:11	2026-10-26 17:17:11	\N
+120	6	129	encoder	921003956	Teacher I	4	Rizal	2026-10-26 17:17:11	2026-10-26 17:17:11	\N
+121	6	130	encoder	981493829	Teacher I	4	Mabini	2026-10-26 17:17:12	2026-10-26 17:17:12	\N
+122	6	131	encoder	971728160	Teacher I	4	Jacinto	2026-10-26 17:17:13	2026-10-26 17:17:13	\N
+123	6	132	encoder	926157424	Teacher I	5	Macapagal	2026-10-26 17:17:13	2026-10-26 17:17:13	\N
+124	6	133	encoder	944493894	Teacher I	5	Roxas	2026-10-26 17:17:14	2026-10-26 17:17:14	\N
+125	6	134	encoder	956211060	Teacher I	5	Quirino	2026-10-26 17:17:15	2026-10-26 17:17:15	\N
+126	6	135	encoder	982829943	Teacher I	5	Ramos	2026-10-26 17:17:16	2026-10-26 17:17:16	\N
+127	6	136	encoder	904302084	Teacher I	6	Venus	2026-10-26 17:17:16	2026-10-26 17:17:16	\N
+128	6	137	encoder	955787514	Teacher I	6	Mercury	2026-10-26 17:17:17	2026-10-26 17:17:17	\N
+129	6	138	encoder	933918475	Teacher I	6	Saturn	2026-10-26 17:17:17	2026-10-26 17:17:17	\N
+7	6	26	encoder	100001	Teacher I	6	Earth	2026-09-13 22:00:09	2026-10-26 16:36:00	\N
 \.
 
 
@@ -51234,59 +51328,23 @@ COPY public.school_years (id, year, is_active, start_date, end_date, created_at,
 --
 
 COPY public.sessions (id, user_id, ip_address, user_agent, payload, last_activity) FROM stdin;
-GWajohd0DJzi8rceW95SRnRboOQnhgAIPTdaFFkL	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJjVmFIY09jMHEzblRyMTBzVFA0QUtMb2VpYmxGT0xsMFlJY1BSMDV6IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791626476
-OewqigZO93zA4Al0vpAKbWYH0vAXh2p0ltYvzsfT	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJDZllVMjFQR0F0bVBuanY4ZmhUdmhnOEtISFpRQ1JhUDI3UE9HOWl3IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791627201
-YGbSAvzCp01XUCgMZI6qiF0SJTJhIDJPo34w5rCu	\N	127.0.0.1	curl/8.3.0	eyJfdG9rZW4iOiJFdTlXRndIaU96cWZRVDRyYmtvN2hRdXdTZ2RONVJjUjdnejc4b3FTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791629329
-H1bP1RvqPe4K09ztVmKq4puLQg4qmbdvEO0r3nuj	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJTOTBPREhuajV4UWhUamthNGFab1V1S1NqZUVKazlubDZ6d1FxeGVLIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791629376
-CbKQEkXcWnhljiwGV8m6OEmPqm7klWcP7Vn7HgrQ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ0T25tanZENk9lVjhXMUZPYUxqSUw0TEpBM1hUNjY4TU1yaGF0ajZGIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791630826
-mhzYExm79Huzg4vf9Sxuc7soLdUwwD6tBZBPg7P5	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJhRzFmQm1renNpWEhZbXRoVFFQZTZnZzIwY056b2pGanRydHg1cFpTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791630931
-MkPGcn3uPmu4zo6nt0JOqKiu1xVEuXO8PpwxTE6G	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJWbnFXaTJLN2dYQ3JpajJBTTVJWjVXeFJFOG9haDBzNVZaSVAxSEtSIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791633001
-2NqLoTJM9VdLtNrC97zElIN2W820e3ybZaPDAmoP	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJHRE5MQ3VPbU5kYlZtTm1PSGlkY0h5WTRhZlVQbjJlQTJkRnNvNmQwIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791635177
-ximey9DWucRtEfj6nageKPzMEEGy74rJtNAPl86U	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJFUUF5YnIzdjRqN3htbk1lNldvR2tFZUowOXBzZFFsYkhmbkdDZWJWIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791637352
-c60zVuakxQNth7p8tjk94F5C0k1IAAnGqFolZRWG	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJJcXllbGIwdnI3YkFxb0JBN3JJbDFLcGJibEVkNVNQSUp5SHJuM2NhIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791637436
-uXqIcFc5iS42LxksmjmB9hZ0aObWMsg25FUQgmP5	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJHcUVNbUNGTkxEUEMzd0Q5bHhMdEQ1Rk5MZFhuZmtCYWU2c3dBOHVNIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791638803
-8G3pD10TepcA1U7HMKqpvoS5d5ygywHjBjFLcVEw	\N	127.0.0.1	Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot) Chrome/119.0.6045.214 Safari/537.36	eyJfdG9rZW4iOiJyYVlsT0J6ZE9Lc256OU93bGx0eTZPS0VUQ1QweXJ3V1JCbWhLczdzIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaFwvZm9yZ290LXBhc3N3b3JkIiwicm91dGUiOiJwYXNzd29yZC5yZXF1ZXN0In0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791640423
-Hb4oUFDqw977ALyk3uuV57i1IzSvlOLhnacdlbMz	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJKUEs5ektpZElYNmcyOEJreUZjeXpOUzdqZGp3dkZ5Rm1lM1M0YWZiIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791641706
-hrL75Dc8iqyI3nTWUA1eAzRtRsexXzuQYr8lK2JO	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJCd3B5ZnVoRGp3VG5NanluSEx1dHEzQTgzaVFwdWhPTWMyS0t6R1VoIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791643156
-g16FrpuLCrxs4PeLXzq7xmz5DMrHFPsHTlcXA3QH	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJPOTlqOUdsTFN4RzluM3NpS3lmWlpKQnV6eUdQME9tdDZBNWZDVjZkIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791619219
-9j6N8UwHNfNR9tFh95nYdUjWotqlhteqg9vuzD22	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiI5Z3hyYzFPNGRlaTNwSTVLbnNncVZBTFhZaG5zY0JKYUlJSnhzTkJMIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791626793
-vEUzwgYIZCNimE6Kf9kyq0gHjPT2mTwtH6vZDMUv	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJxanp3bkFTOWpCTkpabGdjbXFwRjRNaXFiYzV0S05vbWVzTFY2d2h4IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791627925
-m4hoyYrgIGHETDP5tr2aqaQCS1zz7SZrtKziZ4lN	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJHalZFTFBDaDVRbjZhYjJ1bDNpSE41aFBCRFRpdGdWMHZYQVd3SFo5IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791630101
-actVhWbm2X9nQI1zLbhDHVNxBLdWTX0E4sjMSBYM	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJRTno1bHlPeFRRdWxxbm5ZN1dTaFVoWllHZTlZeEVwTm5Idmk5TnUyIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791631551
-uyyIsuqMFR0vYYQJUyvPRuD6qlFYKV12IMO4XUAj	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJjU1FJZXAyYXNBcTJoQjVTUTVWWkQ2TVJhS3p3TXBGRktqUGVWa09EIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791633725
-UZZNijNew51OkohTYagOsxbwdcPteCnHOH3dRNNY	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI1Wjkya1oxaW1kMEJkZWRCSkprVHoxRnVwVzdUam93TkE1T2NJVW9kIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791635901
-nVIH8zDjUrARtQfHqHFoF6swk2w1JokKariGNIN7	\N	127.0.0.1	Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko; compatible; Amazonbot/0.1; +https://developer.amazon.com/support/amazonbot) Chrome/119.0.6045.214 Safari/537.36	eyJfdG9rZW4iOiJHbFZGY0lMSktlZmtJMUE2TWV6dHNrM1NEZTZtQjFIMmRucnBYbEpsIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaFwvbG9naW4iLCJyb3V0ZSI6ImxvZ2luIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791637670
-qQYGAmtpIe6Oxdx0OHEmuJuIn4ws7pkvj8964Rak	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJRZGI5WnJzSHI1VWJhZENVSzBvZ2NZb0RtaXhHYjNlbVJEQ0Q0SmlXIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791637728
-VxJyNfhoiYmWNA0SmFCiF33kauxan2kqJQw7AuoJ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI0UmRCWlo1VWRDYU9iVGtwNHZKU0xBRDhHNmdaYkJPU2RadjZWVHB3IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791639530
-hiFWp4RiSryB6Rl7y1v6Q98AU84YzWr4N5OQK8Js	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJNVnB2MlVKbUdkdExOWFM2R1hnQ0ZXQ0VBNmpMek1XNEpPTVpJTEU1IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791640980
-NqSBnkFVwqdHg6kF1xo0MhQeLUEAjMbuAvSn3EQ8	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJNaHFPdDEwenBSUXJpVnB5eERUanE3SjZFbmczSDJuamlsWTg4dzZsIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791642431
-I7vmAFMfEVg9akw5IFCMNOKLJSwyQsBk4UTwv17M	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ4S2dZUVYya2xYT0g5dURFOUduNng1bDZKT1FzZ0Jya2M3dGlHQTBPIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791643882
-xuouv6ZpUE7GAIaPAfooqjhubDyw6cCIFfFHqVZp	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJrdllnaDlKQmtWSW04WVVCNlZtd0ZkUU9XRjZZb0hRS2lhcTRlTEkxIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791619795
-HVo1O5GIEdvTqNlTmO5DauOhG4Di6DhmtvepDQxh	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIwS0ZKd05sd3ZBSnZYWjZqNzVoamhsanRtMVdZbTliZXRVS1ZiTzRTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791620671
-nQm2qQSsYle3CoofZt2zV2t09S6w2mJCpeYl4EeX	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJ6anpDa0NoQ0JNQXh5aU0xM05UOHVxQk1TenBtT3FJN1ZSRFlBdzlTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791622121
-vAyzlTtjvlRjVfsfEcpjEcV8a8yOQePT9ENwd8zC	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJLdG9GV3pZSnp4NGFlSjE4dEFDb1hwWGdpVUtSUXNoZ3ZZMEJ2c3pYIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791623572
-IBn3PP5VnyoGfVHW1JVj7Tbl5hCZWKICgc6xGXxG	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJLbmZvSjhuNGJ1RXNLblMzeGg0MWxGNzZUUXhkNzNxSGg2amlTU0piIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791625024
-h9ihIdtNxiyZnfmerAhorDqEyO0KWM8HpS6EyF7u	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJxcWpMSFh3SEMwTnp0M0dWaXk0b01jT3dSWnBVWDV2cUNuelFpT1VSIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791626956
-Pbo3vBUitZVGDNZLDsGYeP1bgYc6AAVwbGiCatp8	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJiNU1UR0dUWHZxWWtYUkNpYUtzRmxEamVHQmN3bW1TZVhTRTlyblZJIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791627019
-PbrVx6hmMqgIdIIaeZxa6zGboaTIpBH1E2pAY6pi	\N	127.0.0.1	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJDNHJQU2R6cHY0Q3pkUW1BQm1OTGUydmwxVnhjd0YyUmJ3REd4RTE5IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791624184
-NOhN4DccC1hZfElrRMeUv0ZIM5xjmuYXXm3DmBHb	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJMWWlSQjB1YUQ0bDh4MzBSSHZrZmZZVWh2S1hMTmZJaG5Jdno5WERYIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791628651
-VPqVyjbfUHpCJOvqLN8PWERza1R9Kok2aIWNMWmV	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIzdG5LZEM5b3M1VkRIUG9FMXBWVWJWOVBsemFKRGlDTFBMYzBKY3YzIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791624298
-QJlQwXaMV9aSjm3fStn9z8ZyRWHAV0gb6uJ29MaD	\N	127.0.0.1	Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/150.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJ5aWFDZXVyOVl0UHVtckFROGFiclJCRnpqTlhlSDMwNExBSncyMmlHIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791630491
-x3atHOVXgbZiWL1QzR3RDZfwODdrem08cRwOM2Nb	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJIaHBVNWxaT3dXYm1Vb0x0aDF5VEdjbU5KbXplQjRKR2Q3UW9QR1RxIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791632276
-3V2eHLAuUD6Gm8UNQsFQ2eld0qUg00eEwMocUjQk	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiIxajVKT255bGhGUE9NcmoxWXJmdXc3UGkwUHV1UmpUeWVjaHFBNVlSIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791634398
-TmpEwXYBEOvvkM5PkD2IuzAqzNO0XlFFn0I27zKk	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJnOU1kRmhIRmNGa3hLUjRQam1HMDJGYmF1Z1h3cHN5WjBKM0Jzd0p0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791634452
-ywufD4AdFH0z1WarcsjGT0ExrWrwtGLpDydGov0a	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJTZHlNdm5xT0xmZkY3SW55N2VUc2pRamRNUlFveVpXT21wSmw5T000IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791636627
-GwnqfkK3wZsX4joojd1NiKbDvUkj3AxyLDydVuGP	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJrNENEMlRVOTBSenpCdmxmWkxRa0NUNUtJZzJiQTRyczlMSHphbXA2IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791638078
-vE74EZn0T8v0cURVlXnSzDLoaUSwgH4fIxcgUqfb	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI1MWpJMlZEUUVYeHM1V2hXMkx5WHRUb083V2tKVFQ5Z2ltd2hUb3RrIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791640255
-gP6b8B2zeLTW6U6NFr7ywlOdTsKOlDyK15W5qOuG	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJaOXRHZFk0RXF4MWxRWTFsSXRGbTdKODROYnFrNnNPV1BGYkZ4dDJ1IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791619945
-FqZEyLQHKU2QhFtzdktK9iYYM2jYJfz0QTWBmfgI	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiI2bkxwVFZGdExSQXlXdFpCWWVDMlh4MGZKMEZKOEVFd2tEVDFGblJyIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791619979
-rnbhpIffPi9usGr9hbH7EuVgWfwRYt9h1dgKUFk7	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJINVZtZ09UdHQzWFFBWnNqc0xvZlhnMDdoZHhMcXptWk40cklYbTBrIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791621396
-xgAAkjnvxKqbV8co9vAzGVxXlBilFpDYS95aOaFg	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJINHlNd21tS1JQM2R1ZmxRMUMxYjN1WnY4RWtEd0wzV01JS0dTbUVCIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791622846
-rIVmFhu4aecQOPXQ7gJfZVV8qWnnDlnNU0AYMg4B	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 12; SAMSUNG SM-A415F) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.3	eyJfdG9rZW4iOiJ1Y2txZHdXV3Bsc2YzcmhRRkQzUldXcVQwbnR4c2JQZ0FKSlNQWTlTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791624410
-TylTEA4bOX4HUtAQOftsNqzd172ES1Xh0UCIwcfc	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 12; SAMSUNG SM-A415F) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.3	eyJfdG9rZW4iOiJMN0s0eE9FNUN3UTBKamJSN3ZpOUNDdTNmcUMzUGZKbzdXdUxZT0ZpIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaFwvbG9naW4iLCJyb3V0ZSI6ImxvZ2luIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791624411
-RQGFkDbYsdo2myX1k5Xnf9ukbdYYGC3S4LCWrC6d	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 12; SAMSUNG SM-A415F) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.3	eyJfdG9rZW4iOiJWSHc4eGd3dmJWQ2JKYlVwTEdlZlhFYzdrcnF3a3d5aUlVbFE0aXFRIiwiX3ByZXZpb3VzIjp7InVybCI6Imh0dHA6XC9cL251dHJpc2lnaHQudGVjaFwvZm9yZ290LXBhc3N3b3JkIiwicm91dGUiOiJwYXNzd29yZC5yZXF1ZXN0In0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791624411
-vSc0cFppOfJhNpdGpYSfaEXl9GV6guCgwr0K16Lu	\N	127.0.0.1	Mozilla/5.0 (Linux; Android 12; SAMSUNG SM-A415F) AppleWebKit/537.36 (KHTML, like Gecko) SamsungBrowser/23.0 Chrome/115.0.0.0 Mobile Safari/537.3	eyJfdG9rZW4iOiJKT1dTdFVkaFpDUHAwYkdCSTVoeklTbThYbkRtRTFIeVdVRWV6RXZuIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1791624412
-YBThkCnyT6lnE3LZOthaW7xqpRqSauu0nGSU7v8N	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJIeW9EQjRiOUl1emozTzR6RnlmejFXNkpHTmFqUXBXNUthVDR2RGV0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1791625750
+FIFOyOplpRDITwiarzzA0sk62hvK5uy10WfnscfY	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJxdEtrZEMwZXd0dDQxeGJBdGpZdTh1V3hmdXlHdDZ3NlYzSnE0NGVqIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793004433
+0DqKPER5KXejQxkEP2y50P8Lv9Cuh1fwG1R09PyU	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJlb2piNnEyRVhIZkhhWGM5U012cWs4UEE1MFdqUWo5QlFJTnpqTXdDIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793005882
+Or2bZ5A0iHoHh56U3D6y3wDvlLCWjT7hUoEww14W	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJ0NVE2b1dEVWloRHprRkZ0UDRrWkM3VlMwVVRQbVZjbmRYVEhJOVl4IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1793002620
+K0SJpnCxNzlnN2iDiDuRy7IVAkwSxrKP6gXssqys	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJJTVdDRXp6cUt3VVpGMEkyMGt4QXVsSVo3d3puRjZBU29aVWZsSTZnIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1793007249
+h9rRChviSFIMaBtROW8jT9qEYgPJfEVlGZXKTHAF	27	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36	eyJfdG9rZW4iOiJhMXF3cVNucDJaQUVMNGNORGRwQ2lmbmFYTmF3SzBuYjFKUXFUZHlHIiwiX2ZsYXNoIjp7Im9sZCI6W10sIm5ldyI6W119LCJhY3RpdmVfc2Nob29sX3llYXJfaWQiOjYsIl9wcmV2aW91cyI6eyJ1cmwiOiJodHRwOlwvXC8xMjcuMC4wLjE6ODAwMFwvYWRtaW5cL3N0dWRlbnRzP3BhZ2U9MSIsInJvdXRlIjoiYWRtaW4uc3R1ZGVudHMuaW5kZXgifSwibG9naW5fd2ViXzU5YmEzNmFkZGMyYjJmOTQwMTU4MGYwMTRjN2Y1OGVhNGUzMDk4OWQiOjI3fQ==	1793007703
+Mj8WD8WINifrnHYHNp8SuH0VmbPVzz3tKutwntv2	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJsMXhhRkRHT3FVMk9QcXR2eTQ5NDJUYjR3M0hSUkN0NENVS2ZzcUZTIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793002983
+yldzdJyJHqfsYga2QOgwWBbWvAqxdLxJGX6Syzfa	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJDQ3h2SGpyaFl1MGl2d2RyTzFVSWZhbVU4eGtQZDVia1psMVVYOFR3IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793005158
+HwJ7EY0CzWtKUUBAfdZDbAqzSMzmhuRm82ajRAnm	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiI5N3NNOWlvb21zZTJZbE5Ra2g2RGxma1lGZzRxNDRobWRnSmFZOUVDIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793006608
+6IblpRu8BouRL3WuMGA4hf0CIEbrCQXqU1E37ZS5	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiIzWDZURm5vdG1yTHlZZ01qTER6RURHdnQxRExXeGticTVwaVlWT2t5IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793007333
+Mv6dxghAbeRxrWnodUHOFDuDHYBxDmucmPNf1qnd	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJlMnpadzZybTAzRDFZVmpMYnFyUkdJYWFIU3hzZDFURDJ3b3Z0MW5QIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793000083
+D4PKAoHjJ32Ved5bZqWK6H9VzcUocvejMgu72CQX	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJSS0VSOFZYbHJybTV3U01xandHQ3BzZnpvZlJCZ0xobG1sTTM0cUs0IiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793003707
+AhBdF2v99sJEiabtx5WPBDHRBbzRuBCpt1kFQoYP	\N	127.0.0.1	Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/78.0.3904.108 Safari/537.36	eyJfdG9rZW4iOiJ3WmV1VXZJbmlvS2h1OWRKWjBnVnhKREtVVTc0dFQ0c29xMlM3RUJGIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1793004039
+YpymYohymXJnWURV7L1p9fHH2MiXT9kYZ47P6tuf	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJvUlBSUDZRWEszYWtDUFhucW5sY1loMVFNb3lwV0I1QVRuRVBzNzJQIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793000808
+RZqs2RkL09XJHEBBlWZs8bQLCEoBbcZ7GheZT92y	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJjd1M0ZDdqQjROQzN0WFhTTjNJMVpOVVFwcUdDZ2swVDZpbVpkT1RmIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793001534
+h5vL0ECqmeDOmkk1x786RG548FYce8ApQuvdoeEQ	\N	127.0.0.1	Mozilla/5.0+(compatible; UptimeRobot/2.0; http://www.uptimerobot.com/)	eyJfdG9rZW4iOiJJWVJRd1V0RjNDcFhNem40SkVLZUI5Q2ZyR3RIc0tocW9wcEkzZU5iIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfZmxhc2giOnsib2xkIjpbXSwibmV3IjpbXX19	1793002259
+ND5D0c6rNLxDjb2UtsxuFKEQt2jx52ew82Z8NqAH	\N	127.0.0.1	Mozilla/5.0 (iPhone; CPU iPhone OS 13_2_3 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/13.0.3 Mobile/15E148 Safari/604.1	eyJfdG9rZW4iOiJvZE1xS2p5UDUwNTlrcGt4WmpJV1U3YldoWFJRUDNYUzF5dkdoTHNGIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1793002295
+ilJ667cxA1z3OwZeoCvUP04WxpeBQ754TFjfAFvL	\N	127.0.0.1	Mozilla/5.0 (Windows NT 6.3; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115	eyJfdG9rZW4iOiJJMXE0NTVOdkp2V0ZJM2Jld2lqZjUzYmQ2a3c5ZWJzUDB2elM3eUFGIiwiYWN0aXZlX3NjaG9vbF95ZWFyX2lkIjo2LCJfcHJldmlvdXMiOnsidXJsIjoiaHR0cDpcL1wvbnV0cmlzaWdodC50ZWNoIiwicm91dGUiOiJob21lIn0sIl9mbGFzaCI6eyJvbGQiOltdLCJuZXciOltdfX0=	1793002337
 \.
 
 
@@ -51897,6 +51955,92 @@ COPY public.student_attendance_records (id, sbfp_participant_id, recorded_by_use
 667	119	26	2026-10-07	absent	2026-10-09 17:13:39	2026-10-09 17:13:39	morning
 668	122	26	2026-10-07	absent	2026-10-09 17:13:39	2026-10-09 17:13:39	morning
 669	123	26	2026-10-07	absent	2026-10-09 17:13:39	2026-10-09 17:13:39	morning
+670	62	27	2026-10-13	present	2026-10-13 11:06:06	2026-10-13 11:06:06	morning
+671	63	27	2026-10-13	present	2026-10-13 11:08:17	2026-10-13 11:08:17	morning
+672	64	27	2026-10-13	present	2026-10-13 11:08:37	2026-10-13 11:08:37	morning
+673	67	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+674	68	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+675	69	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+676	71	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+677	77	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+678	78	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+679	87	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+680	88	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+681	89	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+682	90	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+683	91	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+684	66	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+685	57	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+686	58	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+687	59	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+688	60	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+689	61	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+690	62	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+691	63	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+692	64	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+693	65	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+694	97	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+695	98	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+696	99	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+697	100	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+698	101	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+699	112	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+700	115	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+701	102	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+702	103	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+703	104	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+704	105	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+705	106	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+706	113	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+707	116	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+708	114	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+709	117	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+710	118	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+711	119	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+712	120	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+713	121	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+714	122	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+715	123	26	2026-10-13	absent	2026-10-15 20:43:14	2026-10-15 20:43:14	afternoon
+716	67	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+717	68	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+718	69	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+719	71	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+720	77	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+721	78	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+722	87	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+723	88	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+724	89	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+725	90	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+726	91	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+727	66	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+728	57	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+729	58	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+730	59	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+731	60	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+732	61	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+733	65	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+734	97	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+735	98	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+736	99	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+737	100	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+738	101	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+739	112	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+740	115	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+741	102	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+742	103	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+743	104	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+744	105	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+745	106	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+746	113	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+747	116	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+748	114	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+749	117	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+750	118	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+751	119	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+752	120	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+753	121	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+754	122	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
+755	123	26	2026-10-13	absent	2026-10-15 20:43:15	2026-10-15 20:43:15	morning
 \.
 
 
@@ -51988,13 +52132,48 @@ COPY public.students (id, lrn, first_name, last_name, name_extension, middle_nam
 --
 
 COPY public.users (id, name, email, email_verified_at, password, sex, role, birthdate, "position", advisory_grade_level, advisory_section, deped_id, is_active, deleted_at, remember_token, created_at, updated_at, first_name, middle_name, last_name, name_extension, staff_role) FROM stdin;
-31	Encoder U. One	encoder1@nutrisight.test	\N	$2y$12$yzY6QCYIQhK48/gwHiv/qOewAsL.OXnfnCRG4YEkOQYPctn/d0jvi	Male	encoder	2000-01-01	Teacher I	2	B	100010	t	\N	\N	2026-09-10 13:50:02	2026-09-28 22:36:42	Encoder	User	One	\N	\N
-28	Super A. User	superadmin@nutrisight.test	\N	$2y$12$.6Wie9iA5YVa.UOsMtBXTumQ.qLtJZo7K0wrx7PeU86pBf7JXmLny	Male	super_admin	1985-01-01	Master Teacher II			100003	t	\N	Ie29YFzyxtX6S6bbDP2WRJrtff0ILaA99EpYXBjcRkHEPwK9GBZXWeB7GLHT	2026-09-09 22:17:27	2026-09-09 22:17:27	Super	Admin	User	\N	\N
-26	Encoder User Ones	encoder@nutrisight.test	\N	$2y$12$hVafs1iVkdk6Pjv.67yl..fM123/jteMu3F4.6tfp2sYvAvL9U0Nm	Male	encoder	1995-01-01	Teacher I	1	A	100001	t	\N	bJBHsjeDd8NT6rBZmyYWYABa5Q2ym6uZQlR0QRspwq5jN6JsH1ckdCnIX79M	2026-09-09 22:17:26	2026-09-25 23:29:46	Encoder	\N	User Ones	\N	\N
-32	Encoder U. 2	encoder2@nutrisight.test	\N	$2y$12$0DsbesTQS.QMYmylmQVtreTHoY82OTiiDQeT5CB7fXni9lVB5OPyu	Male	encoder	2000-02-01	Teacher II	2	B	100005	t	\N	\N	2026-09-10 13:51:08	2026-09-28 23:17:56	Encoder	User	2	\N	\N
+105	Kinder Red Encoder	kinderred@nutrisight.test	\N	$2y$12$z7k4jcg5PfHG5l.nSJgGfeA8szaDqhJ.053yTwfXm2TCLQptUBdC2	Male	encoder	1970-01-01	Teacher I	0	Red	937366573	t	\N	\N	2026-10-26 17:16:54	2026-10-26 17:16:54	\N	\N	\N	\N	\N
+106	Kinder Blue Encoder	kinderblue@nutrisight.test	\N	$2y$12$4s78PTzv/4p9g0lyMgmCOO16g.AosyveYU3iPv7/ujgojNTOUuVzm	Male	encoder	1970-01-01	Teacher I	0	Blue	921222769	t	\N	\N	2026-10-26 17:16:54	2026-10-26 17:16:54	\N	\N	\N	\N	\N
+107	Kinder Orange Encoder	kinderorange@nutrisight.test	\N	$2y$12$j3m/u1uDUHTYIH6xlf0RsuXWU4lr6FCXarxAbixtsJ3khTUYWHDEC	Male	encoder	1970-01-01	Teacher I	0	Orange	930160289	t	\N	\N	2026-10-26 17:16:55	2026-10-26 17:16:55	\N	\N	\N	\N	\N
+108	Kinder Violet Encoder	kinderviolet@nutrisight.test	\N	$2y$12$ep2BVLBW3E6PuOH4oaEsWevCiNGsrlWf6MlIUKxTeK2KrAepELmsy	Male	encoder	1970-01-01	Teacher I	0	Violet	911078309	t	\N	\N	2026-10-26 17:16:56	2026-10-26 17:16:56	\N	\N	\N	\N	\N
+109	Kinder Yellow Encoder	kinderyellow@nutrisight.test	\N	$2y$12$npPJICn1dFML/UClLCEBS.1DzDKlSzHSBJed9GMKNtYOg3ouRgG7C	Male	encoder	1970-01-01	Teacher I	0	Yellow	966903955	t	\N	\N	2026-10-26 17:16:57	2026-10-26 17:16:57	\N	\N	\N	\N	\N
+110	Kinder Green Encoder	kindergreen@nutrisight.test	\N	$2y$12$Cytb2OZaZZnFIgpF0RR.bubKt5Ral4gAz34nEKJTP5Pan3IkP99F.	Male	encoder	1970-01-01	Teacher I	0	Green	999581881	t	\N	\N	2026-10-26 17:16:57	2026-10-26 17:16:57	\N	\N	\N	\N	\N
+111	Kinder Brown Encoder	kinderbrown@nutrisight.test	\N	$2y$12$NWNQNXriTp2Q7ZES0FsD8ujJVNJwmEiTKnwofQZFpErckcMWfOIpC	Male	encoder	1970-01-01	Teacher I	0	Brown	905598981	t	\N	\N	2026-10-26 17:16:58	2026-10-26 17:16:58	\N	\N	\N	\N	\N
+112	Kinder Pink Encoder	kinderpink@nutrisight.test	\N	$2y$12$srvSkRnaO/3BRX3okeeEPe3hTKKM58iF9tXN7hfRXVts.KuYuRCCC	Male	encoder	1970-01-01	Teacher I	0	Pink	926980128	t	\N	\N	2026-10-26 17:16:59	2026-10-26 17:16:59	\N	\N	\N	\N	\N
+113	Grade 1 Malingap Encoder	grade1malingap@nutrisight.test	\N	$2y$12$u37KyIBr4ntl2qdxi2AkAunLiBs/m5Rkrl/rYHxJ9vK9pMuPcMO1G	Male	encoder	1970-01-01	Teacher I	1	Malingap	967454179	t	\N	\N	2026-10-26 17:17:00	2026-10-26 17:17:00	\N	\N	\N	\N	\N
+114	Grade 1 Magilas Encoder	grade1magilas@nutrisight.test	\N	$2y$12$dPLdWiN0Bl9x./TStdSyWOBproaqN2Tfl0y6uDwZFyvbNctctTqau	Male	encoder	1970-01-01	Teacher I	1	Magilas	990298082	t	\N	\N	2026-10-26 17:17:00	2026-10-26 17:17:00	\N	\N	\N	\N	\N
+115	Grade 1 Masipag Encoder	grade1masipag@nutrisight.test	\N	$2y$12$pnAaQP5/mfz5VMy2fBHF1ulkrHysIqcBHSFOyVrGaK0tnZrWDNoxK	Male	encoder	1970-01-01	Teacher I	1	Masipag	950106339	t	\N	\N	2026-10-26 17:17:01	2026-10-26 17:17:01	\N	\N	\N	\N	\N
+116	Grade 1 Maganaka Encoder	grade1maganaka@nutrisight.test	\N	$2y$12$d/80ARXH9TgnUIkGVLqNneCoWvIZr1MmU0BGY1i9wnyco1RKoKbeS	Male	encoder	1970-01-01	Teacher I	1	Maganaka	947819047	t	\N	\N	2026-10-26 17:17:02	2026-10-26 17:17:02	\N	\N	\N	\N	\N
+117	Grade 1 Masikap Encoder	grade1masikap@nutrisight.test	\N	$2y$12$v1o90CgM8KdYT.21s9iFN.IEYAiaCaWsaPXwpLDj9I7GwadVpjNeG	Male	encoder	1970-01-01	Teacher I	1	Masikap	938780625	t	\N	\N	2026-10-26 17:17:02	2026-10-26 17:17:02	\N	\N	\N	\N	\N
 34	richard Santos	as@gg.co	\N	$2y$12$/D874watHIWG7EhNccWtseVJHm9xWU9QUpcfSUpLyjpWNtiyfkYTK	Male	admin	2026-09-21	Teacher I	\N	\N	12312	f	\N	\N	2026-09-28 16:31:43	2026-09-28 16:46:28	richard	\N	Santos	\N	Project Development Officer
-33	Encoder U. 3	encoder3@nutrisight.test	\N	$2y$12$bN908bEtRhoUEH.ss9pQ.eNG.dUvWOaJqxb3RzCBTgOldFwasrTte	Male	encoder	2000-03-01	Teacher III	1	A	100006	t	\N	1LUwcwQxqNh5pWVoSBzRwpW9enf1P8b6XnNFRS6nv5U0ovdiRBEoDKkNZnRI	2026-09-10 13:52:15	2026-09-14 01:01:30	Encoder	User	3	\N	\N
-27	Maam Rose	admin@nutrisight.test	\N	$2y$12$19uTY9FJg8y8fVUpmGwWted5raqTaSUOykDGCH0UDQvrAnBGA/aTa	Male	admin	1990-01-01	Master Teacher I	\N	\N	100002	t	\N	M8ioaldQh5bBzutKW6rbHwktPnq0XKEgmO5fai1qNxdH5iuvylfZfn9Zh4B0	2026-09-09 22:17:27	2026-09-28 17:55:46	Maam	\N	Rose	\N	Administrative Officer
+35	John Magtoto	moltenterabyte@gmail.com	\N	$2y$12$AHH3i4XbKaHacIKGgp3YaOcejjhTIRcx4B2AxTDxP98xRgz5YrvN2	Male	admin	2026-10-12	Master Teacher I	\N	\N	69	f	\N	\N	2026-10-13 11:28:15	2026-10-15 19:22:32	John	\N	Magtoto	\N	\N
+32	Encoder User Two	encoder2@nutrisight.test	\N	$2y$12$0DsbesTQS.QMYmylmQVtreTHoY82OTiiDQeT5CB7fXni9lVB5OPyu	Male	encoder	2000-02-01	Teacher II	3	A	100005	f	\N	\N	2026-09-10 13:51:08	2026-10-26 17:35:15	Encoder	\N	User Two	\N	\N
+118	Grade 2 Santan Encoder	grade2santan@nutrisight.test	\N	$2y$12$cNTX3WDBPUY26JFA982peO0cQY7VUUTks8Rer5g3XzsOnaHmj3grG	Male	encoder	1970-01-01	Teacher I	2	Santan	962151883	t	\N	\N	2026-10-26 17:17:03	2026-10-26 17:17:03	\N	\N	\N	\N	\N
+119	Grade 2 Lotus Encoder	grade2lotus@nutrisight.test	\N	$2y$12$bwRY/4cPCVyKBhKb/WaFneBTfAwvDK4vY13bMNYGMGK50zgH1fJpG	Male	encoder	1970-01-01	Teacher I	2	Lotus	992827685	t	\N	\N	2026-10-26 17:17:04	2026-10-26 17:17:04	\N	\N	\N	\N	\N
+120	Grade 2 Orchids Encoder	grade2orchids@nutrisight.test	\N	$2y$12$srnMpqSW0mogdYX.osSv4.a2HIDxwIsttEBw6dFz.2s3VdJeN/wB6	Male	encoder	1970-01-01	Teacher I	2	Orchids	910947887	t	\N	\N	2026-10-26 17:17:04	2026-10-26 17:17:04	\N	\N	\N	\N	\N
+121	Grade 2 Sampaguita Encoder	grade2sampaguita@nutrisight.test	\N	$2y$12$E40NtS1.Vo3sgPp0qvKrFun34Iu9w6VwJGyJY7uQDoqybSLDaZX2m	Male	encoder	1970-01-01	Teacher I	2	Sampaguita	977879906	t	\N	\N	2026-10-26 17:17:05	2026-10-26 17:17:05	\N	\N	\N	\N	\N
+33	Encoder User Three	encoder3@nutrisight.test	\N	$2y$12$bN908bEtRhoUEH.ss9pQ.eNG.dUvWOaJqxb3RzCBTgOldFwasrTte	Male	encoder	2000-03-01	Teacher III	4	B	100006	f	\N	g88Kj7NSxMEGhjs9mU1NhCSC4UGYFSB7rD5fjA7Bp8cNehIY0GgTFIfSxPIm	2026-09-10 13:52:15	2026-10-26 17:34:46	Encoder	\N	User Three	\N	\N
+122	Grade 2 Rose Encoder	grade2rose@nutrisight.test	\N	$2y$12$MmXhcO.lV2uXFaVrejmTq.jq76EwROyPHs7Z4N2ejNgzbhWZfn.i6	Male	encoder	1970-01-01	Teacher I	2	Rose	933152056	t	\N	\N	2026-10-26 17:17:06	2026-10-26 17:17:06	\N	\N	\N	\N	\N
+123	Grade 2 Daisy Encoder	grade2daisy@nutrisight.test	\N	$2y$12$9dRoNl.w4fC/ZuuozyO/cuXYjy7eJyZfNKXVuzSKUwj3PSfFuhtRG	Male	encoder	1970-01-01	Teacher I	2	Daisy	936554085	t	\N	\N	2026-10-26 17:17:07	2026-10-26 17:17:07	\N	\N	\N	\N	\N
+124	Grade 3 Mahogany Encoder	grade3mahogany@nutrisight.test	\N	$2y$12$PB7eX7EXTk.f2CxpmHXAhe7y0.Vbe.dy8SZbe9PY4talu3E26p6ka	Male	encoder	1970-01-01	Teacher I	3	Mahogany	930563363	t	\N	\N	2026-10-26 17:17:08	2026-10-26 17:17:08	\N	\N	\N	\N	\N
+125	Grade 3 Acacia Encoder	grade3acacia@nutrisight.test	\N	$2y$12$3dtl0f9pD7oBIXemxieTrepc49fJOB88Tq.CVk4VsFQpkhIzFF8va	Male	encoder	1970-01-01	Teacher I	3	Acacia	921372922	t	\N	\N	2026-10-26 17:17:08	2026-10-26 17:17:08	\N	\N	\N	\N	\N
+126	Grade 3 Narra Encoder	grade3narra@nutrisight.test	\N	$2y$12$pxftmZBLRI/DVmk7L6CUPu1Sf11ndXXHwLPXTWSysJ/iXWaYBQgi6	Male	encoder	1970-01-01	Teacher I	3	Narra	908095202	t	\N	\N	2026-10-26 17:17:09	2026-10-26 17:17:09	\N	\N	\N	\N	\N
+127	Grade 3 Ipil-ipil Encoder	grade3ipilipil@nutrisight.test	\N	$2y$12$GTbpRUIq4G2v3OcVoMiWVux4SePpzJgrZ3R/225k8k8Tvt0ZrDHC2	Male	encoder	1970-01-01	Teacher I	3	Ipil-ipil	994338448	t	\N	\N	2026-10-26 17:17:10	2026-10-26 17:17:10	\N	\N	\N	\N	\N
+128	Grade 4 Bonifacio Encoder	grade4bonifacio@nutrisight.test	\N	$2y$12$WNelF5gKo7.RhU19vCF2huP6Y2Hlv9fyWq5Lmv2R3/ucLXUqZx.hO	Male	encoder	1970-01-01	Teacher I	4	Bonifacio	940046516	t	\N	\N	2026-10-26 17:17:10	2026-10-26 17:17:10	\N	\N	\N	\N	\N
+129	Grade 4 Rizal Encoder	grade4rizal@nutrisight.test	\N	$2y$12$6JquJKddpBScJnzoJ5Psd./sYNcjZjj.y8foNTmLkpsjY.KiWnPNW	Male	encoder	1970-01-01	Teacher I	4	Rizal	921003956	t	\N	\N	2026-10-26 17:17:11	2026-10-26 17:17:11	\N	\N	\N	\N	\N
+130	Grade 4 Mabini Encoder	grade4mabini@nutrisight.test	\N	$2y$12$kFHUB0I6Wr/gvckq88kaDuS.uSNQ7b1RgdzhszOqKpoWROzNfvbA2	Male	encoder	1970-01-01	Teacher I	4	Mabini	981493829	t	\N	\N	2026-10-26 17:17:12	2026-10-26 17:17:12	\N	\N	\N	\N	\N
+131	Grade 4 Jacinto Encoder	grade4jacinto@nutrisight.test	\N	$2y$12$aKwpuJ9dMal78IXQAtJW9.DJmbF29yqPho2zsxwF2p0vXZB6wP8N6	Male	encoder	1970-01-01	Teacher I	4	Jacinto	971728160	t	\N	\N	2026-10-26 17:17:13	2026-10-26 17:17:13	\N	\N	\N	\N	\N
+31	Encoder User One	encoder1@nutrisight.test	\N	$2y$12$yzY6QCYIQhK48/gwHiv/qOewAsL.OXnfnCRG4YEkOQYPctn/d0jvi	Male	encoder	2000-01-01	Teacher I	2	B	100010	f	\N	\N	2026-09-10 13:50:02	2026-10-26 17:33:22	Encoder	\N	User One	\N	\N
+26	Encoder User	encoder@nutrisight.test	\N	$2y$12$hVafs1iVkdk6Pjv.67yl..fM123/jteMu3F4.6tfp2sYvAvL9U0Nm	Male	encoder	1995-01-01	Teacher I	6	Earth	100001	t	\N	rF93yzjI8AUNqgixp2Rg3q9xcohgGi1tSIDXIRmimM2p0z3M9iDqGbc4vqKt	2026-09-09 22:17:26	2026-10-26 16:36:00	Encoder	\N	User	\N	\N
+132	Grade 5 Macapagal Encoder	grade5macapagal@nutrisight.test	\N	$2y$12$sCi2UolyWp4H59eje1Qax.smZpDn9xbllJ1JIeW/JW8qnandlfZGO	Male	encoder	1970-01-01	Teacher I	5	Macapagal	926157424	t	\N	\N	2026-10-26 17:17:13	2026-10-26 17:17:13	\N	\N	\N	\N	\N
+133	Grade 5 Roxas Encoder	grade5roxas@nutrisight.test	\N	$2y$12$SQ/0q3LFR2sm/DnKNJ1ZT.VBnncrhhfBXbmiCvfDmirAL0o4D7/CC	Male	encoder	1970-01-01	Teacher I	5	Roxas	944493894	t	\N	\N	2026-10-26 17:17:14	2026-10-26 17:17:14	\N	\N	\N	\N	\N
+134	Grade 5 Quirino Encoder	grade5quirino@nutrisight.test	\N	$2y$12$BiA7G/zJ3Cl0wD/vN9V4FuiwThLHuvWGk0U8LVqMdMOInRUt5vIn2	Male	encoder	1970-01-01	Teacher I	5	Quirino	956211060	t	\N	\N	2026-10-26 17:17:15	2026-10-26 17:17:15	\N	\N	\N	\N	\N
+135	Grade 5 Ramos Encoder	grade5ramos@nutrisight.test	\N	$2y$12$e2UUd3Qc7T/4BGmG3aw8I.s7lYfCIRBQqwQYr2jrL4d96JHUuc/52	Male	encoder	1970-01-01	Teacher I	5	Ramos	982829943	t	\N	\N	2026-10-26 17:17:15	2026-10-26 17:17:15	\N	\N	\N	\N	\N
+136	Grade 6 Venus Encoder	grade6venus@nutrisight.test	\N	$2y$12$Jmgt4DmHMOFAtk4Jpjr/z.VKrsuEpGIlzcufLrm0G1g1nKiwpmxTi	Male	encoder	1970-01-01	Teacher I	6	Venus	904302084	t	\N	\N	2026-10-26 17:17:16	2026-10-26 17:17:16	\N	\N	\N	\N	\N
+137	Grade 6 Mercury Encoder	grade6mercury@nutrisight.test	\N	$2y$12$9joCYEt1lXe/NqzJRnXkfe9n2Z33Xgo0.0131fDzBe1Wc9qF2XoLi	Male	encoder	1970-01-01	Teacher I	6	Mercury	955787514	t	\N	\N	2026-10-26 17:17:17	2026-10-26 17:17:17	\N	\N	\N	\N	\N
+138	Grade 6 Saturn Encoder	grade6saturn@nutrisight.test	\N	$2y$12$naUsMLwLdyrFGcaKJN.99uFFL0c.I5eiTxTWMS7H2mb34/7LBWLoC	Male	encoder	1970-01-01	Teacher I	6	Saturn	933918475	t	\N	\N	2026-10-26 17:17:17	2026-10-26 17:17:17	\N	\N	\N	\N	\N
+27	Maam Rose	admin@nutrisight.test	\N	$2y$12$19uTY9FJg8y8fVUpmGwWted5raqTaSUOykDGCH0UDQvrAnBGA/aTa	Male	admin	1990-01-01	Master Teacher I	\N	\N	100002	t	\N	f9TU7WODIWkHljQjbvy0ZvIU6vHF8B4JLsVIKymR6kUGOn7tGfEjST8Dpp5X	2026-09-09 22:17:27	2026-10-15 19:22:42	Maam	\N	Rose	\N	Administrative Officer
+28	Super A. User	superadmin@nutrisight.test	\N	$2y$12$.6Wie9iA5YVa.UOsMtBXTumQ.qLtJZo7K0wrx7PeU86pBf7JXmLny	Male	super_admin	1985-01-01	Master Teacher II			100003	t	\N	VjZAnQpUDWNEJtVhw6FtCsPbwTOKHjt7SsVuztOWPbOkoQKw6fPPt4FJp5gC	2026-09-09 22:17:27	2026-09-09 22:17:27	Super	Admin	User	\N	\N
 \.
 
 
@@ -52092,6 +52271,8 @@ COPY realtime.schema_migrations (version, inserted_at) FROM stdin;
 20260925120000	2026-10-07 02:00:00
 20260928120000	2026-10-07 02:00:00
 20261002120000	2026-10-08 01:56:21
+20261008120000	2026-10-26 07:33:04
+20261009120000	2026-10-26 07:33:04
 \.
 
 
@@ -52205,6 +52386,7 @@ COPY storage.migrations (id, name, hash, executed_at) FROM stdin;
 70	list-objects-with-versions	5c17c3777616cd8d7b18b82835525fa3205af57b	2026-09-22 10:20:18.533423
 71	objects-delete-marker-index	6d14858e66c66f8d6accf8a2630aefd1527fddba	2026-09-22 10:20:18.580593
 72	drop-bucketid-objname-index	302beb09e1b469d7d4db19566f2389d280b64aa3	2026-09-22 10:20:18.592467
+73	revoke-grants-to-unused-operations	ba9244051be09f22f714fc0170a2539f8b5f0e68	2026-10-15 01:58:39.115055
 \.
 
 
@@ -52273,7 +52455,7 @@ SELECT pg_catalog.setval('public.attendance_report_sections_id_seq', 1, false);
 -- Name: audit_logs_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.audit_logs_id_seq', 764, true);
+SELECT pg_catalog.setval('public.audit_logs_id_seq', 810, true);
 
 
 --
@@ -52287,7 +52469,7 @@ SELECT pg_catalog.setval('public.enrollment_addresses_id_seq', 67, true);
 -- Name: enrollments_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.enrollments_id_seq', 123, true);
+SELECT pg_catalog.setval('public.enrollments_id_seq', 1418, true);
 
 
 --
@@ -52308,7 +52490,7 @@ SELECT pg_catalog.setval('public.jobs_id_seq', 13, true);
 -- Name: meal_plans_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.meal_plans_id_seq', 29, true);
+SELECT pg_catalog.setval('public.meal_plans_id_seq', 31, true);
 
 
 --
@@ -52322,14 +52504,14 @@ SELECT pg_catalog.setval('public.migrations_id_seq', 60, true);
 -- Name: nutrition_measurements_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.nutrition_measurements_id_seq', 192, true);
+SELECT pg_catalog.setval('public.nutrition_measurements_id_seq', 1483, true);
 
 
 --
 -- Name: report_period_rows_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.report_period_rows_id_seq', 2400, true);
+SELECT pg_catalog.setval('public.report_period_rows_id_seq', 2512, true);
 
 
 --
@@ -52350,7 +52532,7 @@ SELECT pg_catalog.setval('public.sbfp_parent_approval_requests_id_seq', 14, true
 -- Name: sbfp_participants_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.sbfp_participants_id_seq', 123, true);
+SELECT pg_catalog.setval('public.sbfp_participants_id_seq', 1416, true);
 
 
 --
@@ -52364,7 +52546,7 @@ SELECT pg_catalog.setval('public.school_year_report_settings_id_seq', 3, true);
 -- Name: school_year_user_records_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.school_year_user_records_id_seq', 25, true);
+SELECT pg_catalog.setval('public.school_year_user_records_id_seq', 129, true);
 
 
 --
@@ -52378,7 +52560,7 @@ SELECT pg_catalog.setval('public.school_years_id_seq', 8, true);
 -- Name: student_attendance_records_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.student_attendance_records_id_seq', 669, true);
+SELECT pg_catalog.setval('public.student_attendance_records_id_seq', 6355, true);
 
 
 --
@@ -52392,14 +52574,14 @@ SELECT pg_catalog.setval('public.student_feeding_records_id_seq', 1, false);
 -- Name: students_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.students_id_seq', 123, true);
+SELECT pg_catalog.setval('public.students_id_seq', 1418, true);
 
 
 --
 -- Name: users_id_seq; Type: SEQUENCE SET; Schema: public; Owner: postgres
 --
 
-SELECT pg_catalog.setval('public.users_id_seq', 34, true);
+SELECT pg_catalog.setval('public.users_id_seq', 138, true);
 
 
 --
@@ -56178,8 +56360,8 @@ GRANT USAGE ON SEQUENCE realtime.subscription_id_seq TO service_role;
 REVOKE ALL ON TABLE storage.buckets FROM supabase_storage_admin;
 GRANT ALL ON TABLE storage.buckets TO supabase_storage_admin WITH GRANT OPTION;
 GRANT ALL ON TABLE storage.buckets TO service_role;
-GRANT ALL ON TABLE storage.buckets TO authenticated;
-GRANT ALL ON TABLE storage.buckets TO anon;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE storage.buckets TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE storage.buckets TO anon;
 GRANT ALL ON TABLE storage.buckets TO postgres WITH GRANT OPTION;
 
 
@@ -56188,8 +56370,8 @@ GRANT ALL ON TABLE storage.buckets TO postgres WITH GRANT OPTION;
 --
 
 GRANT ALL ON TABLE storage.buckets_analytics TO service_role;
-GRANT ALL ON TABLE storage.buckets_analytics TO authenticated;
-GRANT ALL ON TABLE storage.buckets_analytics TO anon;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE storage.buckets_analytics TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE storage.buckets_analytics TO anon;
 
 
 --
@@ -56197,8 +56379,8 @@ GRANT ALL ON TABLE storage.buckets_analytics TO anon;
 --
 
 GRANT SELECT ON TABLE storage.buckets_vectors TO service_role;
-GRANT SELECT ON TABLE storage.buckets_vectors TO authenticated;
 GRANT SELECT ON TABLE storage.buckets_vectors TO anon;
+GRANT SELECT ON TABLE storage.buckets_vectors TO authenticated;
 
 
 --
@@ -56208,8 +56390,8 @@ GRANT SELECT ON TABLE storage.buckets_vectors TO anon;
 REVOKE ALL ON TABLE storage.objects FROM supabase_storage_admin;
 GRANT ALL ON TABLE storage.objects TO supabase_storage_admin WITH GRANT OPTION;
 GRANT ALL ON TABLE storage.objects TO service_role;
-GRANT ALL ON TABLE storage.objects TO authenticated;
-GRANT ALL ON TABLE storage.objects TO anon;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE storage.objects TO authenticated;
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE storage.objects TO anon;
 GRANT ALL ON TABLE storage.objects TO postgres WITH GRANT OPTION;
 
 
@@ -56236,8 +56418,8 @@ GRANT SELECT ON TABLE storage.s3_multipart_uploads_parts TO anon;
 --
 
 GRANT SELECT ON TABLE storage.vector_indexes TO service_role;
-GRANT SELECT ON TABLE storage.vector_indexes TO authenticated;
 GRANT SELECT ON TABLE storage.vector_indexes TO anon;
+GRANT SELECT ON TABLE storage.vector_indexes TO authenticated;
 
 
 --
@@ -56544,5 +56726,5 @@ ALTER EVENT TRIGGER pgrst_drop_watch OWNER TO supabase_admin;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict 2RPqvSIGj6DCgSkgnureYhSodfaz7JeEQS437rkn8QKSofZjt1DcEldiErcR6L6
+\unrestrict DWSTds1bPreqRD7xAnazavgv8FLQCqkELArcCIlkyVJmk5cOAwJwNoLFeChlgML
 

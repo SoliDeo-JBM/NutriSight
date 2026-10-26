@@ -78,7 +78,7 @@
             <tr class="total-row">
                 <td colspan="4" class="name-column">TOTAL:</td>
                 @foreach(range(1, $daysInMonth) as $day)
-                    <td class="day-column">{{ $students->filter(fn ($student) => in_array(strtolower((string) ($student['days'][$day] ?? '')), ['present', 'p', 'served']))->count() ?: '' }}</td>
+                    <td class="day-column">{{ $dailyTotals[$day] ?: '' }}</td>
                 @endforeach
             </tr>
         </tbody>
