@@ -15,8 +15,6 @@ return [
 
     'default' => env('FILESYSTEM_DISK', 'local'),
 
-    'report_exports_disk' => env('REPORT_EXPORTS_DISK', 'local'),
-
     /*
     |--------------------------------------------------------------------------
     | Filesystem Disks

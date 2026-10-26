@@ -3,28 +3,35 @@
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <style>
-        body { margin: 0; padding: 0; font-family: Arial, sans-serif; font-size: 7px; }
-        h1 { margin: 0; text-align: center; font-size: 13px; }
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; background: #f1f5f9; color: #111827; font-family: Arial, sans-serif; font-size: 10px; }
+        h1 { margin: 0; text-align: center; font-size: 16px; }
         p { margin: 0; text-align: center; }
-        .export-header { position: relative; text-align: center; margin-bottom: 8px; }
-        .export-logo { position: absolute; top: 0; width: 46px; height: 46px; }
+        .print-toolbar { display: flex; justify-content: space-between; gap: 12px; max-width: 1400px; margin: 0 auto 16px; }
+        .print-toolbar a, .print-toolbar button { border: 0; border-radius: 6px; padding: 10px 14px; color: #fff; font-size: 13px; font-weight: 700; text-decoration: none; cursor: pointer; }
+        .print-toolbar a { background: #475569; }
+        .print-toolbar button { background: #c2410c; }
+        .report-page { max-width: 1400px; margin: 0 auto; padding: 24px; overflow-x: auto; background: #fff; box-shadow: 0 1px 5px #0f172a20; }
+        .export-header { position: relative; text-align: center; margin-bottom: 12px; }
+        .export-logo { position: absolute; top: 0; width: 52px; height: 52px; object-fit: contain; }
         .export-logo.left { left: 35px; }
         .export-logo.right { right: 35px; }
-        .export-heading { font-size: 9px; }
-        .period { margin-top: 3px; font-weight: bold; }
-        table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-        th, td { border: 1px solid #333; padding: 3px 2px; text-align: center; vertical-align: middle; }
+        .export-heading { font-size: 11px; }
+        .period { margin-top: 4px; font-weight: bold; }
+        table { border-collapse: collapse; width: 100%; min-width: 1100px; table-layout: fixed; }
+        th, td { border: 1px solid #333; padding: 4px 2px; text-align: center; vertical-align: middle; }
         th { background: #d9e2f3; }
         .number-column { width: 28px; }
         .name-column { width: 170px; text-align: left; overflow-wrap: anywhere; word-wrap: break-word; }
-        .grade-column { width: 45px; }
-        .section-column { width: 65px; overflow-wrap: anywhere; word-wrap: break-word; }
-        .day-column { width: 15px; padding-left: 0; padding-right: 0; }
+        .grade-column { width: 55px; }
+        .section-column { width: 75px; overflow-wrap: anywhere; word-wrap: break-word; }
+        .day-column { width: 18px; padding-left: 0; padding-right: 0; }
         .present { color: #15803d; font-weight: bold; }
         .absent { color: #dc2626; font-weight: bold; }
         .total-row td { background: #dbeafe; font-weight: bold; }
-        .signatures { margin-top: 16px; table-layout: auto; }
+        .signatures { margin-top: 20px; table-layout: auto; }
         .signatures td { width: 50%; border: 0; padding: 0 20px; text-align: left; }
         .signature-stack { width: 190px; }
         .signature-title { font-weight: bold; }
@@ -32,22 +39,39 @@
         .signature-line { height: 1px; border-bottom: 1px solid #333; }
         .signature-name { margin-top: 4px; font-weight: bold; text-align: center; }
         .signature-role { margin-top: 2px; text-align: center; }
-        .generated-at { position: fixed; bottom: 0; right: 0; font-size: 7px; color: #555; }
+        .generated-at { position: fixed; bottom: 0; right: 0; font-size: 8px; color: #555; }
+
+        @page { size: landscape; margin: 8mm; }
+        @media print {
+            body { padding: 0; background: #fff; font-size: 8px; }
+            .no-print { display: none !important; }
+            .report-page { max-width: none; margin: 0; padding: 0; overflow: visible; box-shadow: none; }
+            table { min-width: 0; }
+            thead { display: table-header-group; }
+            tr { break-inside: avoid; page-break-inside: avoid; }
+            th, .total-row td { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        }
     </style>
 </head>
 
 <body>
     @php($daysInMonth = (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear)))
-    <div class="export-header">
-        <img class="export-logo left" src="{{ \App\Services\SchoolLogoService::path($month->school_year_id) }}" alt="School logo">
-        <img class="export-logo right" src="{{ \App\Services\SchoolLogoService::depedPath($month->school_year_id) }}" alt="Department of Education seal">
-        <p class="export-heading">Department of Education</p>
-        <p class="export-heading">Bureau of Learner Support Services</p>
-        <h1>SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING</h1>
-        <p class="period">{{ date('F', mktime(0, 0, 0, $month->month, 1)) }} Attendance · SY {{ $month->schoolYear?->year }}</p>
+    <div class="print-toolbar no-print">
+        <a href="{{ route($attendanceRoutePrefix . '.attendance.month', array_merge(['month' => $month], array_filter(['grade' => $selectedGrade, 'section' => $selectedSection], fn ($value) => $value !== null && $value !== ''))) }}">Back to attendance</a>
+        <button type="button" onclick="window.print()">Print / Save as PDF</button>
     </div>
 
-    <table>
+    <main class="report-page">
+        <div class="export-header">
+            <img class="export-logo left" src="{{ $schoolLogoUrl }}" alt="School logo">
+            <img class="export-logo right" src="{{ $depedLogoUrl }}" alt="Department of Education seal">
+            <p class="export-heading">Department of Education</p>
+            <p class="export-heading">Bureau of Learner Support Services</p>
+            <h1>SCHOOL-BASED FEEDING PROGRAM - RECORD OF DAILY FEEDING</h1>
+            <p class="period">{{ date('F', mktime(0, 0, 0, $month->month, 1)) }} Attendance · SY {{ $month->schoolYear?->year }}</p>
+        </div>
+
+        <table>
         <thead>
             <tr>
                 <th rowspan="2" class="number-column">No.</th>
@@ -82,9 +106,9 @@
                 @endforeach
             </tr>
         </tbody>
-    </table>
+        </table>
 
-    <table class="signatures">
+        <table class="signatures">
         <tr>
             <td>
                 <div class="signature-stack">
@@ -105,8 +129,9 @@
                 </div>
             </td>
         </tr>
-    </table>
-    <div class="generated-at">Generated: {{ now()->format('M d, Y h:i A') }}</div>
+        </table>
+        <div class="generated-at">Generated: {{ now()->format('M d, Y h:i A') }}</div>
+    </main>
 </body>
 
 </html>

@@ -125,9 +125,7 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::get('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'showAttendanceMonth'])->name('attendance.month');
             Route::get('/attendance/month/{month}/excel', [App\Http\Controllers\ReportsController::class, 'exportAttendanceExcel'])->name('attendance.month.excel');
             Route::get('/attendance/month/{month}/docx', [App\Http\Controllers\ReportsController::class, 'exportAttendanceDocx'])->name('attendance.month.docx');
-            Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
-            Route::get('/attendance/pdf-exports/{export}/status', [App\Http\Controllers\ReportsController::class, 'attendancePdfExportStatus'])->name('attendance.pdf-exports.status');
-            Route::get('/attendance/pdf-exports/{export}/download', [App\Http\Controllers\ReportsController::class, 'downloadAttendancePdfExport'])->name('attendance.pdf-exports.download');
+            Route::get('/attendance/month/{month}/print', [App\Http\Controllers\ReportsController::class, 'printAttendanceReport'])->name('attendance.month.print');
             Route::get('/attendance/month/{month}/sql', [App\Http\Controllers\ReportsController::class, 'exportAttendanceSql'])->name('attendance.month.sql');
             Route::patch('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'updateAttendanceMonth'])->middleware('active-school-year')->name('attendance.month.update');
             Route::delete('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'destroyAttendanceMonth'])->middleware('active-school-year')->name('attendance.month.destroy');
@@ -183,9 +181,7 @@ Route::middleware(['auth', 'active'])->group(function () {
             Route::get('/attendance/month/{month}', [App\Http\Controllers\ReportsController::class, 'showAttendanceMonth'])->name('attendance.month');
             Route::get('/attendance/month/{month}/excel', [App\Http\Controllers\ReportsController::class, 'exportAttendanceExcel'])->name('attendance.month.excel');
             Route::get('/attendance/month/{month}/docx', [App\Http\Controllers\ReportsController::class, 'exportAttendanceDocx'])->name('attendance.month.docx');
-            Route::get('/attendance/month/{month}/pdf', [App\Http\Controllers\ReportsController::class, 'exportAttendancePdf'])->name('attendance.month.pdf');
-            Route::get('/attendance/pdf-exports/{export}/status', [App\Http\Controllers\ReportsController::class, 'attendancePdfExportStatus'])->name('attendance.pdf-exports.status');
-            Route::get('/attendance/pdf-exports/{export}/download', [App\Http\Controllers\ReportsController::class, 'downloadAttendancePdfExport'])->name('attendance.pdf-exports.download');
+            Route::get('/attendance/month/{month}/print', [App\Http\Controllers\ReportsController::class, 'printAttendanceReport'])->name('attendance.month.print');
         });
         Route::get('/students', [App\Http\Controllers\StudentController::class, 'index'])->name('students.index');
         Route::get('/students/export-excel', [App\Http\Controllers\StudentController::class, 'exportExcel'])->name('students.export-excel');

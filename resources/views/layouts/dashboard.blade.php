@@ -338,80 +338,27 @@
             return new URL(url, window.location.href).pathname.split('/').pop() || 'report-download';
         }
 
-        async function exportRequest(url) {
-            return fetch(url, {
+        async function downloadExport(link) {
+            const response = await fetch(link.href, {
                 credentials: 'same-origin',
                 headers: {
                     'X-Requested-With': 'XMLHttpRequest',
                 },
             });
-        }
 
-        async function saveExportResponse(response, url) {
+            if (!response.ok) {
+                throw new Error('The report could not be generated.');
+            }
+
             const blob = await response.blob();
             const downloadUrl = URL.createObjectURL(blob);
             const downloadLink = document.createElement('a');
             downloadLink.href = downloadUrl;
-            downloadLink.download = exportFilename(response, url);
+            downloadLink.download = exportFilename(response, link.href);
             document.body.appendChild(downloadLink);
             downloadLink.click();
             downloadLink.remove();
             window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
-        }
-
-        async function waitForAttendancePdf(statusUrl) {
-            const deadline = Date.now() + 15 * 60 * 1000;
-            const message = document.getElementById('global-loading-message');
-
-            while (Date.now() < deadline) {
-                const response = await exportRequest(statusUrl);
-                const result = await response.json();
-
-                if (response.status === 202 && ['queued', 'processing'].includes(result.status)) {
-                    if (message) message.textContent = result.status === 'queued' ? 'PDF queued. Preparing report...' : 'Generating PDF. Please wait...';
-                    await new Promise(resolve => window.setTimeout(resolve, 2500));
-                    continue;
-                }
-
-                if (!response.ok) {
-                    throw new Error(result.message || 'Unable to check PDF export status.');
-                }
-
-                if (result.status === 'failed' || result.status === 'expired') {
-                    throw new Error(result.message || 'The PDF export expired. Please try again.');
-                }
-
-                if (result.status === 'completed' && result.download_url) {
-                    const downloadResponse = await exportRequest(result.download_url);
-                    if (!downloadResponse.ok) {
-                        throw new Error('The completed PDF could not be downloaded. Please try again.');
-                    }
-                    await saveExportResponse(downloadResponse, result.download_url);
-                    return;
-                }
-
-                throw new Error('The PDF export returned an unexpected status. Please try again.');
-            }
-
-            throw new Error('PDF generation is taking longer than expected. Check back later or try again.');
-        }
-
-        async function downloadExport(link) {
-            const response = await exportRequest(link.href);
-
-            if (response.status === 202 && (response.headers.get('Content-Type') || '').includes('application/json')) {
-                const result = await response.json();
-                if (!result.status_url) throw new Error(result.message || 'Unable to start PDF generation.');
-                await waitForAttendancePdf(result.status_url);
-                return;
-            }
-
-            if (!response.ok) {
-                const result = await response.clone().json().catch(() => ({}));
-                throw new Error(result.message || 'The report could not be generated.');
-            }
-
-            await saveExportResponse(response, link.href);
         }
 
         document.addEventListener('click', async (event) => {

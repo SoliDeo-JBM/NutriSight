@@ -10,8 +10,6 @@ use App\Models\AttendanceReportSection;
 use App\Exports\AttendanceReportExport;
 use App\Exports\AssessmentReportExport;
 use App\Exports\AssessmentReportWorkbookExport;
-use App\Jobs\GenerateAttendancePdf;
-use App\Models\AttendancePdfExport;
 use App\Models\SchoolYear;
 use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
@@ -24,7 +22,6 @@ use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
@@ -249,85 +246,45 @@ class ReportsController extends Controller
         return response()->download($path, 'attendance-report.docx')->deleteFileAfterSend(true);
     }
 
-    public function exportAttendancePdf(Request $request, AttendanceReportMonth $month)
+    public function printAttendanceReport(Request $request, AttendanceReportMonth $month)
     {
         $isEncoder = auth()->user()?->isEncoder() ?? false;
         $this->ensureAttendanceMonthAccess($month, $isEncoder);
+        $month->load('schoolYear');
         $selectedGrade = $isEncoder ? auth()->user()->advisory_grade_level : ($request->filled('grade') ? (int) $request->input('grade') : null);
         $selectedSection = $isEncoder ? auth()->user()->advisory_section : ($request->filled('section') ? $request->input('section') : null);
-        if (config('queue.connections.exports.driver') === 'sync') {
-            return response()->json(['message' => 'PDF background processing is not configured.'], 503);
+        $scopeUser = $isEncoder ? auth()->user() : null;
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection, $scopeUser);
+        $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
+        $daysInMonth = (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear));
+        $dailyTotals = array_fill(1, $daysInMonth, 0);
+
+        foreach ($students as $student) {
+            foreach ($student['days'] as $day => $status) {
+                if ($status === 'present') {
+                    $dailyTotals[$day]++;
+                }
+            }
         }
 
-        $export = AttendancePdfExport::create([
-            'user_id' => auth()->id(),
-            'attendance_report_month_id' => $month->id,
-            'grade_level' => $selectedGrade,
-            'section' => $selectedSection,
-            'scope_is_encoder' => $isEncoder,
-            'status' => AttendancePdfExport::STATUS_QUEUED,
-            'expires_at' => now()->addDay(),
-        ]);
+        [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
+        $attendanceRoutePrefix = $isEncoder ? 'encoder.reports.sbfp' : 'admin.reports.sbfp';
+        $schoolLogoUrl = SchoolLogoService::url($month->school_year_id);
+        $depedLogoUrl = SchoolLogoService::depedUrl($month->school_year_id);
 
-        GenerateAttendancePdf::dispatch($export->id)->onConnection('exports')->onQueue('exports');
-
-        $routePrefix = $isEncoder ? 'encoder.reports.sbfp' : 'admin.reports.sbfp';
-
-        return response()->json([
-            'status' => $export->status,
-            'status_url' => route($routePrefix . '.attendance.pdf-exports.status', $export),
-        ], 202);
-    }
-
-    public function attendancePdfExportStatus(AttendancePdfExport $export)
-    {
-        abort_unless($export->user_id === auth()->id(), 404);
-
-        if ($export->expires_at->isPast()) {
-            $this->deleteAttendancePdfExportFile($export);
-            $export->delete();
-
-            return response()->json(['status' => 'expired'], 410);
-        }
-
-        if ($export->status === AttendancePdfExport::STATUS_PROCESSING && $export->updated_at->lt(now()->subMinutes(20))) {
-            $export->update([
-                'status' => AttendancePdfExport::STATUS_FAILED,
-                'failure_message' => 'The PDF worker stopped before completing this report. Please try again or contact an administrator.',
-            ]);
-            $export->refresh();
-        }
-
-        return response()->json([
-            'status' => $export->status,
-            'download_url' => $export->status === AttendancePdfExport::STATUS_COMPLETED
-                ? route($export->user->isEncoder() ? 'encoder.reports.sbfp.attendance.pdf-exports.download' : 'admin.reports.sbfp.attendance.pdf-exports.download', $export)
-                : null,
-            'message' => $export->status === AttendancePdfExport::STATUS_FAILED
-                ? 'The PDF could not be generated. Please try again or contact an administrator.'
-                : null,
-        ], $export->status === AttendancePdfExport::STATUS_QUEUED || $export->status === AttendancePdfExport::STATUS_PROCESSING ? 202 : 200);
-    }
-
-    public function downloadAttendancePdfExport(AttendancePdfExport $export)
-    {
-        abort_unless($export->user_id === auth()->id(), 404);
-
-        if ($export->expires_at->isPast() || $export->status !== AttendancePdfExport::STATUS_COMPLETED || !$export->file_path) {
-            abort(404);
-        }
-
-        $disk = Storage::disk(config('filesystems.report_exports_disk', 'local'));
-        abort_unless($disk->exists($export->file_path), 404);
-
-        return $disk->download($export->file_path, 'attendance-report.pdf', ['Content-Type' => 'application/pdf']);
-    }
-
-    private function deleteAttendancePdfExportFile(AttendancePdfExport $export): void
-    {
-        if ($export->file_path) {
-            Storage::disk(config('filesystems.report_exports_disk', 'local'))->delete($export->file_path);
-        }
+        return view('admin.reports.attendance.print', compact(
+            'month',
+            'students',
+            'calendarYear',
+            'dailyTotals',
+            'adminName',
+            'superAdminName',
+            'attendanceRoutePrefix',
+            'selectedGrade',
+            'selectedSection',
+            'schoolLogoUrl',
+            'depedLogoUrl',
+        ));
     }
 
     public function exportAttendanceSql(AttendanceReportMonth $month): Response
