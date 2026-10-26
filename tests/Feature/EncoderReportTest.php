@@ -3,15 +3,20 @@
 namespace Tests\Feature;
 
 use App\Models\AttendanceReportMonth;
+use App\Models\AttendancePdfExport;
 use App\Models\Enrollment;
 use App\Models\SchoolYear;
 use App\Models\SbfpParticipant;
 use App\Models\Student;
 use App\Models\StudentAttendanceRecord;
 use App\Models\User;
+use App\Jobs\GenerateAttendancePdf;
+use App\Services\AttendanceReportData;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class EncoderReportTest extends TestCase
@@ -56,7 +61,7 @@ class EncoderReportTest extends TestCase
             ->assertDontSee(route('admin.reports.sbfp.attendance.month.pdf', $month));
     }
 
-    public function test_attendance_pdf_loads_only_attendance_records_for_the_requested_month(): void
+    public function test_attendance_pdf_is_queued_and_downloadable_only_by_its_owner(): void
     {
         $encoder = User::factory()->create([
             'role' => User::ROLE_ENCODER,
@@ -107,6 +112,18 @@ class EncoderReportTest extends TestCase
             'status' => 'present',
         ]);
 
+        Queue::fake();
+        Storage::fake('local');
+        config(['filesystems.report_exports_disk' => 'local', 'queue.default' => 'database']);
+
+        $response = $this->actingAs($encoder)
+            ->get(route('encoder.reports.sbfp.attendance.month.pdf', $month))
+            ->assertAccepted()
+            ->assertJsonPath('status', AttendancePdfExport::STATUS_QUEUED);
+
+        $export = AttendancePdfExport::firstOrFail();
+        Queue::assertPushed(GenerateAttendancePdf::class, fn(GenerateAttendancePdf $job) => $job->exportId === $export->id);
+
         $attendanceQueries = [];
         DB::listen(function (QueryExecuted $query) use (&$attendanceQueries): void {
             if (str_contains($query->sql, 'student_attendance_records')) {
@@ -114,12 +131,52 @@ class EncoderReportTest extends TestCase
             }
         });
 
-        $this->actingAs($encoder)
-            ->get(route('encoder.reports.sbfp.attendance.month.pdf', $month))
-            ->assertDownload('attendance-report.pdf');
+        (new GenerateAttendancePdf($export->id))->handle(app(AttendanceReportData::class));
 
         $scopedQuery = collect($attendanceQueries)->first(fn (QueryExecuted $query) => in_array('2027-01-01', $query->bindings, true)
             && in_array('2027-01-31', $query->bindings, true));
         $this->assertNotNull($scopedQuery, 'The attendance eager-load query should be scoped to the requested month.');
+
+        $export->refresh();
+        $this->assertSame(AttendancePdfExport::STATUS_COMPLETED, $export->status);
+        $this->assertTrue(Storage::disk('local')->exists($export->file_path));
+
+        $statusResponse = $this->actingAs($encoder)
+            ->get(route('encoder.reports.sbfp.attendance.pdf-exports.status', $export))
+            ->assertOk()
+            ->assertJsonPath('status', AttendancePdfExport::STATUS_COMPLETED);
+        $downloadUrl = $statusResponse->json('download_url');
+
+        $this->actingAs($encoder)
+            ->get($downloadUrl)
+            ->assertOk()
+            ->assertHeader('content-type', 'application/pdf');
+
+        $otherEncoder = User::factory()->create(['role' => User::ROLE_ENCODER]);
+        $this->actingAs($otherEncoder)
+            ->get(route('encoder.reports.sbfp.attendance.pdf-exports.status', $export))
+            ->assertNotFound();
+
+        config(['queue.connections.exports.driver' => 'sync']);
+        $this->actingAs($encoder)
+            ->get(route('encoder.reports.sbfp.attendance.month.pdf', $month))
+            ->assertServiceUnavailable();
+        $this->assertDatabaseCount('attendance_pdf_exports', 1);
+
+        $staleExport = AttendancePdfExport::create([
+            'user_id' => $encoder->id,
+            'attendance_report_month_id' => $month->id,
+            'grade_level' => 1,
+            'section' => 'Mabini',
+            'scope_is_encoder' => true,
+            'status' => AttendancePdfExport::STATUS_PROCESSING,
+            'expires_at' => now()->addDay(),
+        ]);
+        DB::table('attendance_pdf_exports')->where('id', $staleExport->id)->update(['updated_at' => now()->subMinutes(21)]);
+
+        $this->actingAs($encoder)
+            ->get(route('encoder.reports.sbfp.attendance.pdf-exports.status', $staleExport))
+            ->assertOk()
+            ->assertJsonPath('status', AttendancePdfExport::STATUS_FAILED);
     }
 }

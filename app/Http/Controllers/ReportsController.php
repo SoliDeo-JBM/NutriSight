@@ -10,25 +10,31 @@ use App\Models\AttendanceReportSection;
 use App\Exports\AttendanceReportExport;
 use App\Exports\AssessmentReportExport;
 use App\Exports\AssessmentReportWorkbookExport;
+use App\Jobs\GenerateAttendancePdf;
+use App\Models\AttendancePdfExport;
 use App\Models\SchoolYear;
 use App\Models\StudentAttendanceRecord;
 use App\Models\Student;
 use App\Models\User;
-use App\Models\SchoolYearReportSetting;
 use App\Services\SchoolYearManager;
 use App\Services\ReportPeriodManager;
 use App\Services\SchoolLogoService;
+use App\Services\AttendanceReportData;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Maatwebsite\Excel\Facades\Excel;
 use PhpOffice\PhpWord\IOFactory;
 use PhpOffice\PhpWord\PhpWord;
 
 class ReportsController extends Controller
 {
-    public function __construct(private readonly ReportPeriodManager $reportPeriodManager) {}
+    public function __construct(
+        private readonly ReportPeriodManager $reportPeriodManager,
+        private readonly AttendanceReportData $attendanceReportData,
+    ) {}
 
     public function admin()
     {
@@ -180,43 +186,7 @@ class ReportsController extends Controller
 
     private function attendanceStudents(SchoolYear $schoolYear, int $month, ?int $grade = null, ?string $section = null, ?User $scopeUser = null)
     {
-        $calendarYear = $this->attendanceCalendarYear($schoolYear, $month);
-        $monthStart = sprintf('%04d-%02d-01', $calendarYear, $month);
-        $monthEnd = date('Y-m-t', strtotime($monthStart));
-        $grade ??= $scopeUser?->advisory_grade_level;
-        $section ??= $scopeUser?->advisory_section;
-        $approvedBeneficiary = function ($query) use ($schoolYear, $grade, $section, $scopeUser) {
-            $query->where('school_year_id', $schoolYear->id)
-                ->activeApprovedSbfp()
-                ->when($grade !== null, fn($q) => $q->where('grade_level', $grade))
-                ->when($section !== null, fn($q) => $q->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($section))]))
-                ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'));
-        };
-        return Student::with([
-            'enrollments' => function ($query) use ($schoolYear, $grade, $section, $scopeUser, $monthStart, $monthEnd) {
-                $query->where('school_year_id', $schoolYear->id)
-                    ->activeApprovedSbfp()
-                    ->when($grade !== null, fn($q) => $q->where('grade_level', $grade))
-                    ->when($section !== null, fn($q) => $q->whereRaw('LOWER(TRIM(section)) = ?', [strtolower(trim($section))]))
-                    ->when($scopeUser?->isEncoder() && ($grade === null || $section === null), fn($q) => $q->whereRaw('1 = 0'))
-                    ->with(['sbfpParticipant.attendanceRecords' => fn($attendanceQuery) => $attendanceQuery->whereBetween('attendance_date', [$monthStart, $monthEnd])]);
-            }
-        ])
-            ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
-            ->map(function (Student $student, int $index) use ($month, $calendarYear) {
-                $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
-                $recordsByDay = $records
-                    ->groupBy(fn ($record) => $record->attendance_date?->day);
-                $days = [];
-                $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $calendarYear));
-                for ($day = 1; $day <= $daysInMonth; $day++) {
-                    $dayRecords = $recordsByDay->get($day, collect());
-                    $days[$day] = $dayRecords->contains(fn ($item) => in_array(strtolower((string) $item->status), ['present', 'p', 'served']))
-                        ? 'present'
-                        : ($dayRecords->contains(fn ($item) => in_array(strtolower((string) $item->status), ['absent', 'a'])) ? 'absent' : null);
-                }
-                return ['number' => $index + 1, 'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'grade_level' => $student->enrollments->first()?->grade_level, 'section' => $student->enrollments->first()?->section, 'days' => $days];
-            });
+        return $this->attendanceReportData->students($schoolYear, $month, $grade, $section, $scopeUser);
     }
 
     private function ensureAttendanceMonthAccess(AttendanceReportMonth $month, bool $isEncoder): void
@@ -281,31 +251,83 @@ class ReportsController extends Controller
 
     public function exportAttendancePdf(Request $request, AttendanceReportMonth $month)
     {
-        if (function_exists('ini_set')) {
-            ini_set('memory_limit', '1024M');
-        }
-        set_time_limit(120);
         $isEncoder = auth()->user()?->isEncoder() ?? false;
         $this->ensureAttendanceMonthAccess($month, $isEncoder);
-        $month->load('schoolYear');
-        $selectedGrade = $isEncoder ? null : ($request->filled('grade') ? (int) $request->input('grade') : null);
-        $selectedSection = $isEncoder ? null : ($request->filled('section') ? $request->input('section') : null);
-        $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection, $isEncoder ? auth()->user() : null);
-        $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
-        $daysInMonth = (int) date('t', mktime(0, 0, 0, $month->month, 1, $calendarYear));
-        $dailyTotals = array_fill(1, $daysInMonth, 0);
-        foreach ($students as $student) {
-            foreach ($student['days'] as $day => $status) {
-                if ($status === 'present') {
-                    $dailyTotals[$day]++;
-                }
-            }
+        $selectedGrade = $isEncoder ? auth()->user()->advisory_grade_level : ($request->filled('grade') ? (int) $request->input('grade') : null);
+        $selectedSection = $isEncoder ? auth()->user()->advisory_section : ($request->filled('section') ? $request->input('section') : null);
+        if (config('queue.connections.exports.driver') === 'sync') {
+            return response()->json(['message' => 'PDF background processing is not configured.'], 503);
         }
-        [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
-        return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'dailyTotals', 'adminName', 'superAdminName'))
-            ->setOption(['isHtml5ParserEnabled' => false, 'dpi' => 72])
-            ->setPaper('a4', 'landscape')
-            ->download('attendance-report.pdf');
+
+        $export = AttendancePdfExport::create([
+            'user_id' => auth()->id(),
+            'attendance_report_month_id' => $month->id,
+            'grade_level' => $selectedGrade,
+            'section' => $selectedSection,
+            'scope_is_encoder' => $isEncoder,
+            'status' => AttendancePdfExport::STATUS_QUEUED,
+            'expires_at' => now()->addDay(),
+        ]);
+
+        GenerateAttendancePdf::dispatch($export->id)->onConnection('exports')->onQueue('exports');
+
+        $routePrefix = $isEncoder ? 'encoder.reports.sbfp' : 'admin.reports.sbfp';
+
+        return response()->json([
+            'status' => $export->status,
+            'status_url' => route($routePrefix . '.attendance.pdf-exports.status', $export),
+        ], 202);
+    }
+
+    public function attendancePdfExportStatus(AttendancePdfExport $export)
+    {
+        abort_unless($export->user_id === auth()->id(), 404);
+
+        if ($export->expires_at->isPast()) {
+            $this->deleteAttendancePdfExportFile($export);
+            $export->delete();
+
+            return response()->json(['status' => 'expired'], 410);
+        }
+
+        if ($export->status === AttendancePdfExport::STATUS_PROCESSING && $export->updated_at->lt(now()->subMinutes(20))) {
+            $export->update([
+                'status' => AttendancePdfExport::STATUS_FAILED,
+                'failure_message' => 'The PDF worker stopped before completing this report. Please try again or contact an administrator.',
+            ]);
+            $export->refresh();
+        }
+
+        return response()->json([
+            'status' => $export->status,
+            'download_url' => $export->status === AttendancePdfExport::STATUS_COMPLETED
+                ? route($export->user->isEncoder() ? 'encoder.reports.sbfp.attendance.pdf-exports.download' : 'admin.reports.sbfp.attendance.pdf-exports.download', $export)
+                : null,
+            'message' => $export->status === AttendancePdfExport::STATUS_FAILED
+                ? 'The PDF could not be generated. Please try again or contact an administrator.'
+                : null,
+        ], $export->status === AttendancePdfExport::STATUS_QUEUED || $export->status === AttendancePdfExport::STATUS_PROCESSING ? 202 : 200);
+    }
+
+    public function downloadAttendancePdfExport(AttendancePdfExport $export)
+    {
+        abort_unless($export->user_id === auth()->id(), 404);
+
+        if ($export->expires_at->isPast() || $export->status !== AttendancePdfExport::STATUS_COMPLETED || !$export->file_path) {
+            abort(404);
+        }
+
+        $disk = Storage::disk(config('filesystems.report_exports_disk', 'local'));
+        abort_unless($disk->exists($export->file_path), 404);
+
+        return $disk->download($export->file_path, 'attendance-report.pdf', ['Content-Type' => 'application/pdf']);
+    }
+
+    private function deleteAttendancePdfExportFile(AttendancePdfExport $export): void
+    {
+        if ($export->file_path) {
+            Storage::disk(config('filesystems.report_exports_disk', 'local'))->delete($export->file_path);
+        }
     }
 
     public function exportAttendanceSql(AttendanceReportMonth $month): Response
@@ -324,8 +346,7 @@ class ReportsController extends Controller
 
     private function attendanceCalendarYear(?SchoolYear $schoolYear, int $month): int
     {
-        $startYear = (int) substr((string) ($schoolYear?->year ?? now()->year), 0, 4);
-        return $month >= 6 ? $startYear : $startYear + 1;
+        return $this->attendanceReportData->calendarYear($schoolYear, $month);
     }
 
     // Annual Consolidated Report hierarchy
@@ -618,20 +639,7 @@ class ReportsController extends Controller
 
     private function reportSignatories(?int $schoolYearId = null): array
     {
-        $pdoName = $schoolYearId
-            ? SchoolYearReportSetting::where('school_year_id', $schoolYearId)->value('project_development_officer_name')
-            : null;
-        $superAdmin = User::where('role', User::ROLE_SUPER_ADMIN)->orderBy('id')->first();
-
-        return [
-            $pdoName ? strtoupper(trim($pdoName)) : 'FULL NAME OF THE PROJECT DEVELOPMENT OFFICER',
-            $this->formatSignatoryName($superAdmin, 'Full Name of the Super Admin'),
-        ];
-    }
-
-    private function formatSignatoryName(?User $user, string $fallback): string
-    {
-        return $user?->name ? strtoupper(trim($user->name)) : $fallback;
+        return $this->attendanceReportData->signatories($schoolYearId);
     }
 
     private function periodRows(ReportPeriod $period): array
