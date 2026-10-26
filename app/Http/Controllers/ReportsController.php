@@ -272,7 +272,10 @@ class ReportsController extends Controller
 
     public function exportAttendancePdf(AttendanceReportMonth $month)
     {
-        ini_set('memory_limit', '512M');
+        if (function_exists('ini_set')) {
+            ini_set('memory_limit', '1024M');
+        }
+        set_time_limit(120);
         $this->ensureAttendanceMonthAccess($month, auth()->user()?->isEncoder() ?? false);
         $month->load('schoolYear');
         $students = $this->attendanceStudents($month->schoolYear, $month->month, null, null, auth()->user()?->isEncoder() ? auth()->user() : null);
