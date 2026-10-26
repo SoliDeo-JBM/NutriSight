@@ -198,13 +198,16 @@ class ReportsController extends Controller
             ->whereHas('enrollments', $approvedBeneficiary)->orderBy('last_name')->orderBy('first_name')->get()
             ->map(function (Student $student, int $index) use ($month, $calendarYear) {
                 $records = $student->enrollments->first()?->sbfpParticipant?->attendanceRecords ?? collect();
+                $recordsByDay = $records
+                    ->filter(fn ($record) => $record->attendance_date?->year === $calendarYear && $record->attendance_date?->month === $month)
+                    ->groupBy(fn ($record) => $record->attendance_date?->day);
                 $days = [];
                 $daysInMonth = (int) date('t', mktime(0, 0, 0, $month, 1, $calendarYear));
                 for ($day = 1; $day <= $daysInMonth; $day++) {
-                    $dayRecords = $records->filter(fn($item) => $item->attendance_date?->year === $calendarYear && $item->attendance_date?->month === $month && $item->attendance_date?->day === $day);
-                    $days[$day] = $dayRecords->contains(fn($item) => in_array(strtolower((string) $item->status), ['present', 'p', 'served']))
+                    $dayRecords = $recordsByDay->get($day, collect());
+                    $days[$day] = $dayRecords->contains(fn ($item) => in_array(strtolower((string) $item->status), ['present', 'p', 'served']))
                         ? 'present'
-                        : ($dayRecords->contains(fn($item) => in_array(strtolower((string) $item->status), ['absent', 'a'])) ? 'absent' : null);
+                        : ($dayRecords->contains(fn ($item) => in_array(strtolower((string) $item->status), ['absent', 'a'])) ? 'absent' : null);
                 }
                 return ['number' => $index + 1, 'name' => trim($student->last_name . ', ' . $student->first_name . ' ' . ($student->middle_name ?? '')), 'grade_level' => $student->enrollments->first()?->grade_level, 'section' => $student->enrollments->first()?->section, 'days' => $days];
             });
@@ -270,15 +273,18 @@ class ReportsController extends Controller
         return response()->download($path, 'attendance-report.docx')->deleteFileAfterSend(true);
     }
 
-    public function exportAttendancePdf(AttendanceReportMonth $month)
+    public function exportAttendancePdf(Request $request, AttendanceReportMonth $month)
     {
         if (function_exists('ini_set')) {
             ini_set('memory_limit', '1024M');
         }
         set_time_limit(120);
-        $this->ensureAttendanceMonthAccess($month, auth()->user()?->isEncoder() ?? false);
+        $isEncoder = auth()->user()?->isEncoder() ?? false;
+        $this->ensureAttendanceMonthAccess($month, $isEncoder);
         $month->load('schoolYear');
-        $students = $this->attendanceStudents($month->schoolYear, $month->month, null, null, auth()->user()?->isEncoder() ? auth()->user() : null);
+        $selectedGrade = $isEncoder ? null : ($request->filled('grade') ? (int) $request->input('grade') : null);
+        $selectedSection = $isEncoder ? null : ($request->filled('section') ? $request->input('section') : null);
+        $students = $this->attendanceStudents($month->schoolYear, $month->month, $selectedGrade, $selectedSection, $isEncoder ? auth()->user() : null);
         $calendarYear = $this->attendanceCalendarYear($month->schoolYear, $month->month);
         [$adminName, $superAdminName] = $this->reportSignatories($month->school_year_id);
         return Pdf::loadView('admin.reports.attendance.print', compact('month', 'students', 'calendarYear', 'adminName', 'superAdminName'))->setPaper('a4', 'landscape')->download('attendance-report.pdf');
