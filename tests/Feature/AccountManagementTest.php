@@ -86,6 +86,104 @@ class AccountManagementTest extends TestCase
         ]);
     }
 
+    public function test_account_edit_rejects_underage_birthdates_and_shows_the_error(): void
+    {
+        $admin = User::factory()->create(['role' => User::ROLE_ADMIN]);
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $schoolYear = SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+        $encoder = User::factory()->create([
+            'role' => User::ROLE_ENCODER,
+            'email' => 'encoder-age-edit@example.com',
+            'birthdate' => '1990-01-02',
+        ]);
+        $managedAdmin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'email' => 'admin-age-edit@example.com',
+            'birthdate' => '1990-01-02',
+        ]);
+        $encoder->syncSchoolYearUserRecord($schoolYear->id);
+        $managedAdmin->syncSchoolYearUserRecord($schoolYear->id);
+
+        $cases = [
+            [
+                'actor' => $admin,
+                'target' => $encoder,
+                'update_route' => 'admin.accounts.update',
+                'index_route' => 'admin.accounts.index',
+                'index_parameters' => [],
+            ],
+            [
+                'actor' => $superAdmin,
+                'target' => $managedAdmin,
+                'update_route' => 'super-admin.accounts.update',
+                'index_route' => 'super-admin.accounts.index',
+                'index_parameters' => ['role' => User::ROLE_ADMIN],
+            ],
+        ];
+        $tooYoungBirthdate = today()->subYears(18)->addDay()->toDateString();
+
+        foreach ($cases as $case) {
+            $editUrl = route($case['update_route'], $case['target']);
+            $indexUrl = route($case['index_route'], $case['index_parameters']);
+
+            $this->followingRedirects()
+                ->actingAs($case['actor'])
+                ->from($indexUrl)
+                ->patch($editUrl, [
+                    '_edit_action' => $editUrl,
+                    'name' => $case['target']->name,
+                    'email' => $case['target']->email,
+                    'birthdate' => $tooYoungBirthdate,
+                ])
+                ->assertOk()
+                ->assertSee('The account holder must be at least 18 years old.')
+                ->assertSee('max="' . today()->subYears(18)->toDateString() . '"', false);
+
+            $this->assertDatabaseHas('users', [
+                'id' => $case['target']->id,
+                'birthdate' => '1990-01-02',
+            ]);
+        }
+    }
+
+    public function test_account_edit_accepts_birthdate_on_the_18th_birthday(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $admin = User::factory()->create([
+            'role' => User::ROLE_ADMIN,
+            'email' => 'admin-age-boundary@example.com',
+            'birthdate' => '1990-01-02',
+        ]);
+        $schoolYear = SchoolYear::create([
+            'year' => '2025-2026',
+            'start_date' => '2025-06-01',
+            'end_date' => '2026-03-31',
+            'is_active' => true,
+        ]);
+        $admin->syncSchoolYearUserRecord($schoolYear->id);
+        $minimumBirthdate = today()->subYears(18)->toDateString();
+
+        $this->actingAs($superAdmin)
+            ->patch(route('super-admin.accounts.update', $admin), [
+                'name' => $admin->name,
+                'sex' => 'Female',
+                'email' => $admin->email,
+                'birthdate' => $minimumBirthdate,
+                'position' => 'Master Teacher I',
+            ])
+            ->assertRedirect(route('super-admin.accounts.index', ['role' => User::ROLE_ADMIN]));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $admin->id,
+            'birthdate' => $minimumBirthdate,
+        ]);
+    }
+
     public function test_super_admin_can_view_encoder_accounts(): void
     {
         $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
@@ -124,6 +222,8 @@ class AccountManagementTest extends TestCase
         $this->actingAs($superAdmin)->get(route('super-admin.accounts.create', ['role' => 'encoder']))
             ->assertOk()
             ->assertSee('Add New Encoder Account')
+            ->assertSee('Account holders must be at least 18 years old.')
+            ->assertSee('max="' . today()->subYears(18)->toDateString() . '"', false)
             ->assertSee('name="advisory_grade_level"', false)
             ->assertSee('name="advisory_section"', false);
 
@@ -152,6 +252,65 @@ class AccountManagementTest extends TestCase
             'advisory_grade_level' => '3',
             'advisory_section' => 'Mabini',
         ]);
+    }
+
+    public function test_account_creation_rejects_birthdates_under_18_for_admins_and_encoders(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $tooYoungBirthdate = today()->subYears(18)->addDay()->toDateString();
+
+        foreach ([User::ROLE_ADMIN, User::ROLE_ENCODER] as $index => $role) {
+            $email = "underage-{$index}@example.com";
+            $this->actingAs($superAdmin)
+                ->post(route('super-admin.accounts.store'), [
+                    'target_role' => $role,
+                    'deped_id' => "AGE-{$index}",
+                    'first_name' => 'Young',
+                    'last_name' => 'Account',
+                    'email' => $email,
+                    'password' => 'SecurePass1!',
+                    'password_confirmation' => 'SecurePass1!',
+                    'sex' => 'Female',
+                    'birthdate' => $tooYoungBirthdate,
+                    'position' => 'Teacher I',
+                    'advisory_grade_level' => 3,
+                    'advisory_section' => 'Mabini',
+                ])
+                ->assertSessionHasErrors(['birthdate' => 'The account holder must be at least 18 years old.']);
+
+            $this->assertDatabaseMissing('users', ['email' => $email]);
+        }
+    }
+
+    public function test_account_creation_accepts_birthdates_on_the_18th_birthday_for_admins_and_encoders(): void
+    {
+        $superAdmin = User::factory()->create(['role' => User::ROLE_SUPER_ADMIN]);
+        $minimumBirthdate = today()->subYears(18)->toDateString();
+
+        foreach ([User::ROLE_ADMIN, User::ROLE_ENCODER] as $index => $role) {
+            $email = "adult-{$index}@example.com";
+            $this->actingAs($superAdmin)
+                ->post(route('super-admin.accounts.store'), [
+                    'target_role' => $role,
+                    'deped_id' => "ADULT-{$index}",
+                    'first_name' => 'Adult',
+                    'last_name' => 'Account',
+                    'email' => $email,
+                    'password' => 'SecurePass1!',
+                    'password_confirmation' => 'SecurePass1!',
+                    'sex' => 'Female',
+                    'birthdate' => $minimumBirthdate,
+                    'position' => 'Teacher I',
+                    'advisory_grade_level' => 3,
+                    'advisory_section' => 'Mabini',
+                ]);
+
+            $this->assertDatabaseHas('users', [
+                'email' => $email,
+                'role' => $role,
+                'birthdate' => $minimumBirthdate,
+            ]);
+        }
     }
 
     public function test_admin_cannot_create_admin_by_tampering_with_target_role(): void

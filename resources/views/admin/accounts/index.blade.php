@@ -233,7 +233,8 @@
                 </div>
                 <div>
                     <label for="edit_birthdate" class="block text-sm font-semibold text-gray-700 mb-2">Birthdate</label>
-                    <input id="edit_birthdate" type="date" name="birthdate" aria-invalid="{{ $errors->has('birthdate') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('birthdate') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <input id="edit_birthdate" type="date" name="birthdate" max="{{ today()->subYears(18)->toDateString() }}" aria-invalid="{{ $errors->has('birthdate') ? 'true' : 'false' }}" class="w-full border {{ $errors->has('birthdate') ? 'border-rose-500' : 'border-gray-300' }} rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500">
+                    <p class="text-gray-500 text-xs mt-1">Account holders must be at least 18 years old.</p>
                     @error('birthdate')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                 </div>
                 <div>

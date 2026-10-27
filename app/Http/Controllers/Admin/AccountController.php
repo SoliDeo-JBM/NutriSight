@@ -128,6 +128,7 @@ class AccountController extends Controller
         $currentUser = Auth::user();
         $targetRole = $this->resolveTargetRole($request, $currentUser, true);
         $isEncoder = $targetRole === User::ROLE_ENCODER;
+        $minimumBirthdate = today()->subYears(18)->toDateString();
 
         $validated = $request->validate([
             'deped_id' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', 'unique:users,deped_id'],
@@ -139,10 +140,12 @@ class AccountController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => ['required', 'confirmed', Password::defaults()],
             'sex' => 'required|in:Male,Female',
-            'birthdate' => 'required|date|before:today',
+            'birthdate' => ['required', 'date', 'before_or_equal:' . $minimumBirthdate],
             'position' => ['required', 'string', 'max:255', 'regex:/^[\pL\pN\s.\'\/-]+$/u'],
             'advisory_grade_level' => $isEncoder ? 'required|integer|between:0,7' : 'nullable|integer|between:0,7',
             'advisory_section' => $isEncoder ? ['required', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'] : ['nullable', 'string', 'max:100', 'regex:/^[\pL\pN][\pL\pN .\'-]*$/u'],
+        ], [
+            'birthdate.before_or_equal' => 'The account holder must be at least 18 years old.',
         ]);
 
         $user = User::create([
@@ -179,6 +182,8 @@ class AccountController extends Controller
             return back()->withErrors(['account' => 'Archived accounts can only be restored.']);
         }
 
+        $minimumBirthdate = today()->subYears(18)->toDateString();
+
         $validated = $request->validate([
             'first_name' => ['required_without:name', 'nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'middle_name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
@@ -186,10 +191,12 @@ class AccountController extends Controller
             'name_extension' => ['nullable', 'string', 'max:50', 'regex:/^[\pL\s.\'-]+$/u'],
             'name' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\s.\'-]+$/u'],
             'sex' => ['nullable', 'in:Male,Female'],
-            'birthdate' => ['nullable', 'date', 'before:today'],
+            'birthdate' => ['nullable', 'date', 'before_or_equal:' . $minimumBirthdate],
             'email' => ['required', 'email', 'max:255', Rule::unique('users', 'email')->ignore($user->id)],
             'deped_id' => ['nullable', 'string', 'max:50', 'regex:/^[A-Za-z0-9-]+$/', Rule::unique('users', 'deped_id')->ignore($user->id)],
             'position' => ['nullable', 'string', 'max:255', 'regex:/^[\pL\pN\s.\'\/-]+$/u'],
+        ], [
+            'birthdate.before_or_equal' => 'The account holder must be at least 18 years old.',
         ]);
 
         if ($user->isEncoder()) {

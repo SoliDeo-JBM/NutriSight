@@ -225,8 +225,9 @@
                 <label class="block text-sm font-semibold text-gray-700 mb-2">
                     Birthdate <span class="text-red-500">*</span>
                 </label>
-                <input type="date" name="birthdate" value="{{ old('birthdate') }}" required max="{{ now()->toDateString() }}"
+                <input type="date" name="birthdate" value="{{ old('birthdate') }}" required max="{{ today()->subYears(18)->toDateString() }}"
                     class="w-full border border-gray-300 rounded-lg p-2.5 text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 @error('birthdate') border-red-500 @enderror">
+                <p class="text-gray-500 text-xs mt-1">Account holders must be at least 18 years old.</p>
                 @error('birthdate')
                 <p class="text-red-500 text-xs mt-1">{{ $message }}</p>
                 @enderror
