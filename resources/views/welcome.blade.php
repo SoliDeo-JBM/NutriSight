@@ -296,6 +296,10 @@
                 </div>
                 <div class="text-lg leading-8 text-slate-600">
                     <p>NutriSight supports the School-Based Feeding Program (SBFP) at Marisol Bliss Elementary School by bringing learner nutrition, attendance, feeding, and assessment records into a shared system for better follow-through.</p>
+                    <div class="mt-6 border-l-2 border-orange-500 pl-5 text-base leading-7">
+                        <p>Developed in partial fulfillment of the requirements for the degree of <span class="font-semibold text-slate-800">BACHELOR OF SCIENCE IN INFORMATION TECHNOLOGY</span>.</p>
+                        <p class="mt-2">Institute of Computing Studies<br>Mabalacat City College<br>A.Y. 2026-2027</p>
+                    </div>
                 </div>
             </div>
         </section>
@@ -309,6 +313,13 @@
                     <span class="text-lg font-extrabold text-white">NutriSight</span>
                 </a>
                 <p class="mt-3 max-w-md text-sm leading-6 text-slate-400">School-Based Feeding Program at Marisol Bliss Elementary School.</p>
+                <div class="mt-4 text-sm leading-6 text-slate-400">
+                    <p class="font-semibold text-white">Developed by</p>
+                    <p>Magtoto, John Brett O.</p>
+                    <p>Mungcal, John Matthew D.</p>
+                    <p>Nicdao, Janrey C.</p>
+                    <p>Santos, Richard D.</p>
+                </div>
             </div>
 
             <nav class="flex flex-wrap gap-x-6 gap-y-3" aria-label="Footer navigation">
