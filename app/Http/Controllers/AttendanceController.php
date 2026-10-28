@@ -160,13 +160,13 @@ class AttendanceController extends Controller
             ], 422);
         }
 
-        $existingLog = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
-            ->where('attendance_date', $today)
+        $existingLogs = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
+            ->whereDate('attendance_date', $today)
             ->where('meal_period', $mealPeriod)
-            ->first();
+            ->get();
 
         $this->ensureAttendanceMonth($participant->enrollment->school_year_id, $today);
-        if ($existingLog) {
+        if ($existingLogs->contains(fn ($record) => $record->status !== 'unmarked')) {
             return response()->json([
                 'error' => 'Attendance already recorded for today. No additional email was sent.',
                 'student_name' => $studentName,
@@ -175,17 +175,27 @@ class AttendanceController extends Controller
             ], 409);
         }
 
-        $attendanceRecord = StudentAttendanceRecord::create([
-            'sbfp_participant_id' => $participant->id,
-            'recorded_by_user_id' => Auth::id(),
-            'attendance_date' => $today,
-            'meal_period' => $mealPeriod,
-            'status' => 'present',
-        ]);
+        if ($existingLogs->isNotEmpty()) {
+            foreach ($existingLogs as $record) {
+                $record->update([
+                    'recorded_by_user_id' => Auth::id(),
+                    'status' => 'present',
+                ]);
+            }
+            $attendanceRecord = $existingLogs->first();
+        } else {
+            $attendanceRecord = StudentAttendanceRecord::create([
+                'sbfp_participant_id' => $participant->id,
+                'recorded_by_user_id' => Auth::id(),
+                'attendance_date' => $today,
+                'meal_period' => $mealPeriod,
+                'status' => 'present',
+            ]);
+        }
 
-        $this->sendAttendanceNotice($student, $today, $meals->implode(', '), $attendanceRecord->created_at, $mealPeriod);
+        $this->sendAttendanceNotice($student, $today, $meals->implode(', '), $attendanceRecord->updated_at, $mealPeriod);
 
-        AuditLogger::log('Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
+        AuditLogger::log($existingLogs->isNotEmpty() ? 'Updated' : 'Created', 'Attendance', 'Scanned QR attendance for student ' . $studentName);
 
         return response()->json([
             'success' => 'Attendance logged successfully.',
@@ -213,26 +223,48 @@ class AttendanceController extends Controller
             return back()->with('error', 'Add a ' . $mealPeriod . ' meal first before recording attendance.');
         }
 
-        $existingRecord = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
+        $existingRecords = StudentAttendanceRecord::where('sbfp_participant_id', $participant->id)
             ->whereDate('attendance_date', $validated['date'])
             ->where('meal_period', $mealPeriod)
-            ->first();
+            ->get();
+        $wasPresent = $existingRecords->contains(fn ($record) => $record->status === 'present');
 
         $attendanceRecord = null;
         if ($validated['status'] === 'unmarked') {
-            $existingRecord?->delete();
-        } else {
-            $attendanceRecord = StudentAttendanceRecord::updateOrCreate(
-                [
+            $attributes = [
+                'recorded_by_user_id' => Auth::id(),
+                'status' => 'unmarked',
+            ];
+            if ($existingRecords->isNotEmpty()) {
+                foreach ($existingRecords as $record) {
+                    $record->update($attributes);
+                }
+            } else {
+                StudentAttendanceRecord::create([
                     'sbfp_participant_id' => $validated['sbfp_participant_id'],
                     'attendance_date' => $validated['date'],
                     'meal_period' => $mealPeriod,
-                ],
-                [
-                    'recorded_by_user_id' => Auth::id(),
-                    'status' => $validated['status']
-                ]
-            );
+                    ...$attributes,
+                ]);
+            }
+        } else {
+            $attributes = [
+                'recorded_by_user_id' => Auth::id(),
+                'status' => $validated['status'],
+            ];
+            if ($existingRecords->isNotEmpty()) {
+                foreach ($existingRecords as $record) {
+                    $record->update($attributes);
+                }
+                $attendanceRecord = $existingRecords->first();
+            } else {
+                $attendanceRecord = StudentAttendanceRecord::create([
+                    'sbfp_participant_id' => $validated['sbfp_participant_id'],
+                    'attendance_date' => $validated['date'],
+                    'meal_period' => $mealPeriod,
+                    ...$attributes,
+                ]);
+            }
         }
 
         if ($validated['status'] !== 'unmarked') {
@@ -241,13 +273,13 @@ class AttendanceController extends Controller
 
         if (
             $validated['status'] === 'present'
-            && (!$existingRecord || $existingRecord->status !== 'present')
+            && !$wasPresent
         ) {
             $meal = MealPlan::whereDate('meal_date', $validated['date'])
                 ->where('meal_period', $mealPeriod)
                 ->pluck('meal_name')
                 ->implode(', ');
-            $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal, $attendanceRecord->created_at, $mealPeriod);
+            $this->sendAttendanceNotice($participant->enrollment->student, $validated['date'], $meal, $attendanceRecord->updated_at, $mealPeriod);
         }
 
         $studentName = trim($participant->enrollment->student->first_name . ' ' . $participant->enrollment->student->last_name);
@@ -257,7 +289,12 @@ class AttendanceController extends Controller
             'Updated attendance for ' . $studentName . ' on ' . $validated['date'] . ' to ' . $validated['status'] . '.'
         );
 
-        return back()->with('success', 'Attendance updated.');
+        return back()->with(
+            'success',
+            $validated['status'] === 'unmarked'
+                ? 'Attendance cleared. This learner is now marked as Cleared for the selected date and period.'
+                : 'Attendance updated.'
+        );
     }
 
     private function sendAttendanceNotice(Student $student, string $date, string $meal, ?\Carbon\CarbonInterface $scannedAt = null, string $mealPeriod = MealPlan::PERIOD_MORNING): void
@@ -271,7 +308,7 @@ class AttendanceController extends Controller
         }
 
         try {
-            Mail::to($student->guardian_email)->send(new FeedingDayNotice(
+            Mail::to($student->guardian_email)->sendNow(new FeedingDayNotice(
                 $student,
                 $meal,
                 Carbon::parse($date)->toDateString(),
@@ -279,7 +316,7 @@ class AttendanceController extends Controller
                 $scannedAt,
                 $mealPeriod
             ));
-            Log::info('Automatic SBFP attendance email accepted by SMTP transport.', [
+            Log::info('Automatic SBFP attendance email sent through the configured mail transport.', [
                 'student_id' => $student->id,
                 'attendance_date' => $date,
                 'recipient' => $student->guardian_email,

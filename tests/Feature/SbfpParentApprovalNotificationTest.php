@@ -111,6 +111,7 @@ class SbfpParentApprovalNotificationTest extends TestCase
             'height' => '105',
             'weight' => '16.5',
             'bmi' => 14.97,
+            'bmi_category' => 'Normal',
         ]);
 
         $notice = new SbfpAutomaticEnrollmentNotice($student, $measurement, 0);
@@ -122,6 +123,7 @@ class SbfpParentApprovalNotificationTest extends TestCase
         $this->assertStringContainsString('16.50 kg', $body);
         $this->assertStringContainsString('105.00 cm', $body);
         $this->assertStringContainsString('14.97', $body);
+        $this->assertStringContainsString('BMI status: Normal', $body);
         $this->assertStringContainsString('Republic Act No. 10173', $body);
         $this->assertStringNotContainsString('parent.sbfp.approval', $body);
         $this->assertStringNotContainsString('Review and Respond', $body);

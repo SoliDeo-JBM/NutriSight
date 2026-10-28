@@ -100,7 +100,7 @@ class StudentValidationTest extends TestCase
         $this->assertDatabaseCount('students', 0);
     }
 
-    public function test_automatically_approved_grade_queues_an_informational_parent_notice(): void
+    public function test_automatically_approved_grade_sends_an_informational_parent_notice(): void
     {
         Mail::fake();
         SchoolYear::create([
@@ -121,7 +121,7 @@ class StudentValidationTest extends TestCase
         );
 
         $response->assertRedirect(route('encoder.students.index'));
-        Mail::assertQueued(SbfpAutomaticEnrollmentNotice::class, function ($mail) {
+        Mail::assertSent(SbfpAutomaticEnrollmentNotice::class, function ($mail) {
             return $mail->student->first_name === 'Juan'
                 && $mail->gradeLevel === 1;
         });

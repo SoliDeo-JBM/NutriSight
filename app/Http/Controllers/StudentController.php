@@ -10,6 +10,7 @@ use App\Models\PhilippineBarangay;
 use App\Models\PhilippineMunicipality;
 use App\Models\PhilippineProvince;
 use App\Mail\SbfpAutomaticEnrollmentNotice;
+use App\Mail\SbfpManualEnrollmentNotice;
 use App\Services\NutriCalculationService;
 use App\Services\SchoolYearManager;
 use App\Services\AuditLogger;
@@ -18,13 +19,16 @@ use App\Services\SbfpParentApprovalService;
 use App\Services\StudentSpreadsheetImportService;
 use App\Exports\StudentListExport;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Mailable;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Validation\Rule;
+use Throwable;
 use Carbon\Carbon;
 use Maatwebsite\Excel\Facades\Excel;
 
@@ -475,11 +479,11 @@ class StudentController extends Controller
         $this->parentApprovalService->syncBaseline($participant, $measurement);
         if ($this->parentApprovalService->isAutomaticallyApprovedGrade((int) $enrollment->grade_level)
             && filled($student->guardian_email)) {
-            Mail::to($student->guardian_email)->queue(new SbfpAutomaticEnrollmentNotice(
+            $this->sendGuardianNotice($student, new SbfpAutomaticEnrollmentNotice(
                 $student,
                 $measurement,
                 (int) $enrollment->grade_level,
-            ));
+            ), 'Automatic SBFP enrollment notice');
         }
         $this->reportPeriodManager->ensure(SchoolYearManager::activeSchoolYearId(), 'baseline');
 
@@ -868,6 +872,7 @@ class StudentController extends Controller
         $activeSyId = SchoolYearManager::activeSchoolYearId();
         $enrollment = $student->enrollments()->where('school_year_id', $activeSyId)->active()->first();
 
+        $sendApprovalNotice = false;
         if ($enrollment && $enrollment->sbfpParticipant) {
             if ($this->parentApprovalService->isAutomaticallyApprovedEnrollment($enrollment)) {
                 $enrollment->sbfpParticipant->update([
@@ -877,13 +882,27 @@ class StudentController extends Controller
                 return back()->with('success', 'Kinder and Grade 1 participants are automatically approved.');
             }
 
-            $this->parentApprovalService->closePending($enrollment->sbfpParticipant, 'manual_staff_decision', Auth::id());
-            $enrollment->sbfpParticipant->update([
+            $participant = $enrollment->sbfpParticipant;
+            $wasApproved = $participant->parent_consent === 'approved';
+            $this->parentApprovalService->closePending($participant, 'manual_staff_decision', Auth::id());
+            $participant->update([
                 'parent_consent' => $validated['parent_consent'] === 'pending' ? null : ($validated['parent_consent'] ?? null),
                 'disapproval_reason' => $validated['parent_consent'] === 'disapproved'
                     ? ($validated['disapproval_reason'] === 'custom' ? $validated['reason_details'] : $validated['disapproval_reason'])
                     : null,
             ]);
+            $sendApprovalNotice = !$wasApproved && $participant->parent_consent === 'approved';
+        }
+
+        if ($sendApprovalNotice && $enrollment) {
+            $baselineMeasurement = $enrollment->sbfpParticipant->nutritionMeasurements()
+                ->where('measurement_period', 'baseline')
+                ->first();
+            $this->sendGuardianNotice(
+                $student,
+                new SbfpManualEnrollmentNotice($student, (int) $enrollment->grade_level, $baselineMeasurement),
+                'Manual SBFP approval notice'
+            );
         }
 
         AuditLogger::log('Updated', 'SBFP Approval', 'Updated parent consent for student ' . $student->first_name . ' ' . $student->last_name . ' to ' . $validated['parent_consent']);
@@ -905,8 +924,9 @@ class StudentController extends Controller
         $user = Auth::user();
         $updated = 0;
         $approvalChanges = [];
+        $approvalNotifications = [];
 
-        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated, &$approvalChanges) {
+        DB::transaction(function () use ($validated, $activeSyId, $user, &$updated, &$approvalChanges, &$approvalNotifications) {
             foreach ($validated['approvals'] as $entry) {
                 $student = Student::find($entry['student_id']);
                 $enrollment = $student?->enrollments()
@@ -952,11 +972,43 @@ class StudentController extends Controller
                         'parent_consent' => $normalizedStatus,
                         'disapproval_reason' => $reason,
                     ]);
+                    if ($normalizedStatus === 'approved' && $oldStatus !== 'approved') {
+                        $approvalNotifications[$participant->id] = [
+                            'student' => $student,
+                            'grade_level' => (int) $enrollment->grade_level,
+                        ];
+                    }
                     $approvalChanges[] = "{$studentName}: {$oldStatus} to {$newStatus}";
                     $updated++;
                 }
             }
         });
+
+        if ($approvalNotifications !== []) {
+            $approvedParticipants = SbfpParticipant::query()
+                ->with(['nutritionMeasurements' => fn ($query) => $query->where('measurement_period', 'baseline')])
+                ->whereIn('id', array_keys($approvalNotifications))
+                ->where('parent_consent', 'approved')
+                ->get()
+                ->keyBy('id');
+
+            foreach ($approvalNotifications as $participantId => $notification) {
+                $participant = $approvedParticipants->get($participantId);
+                if (!$participant) {
+                    continue;
+                }
+
+                $this->sendGuardianNotice(
+                    $notification['student'],
+                    new SbfpManualEnrollmentNotice(
+                        $notification['student'],
+                        $notification['grade_level'],
+                        $participant->nutritionMeasurements->first()
+                    ),
+                    'Manual SBFP approval notice'
+                );
+            }
+        }
 
         if ($approvalChanges !== []) {
             AuditLogger::log('Updated', 'SBFP Approval', 'Bulk parent consent changes: ' . implode('; ', $approvalChanges));
@@ -986,6 +1038,28 @@ class StudentController extends Controller
         AuditLogger::log('Archived', 'Students', 'Archived student from the active SBFP enrollment: ' . $student->first_name . ' ' . $student->last_name);
 
         return back()->with('success', 'Student archived. Existing records were preserved.');
+    }
+
+    private function sendGuardianNotice(Student $student, Mailable $notice, string $context): void
+    {
+        if (blank($student->guardian_email)) {
+            Log::info($context . ' skipped because guardian email is missing.', [
+                'student_id' => $student->id,
+            ]);
+            return;
+        }
+
+        try {
+            Mail::to($student->guardian_email)->sendNow($notice);
+            Log::info($context . ' sent through the configured mail transport.', [
+                'student_id' => $student->id,
+            ]);
+        } catch (Throwable $exception) {
+            Log::warning($context . ' failed.', [
+                'student_id' => $student->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
     }
 
     public function restore(Student $student)

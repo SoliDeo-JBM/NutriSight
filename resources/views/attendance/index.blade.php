@@ -86,7 +86,14 @@
                 @php
                 $enrollment = $student->enrollments->first();
                 $participantId = $enrollment?->sbfpParticipant?->id;
-                $status = $participantId ? ($attendanceLogs[$participantId]?->status ?? 'unmarked') : 'unmarked';
+                $attendanceLog = $participantId ? ($attendanceLogs[$participantId] ?? null) : null;
+                $status = $attendanceLog?->status ?? 'unmarked';
+                $statusLabel = ucfirst($status);
+                $statusClass = $status === 'present'
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : ($status === 'absent'
+                        ? 'bg-rose-100 text-rose-800'
+                    : 'bg-slate-100 text-slate-600');
                 $grade = (int) ($enrollment?->grade_level ?? 0);
                 @endphp
                 <tr data-name="{{ strtolower($student->last_name . ' ' . $student->first_name) }}" data-grade="{{ $grade }}" data-section="{{ strtolower($enrollment?->section ?? '') }}" data-status="{{ $status }}" class="attendance-row hover:bg-slate-50">
@@ -96,7 +103,7 @@
                     </td>
                     <td class="px-4 py-3">{{ $grade === 0 ? 'Kinder' : 'Grade ' . $grade }}</td>
                     <td class="px-4 py-3">{{ $enrollment?->section }}</td>
-                    <td class="px-4 py-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $status === 'present' ? 'bg-emerald-100 text-emerald-800' : ($status === 'absent' ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600') }}">{{ ucfirst($status) }}</span></td>
+                    <td class="px-4 py-3"><span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold {{ $statusClass }}" aria-label="Attendance {{ strtolower($statusLabel) }}">{{ $statusLabel }}</span></td>
                     <td class="min-w-[220px] px-2 py-3">
                         <form action="{{ route($routePrefix . '.attendance.update') }}" method="POST" class="mx-auto grid max-w-[220px] grid-cols-[1fr_1fr_32px] items-center gap-1">@csrf<input type="hidden" name="sbfp_participant_id" value="{{ $participantId }}"><input type="hidden" name="date" value="{{ $date }}"><input type="hidden" name="meal_period" value="{{ $mealPeriod }}"><button type="submit" name="status" value="present" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'present' ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-emerald-100' }} disabled:cursor-not-allowed disabled:opacity-50">Present</button><button type="submit" name="status" value="absent" {{ !$hasMeal ? 'disabled' : '' }} class="h-8 w-full rounded-md px-2 py-1.5 text-xs font-semibold {{ $status === 'absent' ? 'bg-rose-600 text-white' : 'bg-slate-200 text-slate-700 hover:bg-rose-100' }} disabled:cursor-not-allowed disabled:opacity-50">Absent</button><button type="submit" name="status" value="unmarked" data-confirm-message="Clear this learner's attendance status for the selected date and period?" title="Clear attendance status" aria-label="Clear attendance status" class="h-8 w-8 rounded-md bg-slate-200 px-2 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-300">X</button></form>
                     </td>

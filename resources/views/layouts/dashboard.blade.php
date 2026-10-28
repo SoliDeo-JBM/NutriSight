@@ -269,9 +269,11 @@
         }
 
         let pendingConfirmationForm = null;
+        let pendingConfirmationSubmitter = null;
 
-        function openConfirmationModal(form, message) {
+        function openConfirmationModal(form, message, submitter = null) {
             pendingConfirmationForm = form;
+            pendingConfirmationSubmitter = submitter;
             document.getElementById('confirmationModalMessage').textContent = message;
             const modal = document.getElementById('confirmationModal');
             modal.classList.remove('hidden');
@@ -280,6 +282,7 @@
 
         function closeConfirmationModal() {
             pendingConfirmationForm = null;
+            pendingConfirmationSubmitter = null;
             const modal = document.getElementById('confirmationModal');
             modal.classList.add('hidden');
             modal.classList.remove('flex');
@@ -287,10 +290,11 @@
 
         function confirmPendingAction() {
             const form = pendingConfirmationForm;
+            const submitter = pendingConfirmationSubmitter;
             closeConfirmationModal();
             if (form) {
                 form.dataset.confirmed = 'true';
-                form.requestSubmit();
+                form.requestSubmit(submitter || undefined);
             }
         }
 
@@ -385,7 +389,7 @@
 
             if (confirmationMessage && form.dataset.confirmed !== 'true') {
                 event.preventDefault();
-                openConfirmationModal(form, confirmationMessage);
+                openConfirmationModal(form, confirmationMessage, submitter);
                 return;
             }
 

@@ -28,6 +28,7 @@
             <li>Weight: {{ number_format((float) $measurement->weight, 2) }} kg</li>
             <li>Height: {{ number_format((float) $measurement->height, 2) }} cm</li>
             <li>BMI: {{ number_format((float) $measurement->bmi, 2) }}</li>
+            <li>BMI status: {{ $measurement->bmi_category ?: 'Not recorded' }}</li>
         </ul>
 
         <p style="font-size: 13px; color: #52606d;">

@@ -129,6 +129,7 @@ class DashboardController extends Controller
             ->where('enrollments.school_year_id', $activeSyId)
             ->where('enrollments.status', Enrollment::STATUS_ENROLLED)
             ->where('participants.parent_consent', 'approved')
+            ->whereIn('records.status', ['present', 'absent'])
             ->whereIn('enrollments.grade_level', $gradeLevels)
             ->where(function ($query) {
                 $query->whereIn('enrollments.grade_level', SbfpParentApprovalService::AUTOMATIC_APPROVAL_GRADES)

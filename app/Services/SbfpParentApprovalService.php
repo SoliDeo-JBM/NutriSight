@@ -8,8 +8,10 @@ use App\Models\NutritionMeasurement;
 use App\Models\SbfpParentApprovalRequest;
 use App\Models\SbfpParticipant;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Throwable;
 
 class SbfpParentApprovalService
 {
@@ -85,7 +87,15 @@ class SbfpParentApprovalService
             'sent_at' => $now,
         ]);
 
-        Mail::to($email)->queue(new ApprovalRequestMail($request));
+        try {
+            Mail::to($email)->sendNow(new ApprovalRequestMail($request));
+        } catch (Throwable $exception) {
+            Log::warning('SBFP parent approval notice could not be sent.', [
+                'participant_id' => $participant->id,
+                'approval_request_id' => $request->id,
+                'error' => $exception->getMessage(),
+            ]);
+        }
 
         return $request;
     }
