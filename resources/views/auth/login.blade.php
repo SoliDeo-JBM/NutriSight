@@ -18,6 +18,11 @@
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <!-- Fallback Tailwind CDN to ensure styles load during development/testing -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        #password::-ms-reveal {
+            display: none;
+        }
+    </style>
 </head>
 
 <body class="font-sans text-gray-900 antialiased bg-slate-50">
